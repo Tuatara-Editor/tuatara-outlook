@@ -472,7 +472,7 @@ point on the mailbox: the messages readpst wrote for it are deleted, as
 when it is closed any other way."
   (let* ((buffer (current-buffer))
          (path (buffer-local buffer 'mailbox-path)))
-    (when (and path (yes-or-no-p* (format nil "Close ~a and go back to its folder in rimu?" (buffer-name buffer))))
+    (when (and path (y-or-n-p* (format nil "Close ~a and go back to its folder in rimu?" (buffer-name buffer))))
       (rimu-show-file path)
       (kill-buffer buffer))))
 

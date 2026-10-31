@@ -918,7 +918,7 @@ and the subjects kept."
             (tuatara.tests::run-keys
              (list (lambda () (tuatara:show-buffer list))
                    ;; h asks before it goes back to the folder: no, and the list stays
-                   "h n RET" (lambda () (setf stayed (tuatara:current-buffer)))
+                   "h n" (lambda () (setf stayed (tuatara:current-buffer)))
                    ;; m marks the message on the line and moves down; RET and l on a folder's line fold it
                    "m" (lambda () (setf marked (tuatara.defaults::list-marked list :marked)))
                    "k k RET" (lambda () (push (tuatara.buffer:buffer-string list) shown))
@@ -992,7 +992,7 @@ and the subjects kept."
         (let ((folder nil))
           (tuatara.tests::run-keys
            (list (lambda () (tuatara:show-buffer list))
-                 "h y RET" (lambda () (setf folder (tuatara:current-buffer))))
+                 "h y" (lambda () (setf folder (tuatara:current-buffer))))
            :width 140 :height 30)
           (false (tuatara.buffer:live-buffer-p list))
           (true (tuatara.defaults::rimu-list-p folder))
