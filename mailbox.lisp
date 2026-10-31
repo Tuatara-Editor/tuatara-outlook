@@ -77,10 +77,6 @@ large."
 
 ;;; What readpst wrote
 
-(defparameter *mailbox-most-files* 1000000
-  "The most files readpst writes that a mailbox's list takes in; past them
-the rest are left out, and the list says so.")
-
 (defun mailbox-folders (root &key (limit 1000000) (in-order t))
   "The folders under ROOT, a directory readpst wrote in, and ROOT itself,
 each (RELATIVE . FILES): RELATIVE its path from ROOT (\"\" for ROOT), FILES
@@ -361,9 +357,9 @@ MAILBOX-LISTED-FILES), the folders in order, counting them as they are read,
 each message's text for a search of the list written into JOB's text folder;
 JOB's FOLDERS then hold them."
   (let* ((folder (mailbox-job-folder job))
-         (folders (multiple-value-bind (written more) (mailbox-folders folder :limit *mailbox-most-files*)
+         (folders (multiple-value-bind (written more) (mailbox-folders folder :limit *outlook-mailbox-most-files*)
                     (when more
-                      (push (format nil "Only the first ~:d files readpst wrote are listed (*mailbox-most-files*)" *mailbox-most-files*)
+                      (push (format nil "Only the first ~:d files readpst wrote are listed (*outlook-mailbox-most-files*)" *outlook-mailbox-most-files*)
                             (mailbox-job-notes job)))
                     (loop for (relative . files) in written
                           for listed = (mailbox-listed-files files)

@@ -41,6 +41,11 @@ not read; a message of parts within parts is read as deep as twice this.")
   "The most seconds readpst may take reading a mailbox (.pst, .ost): an hour as
 standard, after which it is stopped and what it wrote by then is listed.")
 
+(define-package-setting *outlook-mailbox-most-files* 1000000
+  "The most files readpst writes that a mailbox's (.pst, .ost) list takes in,
+a million as standard. Past them the rest are left out, and the list says so.
+Raise it to list a larger mailbox whole.")
+
 (define-package-setting *outlook-search-text-limit* (* 16 1024 1024)
   "The most characters of a message of a mailbox (.pst, .ost) its list's
 search looks through: its headers, the text of its text parts and its

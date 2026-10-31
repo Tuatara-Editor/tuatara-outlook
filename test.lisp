@@ -1144,6 +1144,21 @@ and the subjects kept."
         (true more))
       (false (nth-value 1 (outlook::mailbox-folders root))))))
 
+(define-test (outlook mailbox-files-taken-in-set-by-setting)
+  ;; the most files a mailbox's list takes in is a setting; past it the list says so
+  (with-test-directory (dir)
+    (let* ((out (merge-pathnames "out/" dir))
+           (pst (write-test-octets (merge-pathnames "archive.pst" dir) (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
+           (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
+           (job (outlook::make-mailbox-job buffer pst (namestring out))))
+      (dolist (n '(1 2 3))
+        (put-test-file (merge-pathnames (format nil "Outlook Data File/Inbox/~d.eml" n) out)
+                       (format nil "Subject: Item ~d~%~%text~%" n)))
+      (let ((tuatara-user:*outlook-mailbox-most-files* 2))
+        (outlook::mailbox-list job))
+      (is = 2 (outlook::mailbox-job-total job))
+      (true (find-if (lambda (note) (search "*outlook-mailbox-most-files*" note)) (outlook::mailbox-job-notes job))))))
+
 (define-test (outlook mailbox-counted-less-often-when-large)
   ;; what readpst has written is counted each second at first, and no more often than every thirty
   ;; seconds once there are many files, each count walking them all
