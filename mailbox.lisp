@@ -21,7 +21,8 @@
 (in-package #:outlook)
 
 (define-major-mode mailbox-mode sectioned-list-mode
-  "An Outlook mailbox (.pst, .ost) read by readpst, shut in the sandbox: its
+  "An Outlook mailbox (personal storage table, .pst, or offline storage
+table, .ost) read by readpst, shut in the sandbox: its
 folders, and under each its messages, a line each: when it was sent, whom
 from, how many attachments it has and its subject. \\<mailbox-mode>\\[list-visit] or \\`l' opens the
 message on the line, read only, the matches of the list's filters lit in it,
@@ -251,7 +252,7 @@ NOTES, what to say of how it went."
 (defun mailbox-copy (job copy)
   "Copy JOB's mailbox to COPY (MAILBOX-COPY-PATH) for readpst, read without
 changing the mailbox's access time: refused when the drive would keep less
-than 1 GB free, stopped when JOB is asked to stop. The caller deletes COPY
+than 1 gigabyte (GB) free, stopped when JOB is asked to stop. The caller deletes COPY
 however it ends."
   (let ((size (stamp-size (path-stamp (mailbox-job-path job))))
         (free (ignore-errors (free-bytes (parent-path copy)))))
@@ -274,7 +275,7 @@ each count looks at every file."
 into JOB's folder, and watch it: what it has written counted now and then
 \(MAILBOX-COUNT-SECONDS), the drive's free room each second, and it stopped
 when JOB is asked to stop, when it has written more than
-*OUTLOOK-MAILBOX-SPACE*, or when the drive has less than 1 GB free. Returns
+*OUTLOOK-MAILBOX-SPACE*, or when the drive has less than 1 gigabyte (GB) free. Returns
 how it went (SANDBOX-RUN's second value) and what it said."
   (let* ((folder (mailbox-job-folder job))
          (stop (list nil)) (full nil) (result nil)

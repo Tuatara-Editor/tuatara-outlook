@@ -11,7 +11,8 @@
 (in-package #:outlook)
 
 (define-package-setting *outlook-readpst-program* "readpst"
-  "The program that reads Outlook mailboxes (.pst, .ost) into separate
+  "The program that reads Outlook mailboxes (personal storage table, .pst, or offline
+storage table, .ost) into separate
 messages, shut in the sandbox: readpst, of the libpst package, looked for in
 the system's own directories of programs. Set it in the init file after the
 outlook package is loaded.")
@@ -29,7 +30,7 @@ list only the items it holds as not deleted.")
 
 (define-package-setting *outlook-largest-file* (* 256 1024 1024)
   "The most octets an Outlook item (.msg) or a saved mail (.eml) may have to be
-read as a message, and an attachment or a part of one may hold: 256 MB as
+read as a message, and an attachment or a part of one may hold: 256 megabytes (MB) as
 standard. A larger one is opened as any file.")
 
 (define-package-setting *outlook-nesting-limit* 8
@@ -54,7 +55,7 @@ as far as that, and the list says how many were.")
 
 (define-package-setting *outlook-mailbox-space* (* 32 1024 1024 1024)
   "The most octets readpst may write reading a mailbox (.pst, .ost), its
-messages in your cache directory: 32 GB as standard. It is stopped there, as
+messages in your cache directory: 32 gigabytes (GB) as standard. It is stopped there, as
 it is when the drive has less than 1 GB free, and what it wrote by then is
 listed.")
 
@@ -68,7 +69,7 @@ it on in one list.")
 ;;; A message
 
 (defstruct (mail (:copier nil))
-  "A mail item read: FROM, TO, CC and BCC as written to be read (names with
+  "A mail item read: FROM, TO, carbon copy (CC) and blind carbon copy (BCC) as written to be read (names with
 their addresses); SUBJECT; SENT and RECEIVED, universal times or NIL, with
 DATE-TEXT the date as the item writes it when it could not be read as one;
 MESSAGE-ID; DETAILS, more of what the item says of itself, each (LABEL .
@@ -84,7 +85,7 @@ it, in words."
 
 (defstruct (mail-attachment (:copier nil))
   "An attachment of a MAIL: NAME as the item gives it; OCTETS, its contents,
-or MESSAGE, a MAIL, when it is a message itself; MIME, the type the item
+or MESSAGE, a MAIL, when it is a message itself; MIME, the Multipurpose Internet Mail Extensions (MIME) type the item
 says it is; HIDDEN true when the item hides it from its reader; CONTENT-ID
 when the body shows it in place; WHY, what it is in words when it holds
 neither octets nor a message read (one too deep, an embedded object); COPY-PATH,
@@ -104,7 +105,7 @@ the path of the private copy of its octets once one is made."
 
 (defun mail-person (name address &optional type)
   "A sender or a recipient as written to be read: NAME <ADDRESS>, the
-address with its TYPE when that is not SMTP (EX: /O=...); either alone when
+address with its TYPE when that is not Simple Mail Transfer Protocol (SMTP) (Exchange (EX): /O=...); either alone when
 the other is missing or the same; NIL for neither."
   (let ((name (and name (plusp (length (string-trim " " name))) (string-trim " " name)))
         (address (and address (plusp (length (string-trim " " address)))
@@ -130,7 +131,7 @@ CHARSET-TEXT takes it (1252 windows-1252, 65001 utf-8); NIL for none."
 ;;; Times
 
 (defun filetime-universal-time (filetime)
-  "The universal time of FILETIME, a count of 100-nanosecond steps since
+  "The universal time of the file time (FILETIME), a count of 100-nanosecond steps since
 1601 as Windows keeps times, to the second; NIL for none (0) or one past the
 year 9999."
   (and (integerp filetime) (< 0 filetime #x24C85A5ED1C04000)

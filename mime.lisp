@@ -416,7 +416,7 @@ whole."
     ("mdash" . "—") ("ndash" . "–") ("lsquo" . "‘") ("rsquo" . "’") ("ldquo" . "“") ("rdquo" . "”")
     ("bull" . "•") ("middot" . "·") ("euro" . "€") ("pound" . "£") ("laquo" . "«") ("raquo" . "»")
     ("times" . "×") ("deg" . "°") ("shy" . ""))
-  "Named characters of HTML that XML has not, each (NAME . TEXT).")
+  "Named characters of HTML that Extensible Markup Language (XML) has not, each (NAME . TEXT).")
 
 (defun html-entity-text (name)
   "The text the HTML entity NAME (without & and ;) stands for, or NIL."

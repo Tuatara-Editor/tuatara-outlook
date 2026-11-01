@@ -12,7 +12,7 @@
 (in-package #:outlook)
 
 (defun msg-properties (cfb entry header)
-  "The properties of the storage ENTRY of CFB, an item, a recipient or an
+  "The properties of the storage ENTRY of the compound file (CFB), an item, a recipient or an
 attachment, whose fixed-size properties' stream has HEADER octets before
 them: a hash table from each property's number to (TYPE . VALUE), VALUE a
 number, a universal time, T or NIL, octets, a string, or (:storage . ENTRY)."
@@ -52,11 +52,11 @@ number, a universal time, T or NIL, octets, a string, or (:storage . ENTRY)."
     table))
 
 (defun msg-value (properties id)
-  "The value of the property numbered ID in PROPERTIES (MSG-PROPERTIES), or NIL."
+  "The value of the property numbered identifier (ID) in PROPERTIES (MSG-PROPERTIES), or NIL."
   (cdr (gethash id properties)))
 
 (defun msg-string (properties id codepage)
-  "The property numbered ID in PROPERTIES as text: a string as it is, one in
+  "The property numbered identifier (ID) in PROPERTIES as text: a string as it is, one in
 the item's code page (CODEPAGE, a number) decoded, a number written; NIL for
 none or an empty one."
   (let* ((entry (gethash id properties))
@@ -69,7 +69,7 @@ none or an empty one."
     (and value (plusp (length value)) value)))
 
 (defun msg-children-named (cfb entry prefix)
-  "The storages in ENTRY of CFB whose names begin with PREFIX, in the order
+  "The storages in ENTRY of the compound file (CFB) whose names begin with PREFIX, in the order
 of their names."
   (sort (remove-if-not (lambda (child) (and (eq (cfb-entry-type child) :storage)
                                             (uiop:string-prefix-p prefix (cfb-entry-name child))))
@@ -116,7 +116,7 @@ and the sender as the item gives it."
 
 (defun msg-recipients (mail cfb entry properties codepage)
   "Set whom MAIL is to, copied to and blind copied to, by the recipients'
-storages in the item ENTRY of CFB, text in code page CODEPAGE; the item's
+storages in the item ENTRY of the compound file (CFB), text in code page CODEPAGE; the item's
 own lists in PROPERTIES where it has no recipients of a kind."
   (let ((to '()) (cc '()) (bcc '()))
     (dolist (recipient (msg-children-named cfb entry "__recip_version1.0_#"))
@@ -134,7 +134,7 @@ own lists in PROPERTIES where it has no recipients of a kind."
 
 (defun msg-body (mail properties codepage)
   "Set MAIL's body by the item's PROPERTIES, text in code page CODEPAGE: the
-plain text, else the HTML, else the compressed RTF, each read as text; its
+plain text, else the HTML, else the compressed Rich Text Format (RTF), each read as text; its
 HTML, the item's own or the HTML its RTF keeps; and note which of them the
 item holds."
   (let* ((plain (msg-string properties #x1000 codepage))
@@ -160,7 +160,7 @@ item holds."
 
 (defun msg-attachments (mail cfb entry codepage depth)
   "Set MAIL's attachments by the attachments' storages in the item ENTRY of
-CFB, text in code page CODEPAGE, the item being DEPTH deep: each one's name,
+compound file (CFB), text in code page CODEPAGE, the item being DEPTH deep: each one's name,
 type and contents, an attached item read as one while DEPTH is below
 *OUTLOOK-NESTING-LIMIT*; one that cannot be read is noted."
   (dolist (storage (msg-children-named cfb entry "__attach_version1.0_#"))
@@ -188,10 +188,10 @@ type and contents, an attached item read as one while DEPTH is below
   (setf (mail-attachments mail) (nreverse (mail-attachments mail))))
 
 (defun msg-mail (cfb entry &key (depth 0) (header 32))
-  "The MAIL the item in the storage ENTRY of CFB is (the root for an item of
+  "The MAIL the item in the storage ENTRY of the compound file (CFB) is (the root for an item of
 its own, HEADER 32; an attached one, HEADER 24): its sender, recipients,
 dates and body (its plain text, else its HTML read as text, else its
-compressed RTF read as text), what it says of itself, its internet headers,
+compressed Rich Text Format (RTF) read as text), what it says of itself, its internet headers,
 and its attachments, an attached item read as one when DEPTH is below
 *OUTLOOK-NESTING-LIMIT*."
   (push entry *msg-items*)
