@@ -1,6 +1,6 @@
 ;;;; outlook.lisp --- The outlook package: Outlook items, saved mail and mailboxes read safely.
 ;;;; Copyright (C) 2026 Michael A Jones.  GPL-3.0-or-later; see LICENSE.
-;;;; Needs: Tuatara 0.90.13
+;;;; Needs: Tuatara 0.90.14
 ;;;;
 ;;;; One line in the init file loads it: (load-package "outlook").
 

@@ -44,7 +44,7 @@ sector, and SIZE, its octets; INDEX, its own place in the directory."
 (defun cfb-number (octets at count)
   "The number in COUNT octets of OCTETS from AT, least significant first; an
 error saying the file is cut short when they are past its end."
-  (or (octets-le octets at count) (error "The compound file ends too soon")))
+  (or (octets-integer octets at count) (error "The compound file ends too soon")))
 
 (defun cfb-chain (start table limit &key (what "a sector chain"))
   "The sectors chained from START by TABLE (a file allocation table (FAT) or mini FAT), in order, as a
@@ -110,7 +110,8 @@ or is made so that following it would not end or would read past it."
               do (when (>= sector sectors) (error "A FAT sector of the compound file lies past its end"))
                  (let ((base (* (1+ sector) sector-size)))
                    (loop for i below per-sector
-                      do (setf (aref fat (+ (* k per-sector) i)) (or (octets-le octets (+ base (* 4 i)) 4) #xFFFFFFFF)))))
+                      do (setf (aref fat (+ (* k per-sector) i))
+                               (or (octets-integer octets (+ base (* 4 i)) 4) #xFFFFFFFF)))))
         (let* ((directory (cfb-sector-octets octets (cfb-chain (cfb-number octets 48 4) fat sectors :what "The directory")
                                              sector-size))
                (entries (cfb-directory directory (= sector-size 4096)))
