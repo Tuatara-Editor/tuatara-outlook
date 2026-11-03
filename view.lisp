@@ -15,7 +15,7 @@
 (define-major-mode mail-view-mode special-mode
   "A message read, read only: an Outlook item (.msg), a saved mail (.eml) or a
 message of a mailbox. Who it is from and to, its dates and subject, its
-attachments, its text (its plain text, else its HTML or RTF read as text),
+attachments, its text (its plain text, else its HTML or Rich Text Format (RTF) read as text),
 what else it says of itself, and its internet headers whole. Nothing in it is
 run, and nothing it points to fetched.
 \\<mail-view-mode>\\[push-button] on an attachment opens it here, from a copy only you can
@@ -353,7 +353,7 @@ tag, else at its end."
 
 (defun mail-pages-pdf (fd folder)
   "The PDF *OUTLOOK-PAGE-PROGRAM* (WeasyPrint) draws, shut in, of the message's
-HTML open at FD (MAIL-PAGE-HTML), as a sealed file in memory (SANDBOX-PDF):
+HTML open at the file descriptor (FD) (MAIL-PAGE-HTML), as a sealed file in memory (SANDBOX-PDF):
 laid out as on a screen, as its markup says, the pictures in FOLDER shown,
 your fonts used; nothing fetched, no script run. An error saying why when it
 draws none."
@@ -440,7 +440,7 @@ Returns the buffer, or NIL for a file of another kind."
 
 (defun outlook-preview-text (fd path size kind octets)
   "The preview of an Outlook item, a saved mail or a mailbox (a function of
-*PREVIEW-TEXT-FUNCTIONS*, FD, PATH, SIZE, KIND and OCTETS as it gives them):
+*PREVIEW-TEXT-FUNCTIONS*, the file descriptor (FD), PATH, SIZE, KIND and OCTETS as it gives them):
 a message's headers, attachments and the start of its text; a mailbox's
 size and how to read it; NIL for any other file."
   (let* ((name (native-file-name path))

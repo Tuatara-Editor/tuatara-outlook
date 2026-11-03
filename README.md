@@ -161,6 +161,7 @@ readpst wrote are never changed.
 | `*outlook-largest-file*` | 256 MB | The most an item or saved mail, or an attachment in one, may hold to be read as a message; a larger one opens as any file. |
 | `*outlook-nesting-limit*` | `8` | How many levels of messages attached to messages are shown as messages; deeper ones are listed as not read. |
 | `*outlook-mailbox-seconds*` | `3600` | The most seconds readpst may take; it is stopped then, and what it wrote is listed. |
+| `*outlook-mailbox-most-files*` | 1 million | The most files readpst wrote that a mailbox's list takes in; the rest are left out, and the list says so. |
 | `*outlook-search-text-limit*` | 16 million | The most characters of a mailbox's message its list's search looks through; a larger one is searched that far, and the list counts them. |
 | `*outlook-mailbox-space*` | 32 GB | The most readpst may write; it is stopped there, or when the drive has less than 1 GB free. |
 | `*outlook-preview*` | `t` | Shows the message on the line beside a mailbox's list; `nil` leaves it off until `P` turns it on in one list. |

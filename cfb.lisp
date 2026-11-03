@@ -21,7 +21,7 @@
 
 (defstruct (cfb (:constructor %make-cfb) (:copier nil))
   "A compound file read from OCTETS: SECTOR-SIZE octets a sector (512 or
-4,096) and SECTORS of them; FAT and MINI-FAT, the tables chaining sectors
+4,096) and SECTORS of them; file allocation table (FAT) and MINI-FAT, the tables chaining sectors
 and mini sectors, vectors of numbers; ENTRIES, its directory, a vector of
 CFB-ENTRY; MINI-STREAM, the octets the small streams are kept in; CUTOFF,
 the size from which a stream is kept in sectors of its own; OWNERS, the
@@ -30,7 +30,7 @@ octets of its streams read so far."
   octets sector-size sectors fat mini-fat entries mini-stream cutoff
   (owners (make-hash-table)) (given 0))
 
-(setf (documentation 'cfb-p 'function) "True when OBJECT is a CFB.")
+(setf (documentation 'cfb-p 'function) "True when OBJECT is a compound file (CFB).")
 
 (defstruct (cfb-entry (:copier nil))
   "An entry of a compound file's directory: NAME; TYPE, :storage, :stream or
@@ -44,10 +44,10 @@ sector, and SIZE, its octets; INDEX, its own place in the directory."
 (defun cfb-number (octets at count)
   "The number in COUNT octets of OCTETS from AT, least significant first; an
 error saying the file is cut short when they are past its end."
-  (or (octets-le octets at count) (error "The compound file ends too soon")))
+  (or (octets-integer octets at count) (error "The compound file ends too soon")))
 
 (defun cfb-chain (start table limit &key (what "a sector chain"))
-  "The sectors chained from START by TABLE (a FAT or mini FAT), in order, as a
+  "The sectors chained from START by TABLE (a file allocation table (FAT) or mini FAT), in order, as a
 vector: each sector below LIMIT (the sectors there are) and seen once; an
 error when the chain loops, leaves the table or goes past LIMIT."
   (let ((seen (make-array limit :element-type 'bit :initial-element 0))
@@ -80,7 +80,7 @@ as it goes."
       out)))
 
 (defun cfb-read (octets)
-  "The compound file in OCTETS, a CFB; an error saying why when it is not one,
+  "The compound file (CFB) in OCTETS; an error saying why when it is not one,
 or is made so that following it would not end or would read past it."
   (unless (and (>= (length octets) 512) (octets-at-p octets *compound-file-signature*))
     (error "Not a compound file"))
@@ -110,7 +110,8 @@ or is made so that following it would not end or would read past it."
               do (when (>= sector sectors) (error "A FAT sector of the compound file lies past its end"))
                  (let ((base (* (1+ sector) sector-size)))
                    (loop for i below per-sector
-                      do (setf (aref fat (+ (* k per-sector) i)) (or (octets-le octets (+ base (* 4 i)) 4) #xFFFFFFFF)))))
+                      do (setf (aref fat (+ (* k per-sector) i))
+                               (or (octets-integer octets (+ base (* 4 i)) 4) #xFFFFFFFF)))))
         (let* ((directory (cfb-sector-octets octets (cfb-chain (cfb-number octets 48 4) fat sectors :what "The directory")
                                              sector-size))
                (entries (cfb-directory directory (= sector-size 4096)))
@@ -147,7 +148,7 @@ not looked at."
                                   :index i))))))))
 
 (defun cfb-children (cfb entry)
-  "The entries in the storage ENTRY of CFB, as a list in the directory's
+  "The entries in the storage ENTRY of the compound file (CFB), as a list in the directory's
 order: its tree walked with each entry seen once, a loop in it gone round
 never, and an entry another storage holds too left to that one, so that no
 stream is read again for each storage that names it."
@@ -171,7 +172,7 @@ stream is read again for each storage that names it."
     (sort found #'< :key #'cfb-entry-index)))
 
 (defun cfb-stream-octets (cfb entry)
-  "The octets of the stream ENTRY of CFB: from the mini stream when it is
+  "The octets of the stream ENTRY of the compound file (CFB): from the mini stream when it is
 smaller than the file's cutoff, else from sectors of its own; an error when
 it says it holds more than its chain does or than *OUTLOOK-LARGEST-FILE*, or
 when its streams together come to more than twice the file, as streams
@@ -201,11 +202,11 @@ sharing their sectors would."
 (defparameter *lzfu-dictionary*
   (concatenate 'string "{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss \\fmodern \\fscript \\fdecor MS Sans SerifSymbolArialTimes New RomanCourier{\\colortbl\\red0\\green0\\blue0"
                (coerce '(#\Return #\Newline) 'string) "\\par \\pard\\plain\\f0\\fs20\\b\\i\\u\\tab\\tx")
-  "The text compressed RTF's dictionary starts with, 207 characters, which
+  "The text the dictionary of compressed Rich Text Format (RTF) starts with, 207 characters, which
 its references may point into from the first.")
 
 (defun lzfu-decompress (octets &key (limit *outlook-largest-file*))
-  "The RTF compressed in OCTETS, as an Outlook item keeps its body: as it is
+  "The Rich Text Format (RTF) compressed in OCTETS, as an Outlook item keeps its body: as it is
 when it is stored uncompressed (MELA), else taken out of its references
 back into the text written so far (LZFu); at most LIMIT octets, and never
 more than it says it holds. An error when it is neither."
@@ -249,11 +250,11 @@ more than it says it holds. An error when it is neither."
   '("fonttbl" "colortbl" "stylesheet" "info" "pict" "object" "header" "headerl" "headerr" "headerf" "footer"
     "footerl" "footerr" "footerf" "themedata" "colorschememapping" "datastore" "latentstyles" "listtable"
     "listoverridetable" "rsidtbl" "generator" "xmlnstbl" "mmathPr" "fldinst" "filetbl" "revtbl" "pgdsctbl" "nonshppict")
-  "Groups of RTF that hold no text to read: tables of fonts, colours and
+  "Groups of Rich Text Format (RTF) that hold no text to read: tables of fonts, colours and
 styles, pictures, objects, headers, a field's instruction.")
 
 (defun rtf-control-word (octets i)
-  "The RTF control word in OCTETS whose letters begin at I, as three values:
+  "The Rich Text Format (RTF) control word in OCTETS whose letters begin at I, as three values:
 the word, its number (NIL when it has none) and where what follows it begins,
 past the space that may end it."
   (let* ((n (length octets))
@@ -269,7 +270,7 @@ past the space that may end it."
     (values word parameter i)))
 
 (defun rtf-word-text (word)
-  "The text the RTF control word WORD stands for: a line break, a tab, a dash,
+  "The text the Rich Text Format (RTF) control word WORD stands for: a line break, a tab, a dash,
 a bullet or a quotation mark; NIL for any other word."
   (cond ((member word '("par" "line" "row" "sect" "page") :test #'string=) (string #\Newline))
         ((member word '("tab" "cell") :test #'string=) (string #\Tab))
@@ -279,7 +280,7 @@ a bullet or a quotation mark; NIL for any other word."
         ((string= word "rdblquote") "”")))
 
 (defun rtf-text (octets &key (limit *outlook-largest-file*))
-  "The text of the RTF in OCTETS, roughly, at most LIMIT characters: control
+  "The text of the Rich Text Format (RTF) in OCTETS, roughly, at most LIMIT characters: control
 words left out, but those that break lines and tabs; groups that hold no
 text (*RTF-SKIPPED-GROUPS*, and those marked as ignorable) left out;
 characters given by their number (\\uN, and \\'XX in the document's code

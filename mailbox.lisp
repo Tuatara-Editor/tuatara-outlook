@@ -21,7 +21,8 @@
 (in-package #:outlook)
 
 (define-major-mode mailbox-mode sectioned-list-mode
-  "An Outlook mailbox (.pst, .ost) read by readpst, shut in the sandbox: its
+  "An Outlook mailbox (personal storage table, .pst, or offline storage
+table, .ost) read by readpst, shut in the sandbox: its
 folders, and under each its messages, a line each: when it was sent, whom
 from, how many attachments it has and its subject. \\<mailbox-mode>\\[list-visit] or \\`l' opens the
 message on the line, read only, the matches of the list's filters lit in it,
@@ -76,10 +77,6 @@ large."
           name (octets-words size) (mailbox-readpst) *outlook-include-deleted*))
 
 ;;; What readpst wrote
-
-(defparameter *mailbox-most-files* 1000000
-  "The most files readpst writes that a mailbox's list takes in; past them
-the rest are left out, and the list says so.")
 
 (defun mailbox-folders (root &key (limit 1000000) (in-order t))
   "The folders under ROOT, a directory readpst wrote in, and ROOT itself,
@@ -255,7 +252,7 @@ NOTES, what to say of how it went."
 (defun mailbox-copy (job copy)
   "Copy JOB's mailbox to COPY (MAILBOX-COPY-PATH) for readpst, read without
 changing the mailbox's access time: refused when the drive would keep less
-than 1 GB free, stopped when JOB is asked to stop. The caller deletes COPY
+than 1 gigabyte (GB) free, stopped when JOB is asked to stop. The caller deletes COPY
 however it ends."
   (let ((size (stamp-size (path-stamp (mailbox-job-path job))))
         (free (ignore-errors (free-bytes (parent-path copy)))))
@@ -278,7 +275,7 @@ each count looks at every file."
 into JOB's folder, and watch it: what it has written counted now and then
 \(MAILBOX-COUNT-SECONDS), the drive's free room each second, and it stopped
 when JOB is asked to stop, when it has written more than
-*OUTLOOK-MAILBOX-SPACE*, or when the drive has less than 1 GB free. Returns
+*OUTLOOK-MAILBOX-SPACE*, or when the drive has less than 1 gigabyte (GB) free. Returns
 how it went (SANDBOX-RUN's second value) and what it said."
   (let* ((folder (mailbox-job-folder job))
          (stop (list nil)) (full nil) (result nil)
@@ -361,9 +358,9 @@ MAILBOX-LISTED-FILES), the folders in order, counting them as they are read,
 each message's text for a search of the list written into JOB's text folder;
 JOB's FOLDERS then hold them."
   (let* ((folder (mailbox-job-folder job))
-         (folders (multiple-value-bind (written more) (mailbox-folders folder :limit *mailbox-most-files*)
+         (folders (multiple-value-bind (written more) (mailbox-folders folder :limit *outlook-mailbox-most-files*)
                     (when more
-                      (push (format nil "Only the first ~:d files readpst wrote are listed (*mailbox-most-files*)" *mailbox-most-files*)
+                      (push (format nil "Only the first ~:d files readpst wrote are listed (*outlook-mailbox-most-files*)" *outlook-mailbox-most-files*)
                             (mailbox-job-notes job)))
                     (loop for (relative . files) in written
                           for listed = (mailbox-listed-files files)
@@ -475,7 +472,7 @@ point on the mailbox: the messages readpst wrote for it are deleted, as
 when it is closed any other way."
   (let* ((buffer (current-buffer))
          (path (buffer-local buffer 'mailbox-path)))
-    (when (and path (yes-or-no-p* (format nil "Close ~a and go back to its folder in rimu?" (buffer-name buffer))))
+    (when (and path (y-or-n-p* (format nil "Close ~a and go back to its folder in rimu?" (buffer-name buffer))))
       (rimu-show-file path)
       (kill-buffer buffer))))
 

@@ -303,8 +303,8 @@ attached item nested INNER-DEPTH deep."
 
 (define-test (outlook crafted-compound-files)
   (let* ((good (msg-test-octets))
-         (dir (tuatara.io:octets-le good 48 4))
-         (fat (* 512 (1+ (tuatara.io:octets-le good 76 4)))))
+         (dir (tuatara.io:octets-integer good 48 4))
+         (fat (* 512 (1+ (tuatara.io:octets-integer good 76 4)))))
     (flet ((refused (octets words)
              (let ((start (get-internal-real-time)))
                  (fail (outlook::msg-read octets))
@@ -339,7 +339,7 @@ attached item nested INNER-DEPTH deep."
          (entries (outlook::cfb-entries cfb))
          (inner (find "__substg1.0_3701000D" entries :key (lambda (e) (and e (outlook::cfb-entry-name e))) :test #'equal))
          (circle (copy-seq good))
-         (at (+ (* 512 (1+ (tuatara.io:octets-le good 48 4))) (* 128 (outlook::cfb-entry-index inner)) 76))
+         (at (+ (* 512 (1+ (tuatara.io:octets-integer good 48 4))) (* 128 (outlook::cfb-entry-index inner)) 76))
          (start (get-internal-real-time)))
     (tuatara.io:octets-put-integer circle (outlook::cfb-entry-child (aref entries 0)) 4 :at at)
     (let ((mail (outlook::msg-read circle)))
@@ -918,7 +918,7 @@ and the subjects kept."
             (tuatara.tests::run-keys
              (list (lambda () (tuatara:show-buffer list))
                    ;; h asks before it goes back to the folder: no, and the list stays
-                   "h n RET" (lambda () (setf stayed (tuatara:current-buffer)))
+                   "h n" (lambda () (setf stayed (tuatara:current-buffer)))
                    ;; m marks the message on the line and moves down; RET and l on a folder's line fold it
                    "m" (lambda () (setf marked (tuatara.defaults::list-marked list :marked)))
                    "k k RET" (lambda () (push (tuatara.buffer:buffer-string list) shown))
@@ -992,7 +992,7 @@ and the subjects kept."
         (let ((folder nil))
           (tuatara.tests::run-keys
            (list (lambda () (tuatara:show-buffer list))
-                 "h y RET" (lambda () (setf folder (tuatara:current-buffer))))
+                 "h y" (lambda () (setf folder (tuatara:current-buffer))))
            :width 140 :height 30)
           (false (tuatara.buffer:live-buffer-p list))
           (true (tuatara.defaults::rimu-list-p folder))
@@ -1143,6 +1143,21 @@ and the subjects kept."
         (is = 2 (reduce #'+ folders :key (lambda (f) (length (cdr f)))))
         (true more))
       (false (nth-value 1 (outlook::mailbox-folders root))))))
+
+(define-test (outlook mailbox-files-taken-in-set-by-setting)
+  ;; the most files a mailbox's list takes in is a setting; past it the list says so
+  (with-test-directory (dir)
+    (let* ((out (merge-pathnames "out/" dir))
+           (pst (write-test-octets (merge-pathnames "archive.pst" dir) (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
+           (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
+           (job (outlook::make-mailbox-job buffer pst (namestring out))))
+      (dolist (n '(1 2 3))
+        (put-test-file (merge-pathnames (format nil "Outlook Data File/Inbox/~d.eml" n) out)
+                       (format nil "Subject: Item ~d~%~%text~%" n)))
+      (let ((tuatara-user:*outlook-mailbox-most-files* 2))
+        (outlook::mailbox-list job))
+      (is = 2 (outlook::mailbox-job-total job))
+      (true (find-if (lambda (note) (search "*outlook-mailbox-most-files*" note)) (outlook::mailbox-job-notes job))))))
 
 (define-test (outlook mailbox-counted-less-often-when-large)
   ;; what readpst has written is counted each second at first, and no more often than every thirty
