@@ -42,8 +42,8 @@ expression is typed to the messages whose headers, any of them, or contents
 match: the text of each text part, decoded, and the names of the
 attachments; \\<search>\\[search-exit] keeps the pattern as a filter, the next search
 narrowing what it left, and \\[search-abort] lets the one typed go.
-\\<mailbox-mode>\\[list-search-filters] lists the filters, to take one away, and
-\\[remove-search-filters] takes them all away. The messages are searched in the
+\\<mailbox-mode>\\[search-filter-list] lists the filters, to take one away, and
+\\[search-filter-remove-all] takes them all away. The messages are searched in the
 background, the mode line saying how far it has got; of a message larger
 than *OUTLOOK-SEARCH-TEXT-LIMIT* characters only that much is searched, and
 the list says how many there are."
