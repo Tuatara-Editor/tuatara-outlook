@@ -104,7 +104,7 @@ the path of the private copy of its octets once one is made."
     (setf (mail-details mail) (append (mail-details mail) (list (cons label (princ-to-string text)))))))
 
 (defun mail-person (name address &optional type)
-  "A sender or a recipient as written to be read: NAME <ADDRESS>, the
+  "A sender or a recipient as written to be read, as NAME <ADDRESS>, the
 address with its TYPE when that is not Simple Mail Transfer Protocol (SMTP) (Exchange (EX): /O=...); either alone when
 the other is missing or the same; NIL for neither."
   (let ((name (and name (plusp (length (string-trim " " name))) (string-trim " " name)))

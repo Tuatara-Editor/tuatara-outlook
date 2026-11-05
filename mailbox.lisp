@@ -22,7 +22,7 @@
 
 (define-major-mode mailbox-mode sectioned-list-mode
   "An Outlook mailbox (personal storage table, .pst, or offline storage
-table, .ost) read by readpst, shut in the sandbox: its
+table, .ost) read by readpst, shut in the sandbox, with its
 folders, and under each its messages, a line each: when it was sent, whom
 from, how many attachments it has and its subject. \\<mailbox-mode>\\[list-visit] or \\`l' opens the
 message on the line, read only, the matches of the list's filters lit in it,

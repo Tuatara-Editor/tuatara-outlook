@@ -251,7 +251,7 @@ where you keep your files."
 after asking: a copy of it only you can read, never the message, and only an
 attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a
 sound, a video, an Office document, by its contents, with a name that
-agrees: *open-externally-kinds*). That program is not shut in the sandbox."
+agrees; see *open-externally-kinds*). That program is not shut in the sandbox."
   (let ((attachment (mail-attachment-at-point)))
     (cond ((null attachment) (message "No attachment at point: \\<mail-view-mode>\\[forward-button] goes to the next"))
           ((mail-attachment-message attachment)
@@ -283,7 +283,7 @@ is not cut off; as long for their width as A4.")
 the internet when it is shown: never fetched here, only counted.")
 
 (defun mail-content-id (text)
-  "TEXT, a Content-ID or what follows cid: in HTML, as the two are compared:
+  "TEXT, a Content-ID or what follows cid: in HTML, as the two are compared,
 without its angle brackets and spaces, %XX read as the octets they stand for."
   (let ((id (string-trim '(#\< #\> #\Space #\Tab) text)))
     (percent-decoded id)))

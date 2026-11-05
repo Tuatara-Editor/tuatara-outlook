@@ -442,7 +442,7 @@ decoded; NIL when it has none."
   "HTML elements that begin a line of their own.")
 
 (defun html-text (html)
-  "The text of HTML, as a message shows it: its markup left out, scripts,
+  "The text of HTML, as a message shows it, with its markup left out, scripts,
 styles and comments with it; elements that make blocks on lines of their
 own; a link followed by its address in <>, when that is not its text; a
 picture as [picture: what it shows], its address said and not fetched;
