@@ -255,7 +255,7 @@ changing the mailbox's access time: refused when the drive would keep less
 than 1 gigabyte (GB) free, stopped when JOB is asked to stop. The caller deletes COPY
 however it ends."
   (let ((size (stamp-size (path-stamp (mailbox-job-path job))))
-        (free (ignore-errors (free-bytes (parent-path copy)))))
+        (free (ignore-errors (free-octets (parent-path copy)))))
     (when (and free (< free (+ size (expt 2 30))))
       (error "The drive of the cache directory has room for no copy of this mailbox (~a, and 1 GB to spare)" (octets-words size)))
     (setf (mailbox-job-size job) size (mailbox-job-copied job) 0)
@@ -305,7 +305,7 @@ how it went (SANDBOX-RUN's second value) and what it said."
                  (when (and (not full) (> octets *outlook-mailbox-space*))
                    (setf full (format nil "readpst was stopped once it had written ~a (*outlook-mailbox-space*)" (octets-words octets))
                          (car stop) t))))
-             (let ((free (ignore-errors (free-bytes folder))))
+             (let ((free (ignore-errors (free-octets folder))))
                (when (and (not full) free (< free (expt 2 30)))
                  (setf full "readpst was stopped: the drive of the cache directory has less than 1 GB free"
                        (car stop) t)))
