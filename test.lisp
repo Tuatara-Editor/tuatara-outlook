@@ -464,11 +464,11 @@ Epilogue.~%"
                           (and view (or (tuatara.defaults::pdf-view-job view) (tuatara.defaults::pdf-view-text-job view)))))
             tuatara.defaults::*pdf-views*)))
 
-(defun outlook-session (path steps &key (width 120) (height 40))
+(defun outlook-session (path steps &key (width 120) (height 40) cell-pixels)
   "Visit PATH with C-x C-f in an editor session, then do each of STEPS (keys,
 or a function called there) once what is read in the background is done.
-Returns the frontend and the editor."
-  (let ((f (tuatara.frontend.fake:make-fake-frontend :width width :height height))
+CELL-PIXELS has the frontend show pictures. Returns the frontend and the editor."
+  (let ((f (tuatara.frontend.fake:make-fake-frontend :width width :height height :cell-pixels cell-pixels))
         (start (get-internal-real-time)))
     (let ((scratch (tuatara.buffer:find-buffer "*scratch*")))
       (when scratch (tuatara.buffer:kill-buffer scratch)))
@@ -509,7 +509,7 @@ Returns the frontend and the editor."
           (tuatara.buffer:kill-buffer buffer)))
       ;; RET on the picture: its private copy shown as rimu shows it, a picture drawn in the sandbox
       (when (and (eq :ready (tuatara.io:sandbox-status)) (tuatara.defaults::find-image-decoder))
-        (multiple-value-bind (f editor) (outlook-session path (list (to-attachment 0) "RET"))
+        (multiple-value-bind (f editor) (outlook-session path (list (to-attachment 0) "RET") :cell-pixels '(10 20))
           (declare (ignore f))
           (let* ((view (tuatara.defaults::image-view-of (session-buffer editor)))
                  (copy (and view (tuatara.defaults::image-view-path view))))
