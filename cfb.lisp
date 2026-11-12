@@ -21,12 +21,12 @@
 
 (defstruct (cfb (:constructor %make-cfb) (:copier nil))
   "A compound file read from OCTETS: SECTOR-SIZE octets a sector (512 or
-4,096) and SECTORS of them; file allocation table (FAT) and MINI-FAT, the tables chaining sectors
-and mini sectors, vectors of numbers; ENTRIES, its directory, a vector of
-CFB-ENTRY; MINI-STREAM, the octets the small streams are kept in; CUTOFF,
-the size from which a stream is kept in sectors of its own; OWNERS, the
-storage each entry was first found in, which alone it belongs to; GIVEN, the
-octets of its streams read so far."
+4,096) and SECTORS of them. The file allocation table (FAT) and MINI-FAT are
+the tables chaining sectors and mini sectors, vectors of numbers. ENTRIES is
+its directory, a vector of CFB-ENTRY. MINI-STREAM is the octets the small
+streams are kept in. CUTOFF is the size from which a stream is kept in
+sectors of its own. OWNERS is the storage each entry was first found in,
+which alone it belongs to. GIVEN is the octets of its streams read so far."
   octets sector-size sectors fat mini-fat entries mini-stream cutoff
   (owners (make-hash-table)) (given 0))
 
@@ -86,12 +86,15 @@ or is made so that following it would not end or would read past it."
     (error "Not a compound file"))
   (let* ((shift (cfb-number octets 30 2))
          (mini-shift (cfb-number octets 32 2))
-         (sector-size (if (member shift '(9 12)) (ash 1 shift) (error "A compound file with sectors of 2^~d octets" shift)))
+         (sector-size (if (member shift '(9 12))
+                          (ash 1 shift)
+                          (error "A compound file with sectors of 2^~d octets" shift)))
          (sectors (max 0 (ceiling (- (length octets) sector-size) sector-size)))
          (fat-count (cfb-number octets 44 4))
          (per-sector (floor sector-size 4)))
     (unless (= mini-shift 6) (error "A compound file with mini sectors of 2^~d octets" mini-shift))
-    (when (> fat-count sectors) (error "The compound file says it has ~:d FAT sectors, more than its ~:d" fat-count sectors))
+    (when (> fat-count sectors)
+      (error "The compound file says it has ~:d FAT sectors, more than its ~:d" fat-count sectors))
     ;; the FAT's sectors: 109 named in the header, the rest in a chain of DIFAT sectors
     (let ((fat-sectors (make-array fat-count :fill-pointer 0)))
       (loop for i below (min 109 fat-count)
@@ -112,20 +115,28 @@ or is made so that following it would not end or would read past it."
                    (loop for i below per-sector
                       do (setf (aref fat (+ (* k per-sector) i))
                                (or (octets-integer octets (+ base (* 4 i)) 4) #xFFFFFFFF)))))
-        (let* ((directory (cfb-sector-octets octets (cfb-chain (cfb-number octets 48 4) fat sectors :what "The directory")
+        (let* ((directory (cfb-sector-octets octets
+                                             (cfb-chain (cfb-number octets 48 4) fat sectors :what "The directory")
                                              sector-size))
                (entries (cfb-directory directory (= sector-size 4096)))
                (root (and (plusp (length entries)) (aref entries 0))))
           (unless (and root (eq (cfb-entry-type root) :root)) (error "The compound file has no root"))
           (let* ((mini-fat-octets (let ((start (cfb-number octets 60 4)))
                                     (if (>= start sectors) (make-array 0 :element-type '(unsigned-byte 8))
-                                        (cfb-sector-octets octets (cfb-chain start fat sectors :what "The mini FAT") sector-size))))
-                 (mini-fat (let ((table (make-array (floor (length mini-fat-octets) 4) :element-type '(unsigned-byte 32))))
+                                        (cfb-sector-octets octets
+                                                           (cfb-chain start fat sectors :what "The mini FAT")
+                                                           sector-size))))
+                 (mini-fat (let ((table (make-array (floor (length mini-fat-octets) 4)
+                                                    :element-type '(unsigned-byte 32))))
                              (dotimes (i (length table) table)
                                (setf (aref table i) (cfb-number mini-fat-octets (* 4 i) 4)))))
                  (mini-stream (if (or (zerop (cfb-entry-size root)) (>= (cfb-entry-start root) sectors))
                                   (make-array 0 :element-type '(unsigned-byte 8))
-                                  (cfb-sector-octets octets (cfb-chain (cfb-entry-start root) fat sectors :what "The mini stream")
+                                  (cfb-sector-octets octets
+                                                     (cfb-chain (cfb-entry-start root)
+                                                                fat
+                                                                sectors
+                                                                :what "The mini stream")
                                                      sector-size :size (cfb-entry-size root)))))
             (%make-cfb :octets octets :sector-size sector-size :sectors sectors :fat fat :mini-fat mini-fat
                        :entries entries :mini-stream mini-stream :cutoff (cfb-number octets 56 4))))))))
@@ -142,9 +153,12 @@ not looked at."
         (when type
           (flet ((link (offset) (let ((n (cfb-number octets (+ at offset) 4))) (and (< n (length entries)) n))))
             (setf (aref entries i)
-                  (make-cfb-entry :name (utf-16-text octets :start at :end (+ at (min 64 (max 0 (- (cfb-number octets (+ at 64) 2) 2)))))
+                  (make-cfb-entry :name (utf-16-text octets
+                                                     :start at
+                                                     :end (+ at (min 64 (max 0 (- (cfb-number octets (+ at 64) 2) 2)))))
                                   :type type :left (link 68) :right (link 72) :child (link 76)
-                                  :start (cfb-number octets (+ at 116) 4) :size (cfb-number octets (+ at 120) (if wide 8 4))
+                                  :start (cfb-number octets (+ at 116) 4)
+                                  :size (cfb-number octets (+ at 120) (if wide 8 4))
                                   :index i))))))))
 
 (defun cfb-children (cfb entry)
@@ -172,11 +186,11 @@ stream is read again for each storage that names it."
     (sort found #'< :key #'cfb-entry-index)))
 
 (defun cfb-stream-octets (cfb entry)
-  "The octets of the stream ENTRY of the compound file (CFB): from the mini stream when it is
-smaller than the file's cutoff, else from sectors of its own; an error when
-it says it holds more than its chain does or than *OUTLOOK-LARGEST-FILE*, or
-when its streams together come to more than twice the file, as streams
-sharing their sectors would."
+  "The octets of the stream ENTRY of the compound file (CFB), from the mini
+stream when it is smaller than the file's cutoff, else from sectors of its
+own. It is an error when the entry says it holds more than its chain does or
+than *OUTLOOK-LARGEST-FILE*. It is also an error when the streams together
+come to more than twice the file, as streams sharing their sectors would."
   (let ((size (cfb-entry-size entry)))
     (when (> size *outlook-largest-file*)
       (error "A stream of the compound file says it holds ~:d octets, more than *outlook-largest-file*" size))
@@ -185,22 +199,29 @@ sharing their sectors would."
     (cond ((zerop size) (make-array 0 :element-type '(unsigned-byte 8)))
           ((< size (cfb-cutoff cfb))
            (let* ((mini (cfb-mini-stream cfb))
-                  (chain (cfb-chain (cfb-entry-start entry) (cfb-mini-fat cfb) (ceiling (length mini) 64) :what "A small stream")))
+                  (chain (cfb-chain (cfb-entry-start entry)
+                                    (cfb-mini-fat cfb)
+                                    (ceiling (length mini) 64)
+                                    :what "A small stream")))
              (when (> size (* 64 (length chain)))
-               (error "A stream of the compound file says it holds ~:d octets, more than its ~:d" size (* 64 (length chain))))
+               (error "A stream of the compound file says it holds ~:d octets, more than its ~:d"
+                      size
+                      (* 64 (length chain))))
              (let ((out (make-array size :element-type '(unsigned-byte 8))))
                (loop for sector across chain
                      for at from 0 by 64
                      while (< at size)
                      do (replace out mini :start1 at :end1 (min size (+ at 64)) :start2 (* sector 64)))
                out)))
-          (t (cfb-sector-octets (cfb-octets cfb) (cfb-chain (cfb-entry-start entry) (cfb-fat cfb) (cfb-sectors cfb) :what "A stream")
+          (t (cfb-sector-octets (cfb-octets cfb)
+                                (cfb-chain (cfb-entry-start entry) (cfb-fat cfb) (cfb-sectors cfb) :what "A stream")
                                 (cfb-sector-size cfb) :size size)))))
 
 ;;; The body kept as compressed RTF
 
 (defparameter *lzfu-dictionary*
-  (concatenate 'string "{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss \\fmodern \\fscript \\fdecor MS Sans SerifSymbolArialTimes New RomanCourier{\\colortbl\\red0\\green0\\blue0"
+  (concatenate 'string
+               "{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss \\fmodern \\fscript \\fdecor MS Sans SerifSymbolArialTimes New RomanCourier{\\colortbl\\red0\\green0\\blue0"
                (coerce '(#\Return #\Newline) 'string) "\\par \\pard\\plain\\f0\\fs20\\b\\i\\u\\tab\\tx")
   "The text the dictionary of compressed Rich Text Format (RTF) starts with, 207 characters, which
 its references may point into from the first.")
@@ -338,19 +359,23 @@ HTML itself as a second value."
                            (cond ((member word *rtf-skipped-groups* :test #'string=) (setf skip t))
                                  ((string= word "fromhtml") (setf html t))
                                  ((string= word "htmlrtf") (setf html-skip (not (eql parameter 0))))
-                                 ((string= word "ansicpg") (setf charset (or (mail-codepage-charset parameter) charset)))
+                                 ((string= word "ansicpg")
+                                  (setf charset (or (mail-codepage-charset parameter) charset)))
                                  ((string= word "uc") (setf uc (max 0 (min 10 (or parameter 1)))))
                                  ((string= word "u")
                                   (flush)
                                   (when (and parameter (text-p))
                                     (let ((code (if (minusp parameter) (+ parameter 65536) parameter)))
-                                      (emit (string (if (or (<= #xD800 code #xDFFF) (>= code char-code-limit)) (code-char #xFFFD) (code-char code))))))
+                                      (emit (string (if (or (<= #xD800 code #xDFFF) (>= code char-code-limit))
+                                                        (code-char #xFFFD)
+                                                        (code-char code))))))
                                   (setf to-skip uc))
                                  ((text-p)
                                   (let ((said (rtf-word-text word)))
                                     (when said (emit said)))))))
                         ((= next 39)                                       ; \'XX, an octet of the code page
-                      (let ((value (and (<= (+ i 3) n) (ignore-errors (parse-integer (octets-latin-1 octets :start (1+ i) :end (+ i 3)) :radix 16)))))
+                      (let ((value (and (<= (+ i 3) n)
+                                        (ignore-errors (parse-integer (octets-latin-1 octets :start (1+ i) :end (+ i 3)) :radix 16)))))
                            (incf i 3)
                            (when (and value (not (consumed-by-u)) (text-p))
                              (vector-push-extend value pending))))

@@ -70,7 +70,8 @@ END)."
                               (cdr (first headers))))
                        (t (let ((colon (position 58 octets :start i :end text-end)))
                             (if colon
-                                (push (list (string-downcase (string-trim " 	" (octets-string octets :start i :end colon)))
+                                (push (list (string-downcase (string-trim " 	"
+                                                                          (octets-string octets :start i :end colon)))
                                             (string-trim " 	" (octets-string octets :start (1+ colon) :end text-end)))
                                       headers)
                                 ;; no header: the body began without its empty line
@@ -95,7 +96,10 @@ charset of its own (name*0*=utf-8''%C3%A9...) put together and decoded."
               (setf value (cl-ppcre:regex-replace-all "\\\\(.)" (subseq value 1 (1- (length value))) "\\1")))
             (multiple-value-bind (match groups) (cl-ppcre:scan-to-strings "^([^*]+)\\*(?:(\\d+))?(\\*)?$" name)
               (if match
-                  (push (list (aref groups 0) (if (aref groups 1) (parse-integer (aref groups 1)) 0) (and (or (aref groups 2) (null (aref groups 1))) t) value)
+                  (push (list (aref groups 0)
+                              (if (aref groups 1) (parse-integer (aref groups 1)) 0)
+                              (and (or (aref groups 2) (null (aref groups 1))) t)
+                              value)
                         pieces)
                   (push (cons name value) plain)))))))
     ;; a value in parts or with its charset: name*=utf-8''..., name*0*=...; name*1=...
@@ -176,7 +180,9 @@ the octet XX, = at a line's end joining it to the next, the rest as it is."
                              ((let ((j (1+ i)))
                                 (loop while (and (< j end) (member (aref octets j) '(32 9))) do (incf j))
                                 (cond ((and (< j end) (= (aref octets j) 10)) (setf i (1+ j)) t)
-                                      ((and (< (1+ j) end) (= (aref octets j) 13) (= (aref octets (1+ j)) 10)) (setf i (+ j 2)) t)
+                                      ((and (< (1+ j) end) (= (aref octets j) 13) (= (aref octets (1+ j)) 10))
+                                       (setf i (+ j 2))
+                                       t)
                                       ((= j end) (setf i end) t))))
                              (t (vector-push o out) (incf i))))))))
     (coerce out '(simple-array (unsigned-byte 8) (*)))))
@@ -336,21 +342,31 @@ says, or NIL when it cannot be read as one."
       (ignore-errors
        (let* ((day (parse-integer (aref groups 0)))
               (month (1+ (position (aref groups 1) *short-month-names* :test #'string-equal)))
-              (year (let ((y (parse-integer (aref groups 2)))) (cond ((< y 50) (+ y 2000)) ((< y 100) (+ y 1900)) (t y))))
+              (year (let ((y (parse-integer (aref groups 2))))
+                      (cond ((< y 50) (+ y 2000)) ((< y 100) (+ y 1900)) (t y))))
               (zone (let ((z (aref groups 6)))
                       (cond ((null z) 0)
                             ((member (char z 0) '(#\+ #\-)) (parse-integer z))
                             (t (or (cdr (assoc z *mail-zones* :test #'string-equal)) 0)))))
               (offset (* (signum zone) (+ (* 3600 (floor (abs zone) 100)) (* 60 (mod (abs zone) 100))))))
          (and (valid-date-p year month day) (<= 1900 year 9999)
-              (- (encode-universal-time (if (aref groups 5) (parse-integer (aref groups 5)) 0) (parse-integer (aref groups 4))
+              (- (encode-universal-time (if (aref groups 5) (parse-integer (aref groups 5)) 0)
+                                        (parse-integer (aref groups 4))
                                         (parse-integer (aref groups 3)) day month year 0)
                  offset)))))))
 
 ;;; A message read
 
 (defparameter *mail-shown-headers*
-  '("reply-to" "sender" "return-path" "in-reply-to" "x-mailer" "user-agent" "x-originating-ip" "importance" "x-priority")
+  '("reply-to"
+    "sender"
+    "return-path"
+    "in-reply-to"
+    "x-mailer"
+    "user-agent"
+    "x-originating-ip"
+    "importance"
+    "x-priority")
   "The headers of internet mail shown among what a message says of itself,
 besides those every message shows; and those readpst adds (X-libpst-...).")
 
@@ -363,7 +379,9 @@ whole."
     (let* ((leaves (mime-leaves part))
            (body (mime-body-part leaves))
            (received (let ((first (mime-header part "received")))
-                       (and first (find #\; first) (mail-date-time (subseq first (1+ (position #\; first :from-end t)))))))
+                       (and first
+                            (find #\; first)
+                            (mail-date-time (subseq first (1+ (position #\; first :from-end t)))))))
            (date (header "date"))
            (mail (make-mail :from (header "from") :to (header "to") :cc (header "cc") :bcc (header "bcc")
                             :subject (header "subject") :sent (mail-date-time date) :received received
@@ -395,12 +413,16 @@ whole."
             (let ((nested (mime-part-message leaf)))
               (push (make-mail-attachment
                      :name (or (mime-part-name leaf)
-                               (and nested (let ((subject (mime-header nested "subject"))) (and subject (mime-decode-words subject))))
+                               (and nested
+                                    (let ((subject (mime-header nested "subject")))
+                                      (and subject (mime-decode-words subject))))
                                (format nil "part ~d (~a)" count (mime-part-type leaf)))
                      :mime (mime-part-type leaf) :content-id (mime-header leaf "content-id")
                      :message (and nested (< depth *outlook-nesting-limit*) (mime-mail nested :depth (1+ depth)))
                      :octets (and (not nested) (mime-part-content leaf))
-                     :why (and nested (>= depth *outlook-nesting-limit*) "a message nested too deep to read (*outlook-nesting-limit*)"))
+                     :why (and nested
+                               (>= depth *outlook-nesting-limit*)
+                               "a message nested too deep to read (*outlook-nesting-limit*)"))
                     (mail-attachments mail))))))
       (setf (mail-attachments mail) (nreverse (mail-attachments mail)))
       mail)))
@@ -443,10 +465,10 @@ decoded; NIL when it has none."
 
 (defun html-text (html)
   "The text of HTML, as a message shows it, with its markup left out, scripts,
-styles and comments with it; elements that make blocks on lines of their
-own; a link followed by its address in <>, when that is not its text; a
-picture as [picture: what it shows], its address said and not fetched;
-entities decoded and spaces run together as HTML runs them."
+styles and comments with it. Elements that make blocks are on lines of their
+own. A link is followed by its address in <>, when that is not its text. A
+picture is [picture: what it shows], its address said and not fetched.
+Entities are decoded and spaces run together as HTML runs them."
   (let ((out (make-array 1024 :element-type 'character :adjustable t :fill-pointer 0))
         (i 0) (n (length html)) (pre 0) (link nil) (link-start 0))
     (labels ((put (text) (loop for c across text do (vector-push-extend c out)))
@@ -470,7 +492,9 @@ entities decoded and spaces run together as HTML runs them."
                           ;; what they hold is no text: on to their end
                           (let ((end (search (format nil "</~a" name) html :start2 i :test #'char-equal)))
                             (setf i (if end (let ((e (position #\> html :start end))) (if e (1+ e) n)) n))))
-                         ((string= name "pre") (if ending (setf pre (max 0 (1- pre))) (incf pre)) (put (string #\Newline)))
+                         ((string= name "pre")
+                          (if ending (setf pre (max 0 (1- pre))) (incf pre))
+                          (put (string #\Newline)))
                          ((member name *html-block-tags* :test #'string=)
                           (put (string #\Newline))
                           (when (and (string= name "li") (not ending)) (put "• ")))
@@ -492,5 +516,8 @@ entities decoded and spaces run together as HTML runs them."
                                                          (format nil "from ~a, not fetched" source)
                                                          source)))))))))))
       (string-trim '(#\Newline #\Space)
-                   (cl-ppcre:regex-replace-all "\\n{3,}" (cl-ppcre:regex-replace-all "(?m)[ \\t]+$" (coerce out 'simple-string) "")
+                   (cl-ppcre:regex-replace-all "\\n{3,}"
+                                               (cl-ppcre:regex-replace-all "(?m)[ \\t]+$"
+                                                                           (coerce out 'simple-string)
+                                                                           "")
                                                (format nil "~%~%"))))))

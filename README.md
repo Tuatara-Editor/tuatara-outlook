@@ -8,7 +8,8 @@ read are never changed.
 
 ## Loading it, step by step
 
-1. **Install what it needs.** readpst, which reads mailboxes, and WeasyPrint, which draws a message as it looks (`P`):
+1. **Install what it needs.** readpst, which reads mailboxes, and WeasyPrint,
+   which draws a message as it looks (`P`):
 
    | System | Command |
    |---|---|
@@ -27,7 +28,8 @@ read are never changed.
 
 4. **Save** with `C-x C-s`, **quit** with `C-x C-c`, and **start Tuatara
    again**. Answer `y` when it asks whether to load outlook; it asks once.
-5. **Check it**: `M-x check-health` says whether readpst and WeasyPrint are found; then open a `.msg`, `.eml` or `.pst` file.
+5. **Check it**: `M-x check-health` says whether readpst and WeasyPrint are
+   found; then open a `.msg`, `.eml` or `.pst` file.
 
 Once it is loaded, opening one of these files shows it as a message, or a
 list of messages:
@@ -43,54 +45,54 @@ here.
 
 ## Keys
 
-| Where | Key | What it does |
-|---|---|---|
-| A message | `RET`, a click | Opens the attachment at point here, from a copy only you can read: an attached message as a message; a PDF, an Office document or a picture as rimu shows it, as pages or as the picture, drawn shut in the sandbox; anything else safely, read only. |
-| A message | `O` | Opens the attachment at point in the desktop's own program for its kind, after asking: a copy only you can read, and only a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document). That program is not shut in the sandbox. |
-| A message | `P` | Shows it as it looks: its HTML drawn as pages, its pictures in place, nothing fetched from the internet, no script run (see Seeing a message as it looks). `T` there comes back to the message. |
-| A message | `T` | Shows the message's file as its text: opened safely when the message came from a mailbox or an attachment, else as any file is opened. |
-| A message | `C-c o o`, `C-c o p`, `C-c o t` | The same as `O`, `P` and `T`: outlook's commands under its own prefix, `C-c o`, as every package's are under a prefix of its own. |
-| A mailbox | `RET`, `l` | Opens the item on the line: a message as one, read only, the matches of the list's filters lit in it; a contact or an appointment as its text, safely. On a folder's line, folds or unfolds the folder. |
-| A mailbox | `o` | Opens the item on the line in another window, the list staying where it is. |
-| A mailbox | `n`, `p` | Go to the next item and the one before, over the folders' lines. |
-| A mailbox | `TAB`, `S-TAB` | Folds or unfolds the folder the line is in; every folder. |
-| A mailbox | `m`, `u`, `U`, `t` | Marks the message on the line (`>`) and moves down; takes its mark off; takes every mark off; marks those shown that are not marked and unmarks those marked, as in rimu. A count marks as many. |
-| A mailbox | `C` | Opens the menu of copying out the messages marked, or the one on the line: `e` as saved mail (`.eml`), `m` as Outlook items (`.msg`), then asks for the folder (made when it is not there). `C-h` there lists the menu. |
-| A mailbox | `P` | Turns off and on the preview: the message on the line shown in a window beside the list, read as any message is, following the cursor (see Seeing a message beside the list). |
-| A mailbox | `C-s`, `C-r` | Narrows the list, as a regular expression is typed, to the messages whose headers or contents match (see Searching a mailbox). `RET` keeps the pattern as a filter, `C-g` lets the one typed go. |
-| A mailbox | `C-x / l` | Lists the filters narrowing the list, each with how many items it leaves; there `d` takes away the filter on the line and `D` all of them. |
-| A mailbox | `C-x / r` | Takes every filter away: the whole list again. |
-| A message | `q` | Closes it, back to the mailbox (or wherever it was opened from); `h` moves the cursor left, as everywhere. |
-| A mailbox | `q` | Closes it. |
-| A mailbox | `h` | Asks, then closes it and goes back to its folder in rimu, on the mailbox. The moves by word (`w`, `b`, `W`, `B`) do nothing in the list; `V` is the one selection, of whole lines. |
-| A mailbox | `C-c o h`, `C-c o c` | The same as `h` and `C`, under outlook's own prefix. |
+| Where     | Key                             | What it does                                                                                                                                                                                                                                                           |
+| ---       | ---                             | ---                                                                                                                                                                                                                                                                    |
+| A message | `RET`, a click                  | Opens the attachment at point here, from a copy only you can read: an attached message as a message; a PDF, an Office document or a picture as rimu shows it, as pages or as the picture, drawn shut in the sandbox; anything else safely, read only.                  |
+| A message | `O`                             | Opens the attachment at point in the desktop's own program for its kind, after asking: a copy only you can read, and only a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document). That program is not shut in the sandbox. |
+| A message | `P`                             | Shows it as it looks: its HTML drawn as pages, its pictures in place, nothing fetched from the internet, no script run (see Seeing a message as it looks). `T` there comes back to the message.                                                                        |
+| A message | `T`                             | Shows the message's file as its text: opened safely when the message came from a mailbox or an attachment, else as any file is opened.                                                                                                                                 |
+| A message | `C-c o o`, `C-c o p`, `C-c o t` | The same as `O`, `P` and `T`: outlook's commands under its own prefix, `C-c o`, as every package's are under a prefix of its own.                                                                                                                                      |
+| A mailbox | `RET`, `l`                      | Opens the item on the line: a message as one, read only, the matches of the list's filters lit in it; a contact or an appointment as its text, safely. On a folder's line, folds or unfolds the folder.                                                                |
+| A mailbox | `o`                             | Opens the item on the line in another window, the list staying where it is.                                                                                                                                                                                            |
+| A mailbox | `n`, `p`                        | Go to the next item and the one before, over the folders' lines.                                                                                                                                                                                                       |
+| A mailbox | `TAB`, `S-TAB`                  | Folds or unfolds the folder the line is in; every folder.                                                                                                                                                                                                              |
+| A mailbox | `m`, `u`, `U`, `t`              | Marks the message on the line (`>`) and moves down; takes its mark off; takes every mark off; marks those shown that are not marked and unmarks those marked, as in rimu. A count marks as many.                                                                       |
+| A mailbox | `C`                             | Opens the menu of copying out the messages marked, or the one on the line: `e` as saved mail (`.eml`), `m` as Outlook items (`.msg`), then asks for the directory (made when it is not there). `C-h` there lists the menu.                                             |
+| A mailbox | `P`                             | Turns off and on the preview: the message on the line shown in a window beside the list, read as any message is, following the cursor (see Seeing a message beside the list).                                                                                          |
+| A mailbox | `C-s`, `C-r`                    | Narrows the list, as a regular expression is typed, to the messages whose headers or contents match (see Searching a mailbox). `RET` keeps the pattern as a filter, `C-g` lets the one typed go.                                                                       |
+| A mailbox | `C-x / l`                       | Lists the filters narrowing the list, each with how many items it leaves; there `d` takes away the filter on the line and `D` all of them.                                                                                                                             |
+| A mailbox | `C-x / r`                       | Takes every filter away: the whole list again.                                                                                                                                                                                                                         |
+| A message | `q`                             | Closes it, back to the mailbox (or wherever it was opened from); `h` moves the cursor left, as everywhere.                                                                                                                                                             |
+| A mailbox | `q`                             | Closes it.                                                                                                                                                                                                                                                             |
+| A mailbox | `h`                             | Asks, then closes it and goes back to its directory in rimu, on the mailbox. The moves by word (`w`, `b`, `W`, `B`) do nothing in the list; `V` is the one selection, of whole lines.                                                                                  |
+| A mailbox | `C-c o h`, `C-c o c`            | The same as `h` and `C`, under outlook's own prefix.                                                                                                                                                                                                                   |
 
 ## Mailboxes
 
 A mailbox is read by `readpst`, of the libpst package, shut in Tuatara's
 sandbox: no network, and none of your files but the mailbox. Its messages are
-written to your cache folder, each twice, as saved mail and as an Outlook
+written to your cache directory, each twice, as saved mail and as an Outlook
 item, so that they can be copied out as either; they are deleted when the
 list is closed. Install libpst from your system's packages
-(`readpst` on the `PATH` of the system's own program folders).
+(`readpst` on the `PATH` of the system's own program directories).
 
 ## Seeing a message as it looks
 
-`P` in a message draws it as a mail program shows it: its HTML laid out as
-on a screen, its colours, tables and fonts, the pictures it carries in their
-places, under its headers (from, to, subject, dates, attachments) as a mail
-program prints it, and its internet headers whole, as they came, on a page
-of their own after it. The pages are shown in Tuatara's PDF view, with its
-keys (zoom, search, the text). The message's HTML comes from the message itself: the HTML part
-of a saved mail, or an Outlook item's HTML, or the HTML its rich text keeps.
-A message of plain text alone looks as it is shown already.
+`P` in a message draws it as a mail program shows it: its HTML laid out as on a
+screen, its colours, tables and fonts, the pictures it carries in their places,
+under its headers (from, to, subject, dates, attachments) as a mail program
+prints it, and its internet headers whole, as they came, on a page of their own
+after it. The pages are shown in Tuatara's PDF view, with its keys (zoom,
+search, the text). The message's HTML comes from the message itself: the HTML
+part of a saved mail, or an Outlook item's HTML, or the HTML its rich text
+keeps. A message of plain text alone looks as it is shown already.
 
 It is drawn by [WeasyPrint](https://weasyprint.org), shut in Tuatara's
 sandbox as readpst is: no network, so nothing is fetched from the internet (a
 picture, a style, a tracking pixel) and the sender cannot learn the message
 was opened; the line over the pages says how many such things it holds.
 WeasyPrint runs no scripts at all. It sees only the message's HTML and the
-pictures it shows, written into a folder of your cache only you can read, and
+pictures it shows, written into a directory of your cache only you can read, and
 your fonts, read only. Install it from your system's packages: `weasyprint`
 on Fedora, Debian and Ubuntu, `python-weasyprint` on Arch, `python3-weasyprint`
 on openSUSE. The pages need poppler's `pdftoppm` too, as any PDF does.
@@ -108,14 +110,14 @@ buffers with it, when the cursor leaves the list and the preview.
 ## Copying messages out
 
 `C` opens a menu of copying out the messages marked with `m` (or, with none
-marked, the one on the line) into a folder you choose, each a file of its
+marked, the one on the line) into a directory you choose, each a file of its
 own: `e` as saved mail (`.eml`, internet mail as readpst wrote it), `m` as
 Outlook items (`.msg`, written by readpst from the mailbox itself, beside
 each `.eml`); `M-x mailbox-export-eml` and `M-x mailbox-export-msg` do the
 same without the menu. A
 copy is named by when the message was sent and its subject,
 `2026-04-30 0915 kea survey.msg`; a name already taken gets `(2)`, `(3)`
-and so on, and nothing in the folder is overwritten. Characters a name cannot
+and so on, and nothing in the directory is overwritten. Characters a name cannot
 hold on other systems' drives (`: * ? " < > | / \`) are left out or made `-`.
 Copying runs in the background; the message line then says how many were
 copied and which could not be. Marks stay on messages a filter hides, and
@@ -142,7 +144,7 @@ again), and `C-x / r` takes them all away. `RET` on a message of the
 narrowed list opens it with the filters' matches lit.
 
 The text searched is made once, as the mailbox is listed: for each message,
-in the list's own private folder, deleted with it. Matching runs in the
+in the list's own private directory, deleted with it. Matching runs in the
 background, the mode line saying how far it has got, and starts again as the
 pattern changes; the editor goes on meanwhile, however large the mailbox. Of
 a message larger than `*outlook-search-text-limit*` only that much is
@@ -153,18 +155,18 @@ readpst wrote are never changed.
 
 ## Settings
 
-| Setting | Standard | What it is |
-|---|---|---|
-| `*outlook-readpst-program*` | `"readpst"` | The program that reads mailboxes. |
-| `*outlook-page-program*` | `"weasyprint"` | The program that draws a message as it looks. |
-| `*outlook-include-deleted*` | `t` | Lists the items a mailbox still holds that were deleted, in the folders they were deleted from; `nil` for only those not deleted. |
-| `*outlook-largest-file*` | 256 MB | The most an item or saved mail, or an attachment in one, may hold to be read as a message; a larger one opens as any file. |
-| `*outlook-nesting-limit*` | `8` | How many levels of messages attached to messages are shown as messages; deeper ones are listed as not read. |
-| `*outlook-mailbox-seconds*` | `3600` | The most seconds readpst may take; it is stopped then, and what it wrote is listed. |
-| `*outlook-mailbox-most-files*` | 1 million | The most files readpst wrote that a mailbox's list takes in; the rest are left out, and the list says so. |
-| `*outlook-search-text-limit*` | 16 million | The most characters of a mailbox's message its list's search looks through; a larger one is searched that far, and the list counts them. |
-| `*outlook-mailbox-space*` | 32 GB | The most readpst may write; it is stopped there, or when the drive has less than 1 GB free. |
-| `*outlook-preview*` | `t` | Shows the message on the line beside a mailbox's list; `nil` leaves it off until `P` turns it on in one list. |
+| Setting | Standard | Values | What it is |
+|---|---|---|---|
+| `*outlook-readpst-program*` | `"readpst"` | text | The program that reads mailboxes. |
+| `*outlook-page-program*` | `"weasyprint"` | text | The program that draws a message as it looks. |
+| `*outlook-include-deleted*` | `t` | `t` or `nil` | Lists the items a mailbox still holds that were deleted, in the folders they were deleted from; `nil` for only those not deleted. |
+| `*outlook-largest-file*` | 256 MB | a whole number, 1 or more | The most an item or saved mail, or an attachment in one, may hold to be read as a message; a larger one opens as any file. |
+| `*outlook-nesting-limit*` | `8` | a whole number, 0 or more | How many levels of messages attached to messages are shown as messages; deeper ones are listed as not read. |
+| `*outlook-mailbox-seconds*` | `3600` | a whole number, 1 or more | The most seconds readpst may take; it is stopped then, and what it wrote is listed. |
+| `*outlook-mailbox-most-files*` | 1 million | a whole number, 1 or more | The most files readpst wrote that a mailbox's list takes in; the rest are left out, and the list says so. |
+| `*outlook-search-text-limit*` | 16 million | a whole number, 1 or more | The most characters of a mailbox's message its list's search looks through; a larger one is searched that far, and the list counts them. |
+| `*outlook-mailbox-space*` | 32 GB | a whole number, 1 or more | The most readpst may write; it is stopped there, or when the drive has less than 1 GB free. |
+| `*outlook-preview*` | `t` | `t` or `nil` | Shows the message on the line beside a mailbox's list; `nil` leaves it off until `P` turns it on in one list. |
 
 Set them in the package's `:config`:
 
@@ -196,7 +198,7 @@ tools/test.sh
 ```
 
 runs its tests against a Tuatara source tree: `../tuatara` beside this
-repository, or `../../tuatara` beside the folder it is in, unless
+repository, or `../../tuatara` beside the directory it is in, unless
 `TUATARA_SOURCE` names another. How a package is laid out and which of
 Tuatara's names it may use are in Tuatara's
 [HACKING.org](https://github.com/Tuatara-Editor/tuatara/blob/main/HACKING.org);

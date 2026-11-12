@@ -14,17 +14,19 @@
 
 (define-major-mode mail-view-mode special-mode
   "A message read, read only: an Outlook item (.msg), a saved mail (.eml) or a
-message of a mailbox. Who it is from and to, its dates and subject, its
-attachments, its text (its plain text, else its HTML or Rich Text Format (RTF) read as text),
-what else it says of itself, and its internet headers whole. Nothing in it is
-run, and nothing it points to fetched.
-\\<mail-view-mode>\\[push-button] on an attachment opens it here, from a copy only you can
-read: a message as a message, a PDF, an Office document or a picture as
-rimu shows it, drawn shut in the sandbox, anything else safely; \\[mail-open-attachment-outside] opens that copy in
-the desktop's program, after asking; \\[forward-button] and \\[backward-button] go from one
-attachment to the next; \\[mail-view-pages] shows it as it looks, its HTML drawn as pages,
-nothing fetched; \\[mail-view-file-text] shows the file of the message itself, as
-text; \\[quit-window] closes it, back to the list it was opened from."
+message of a mailbox. It shows who it is from and to, its dates and subject,
+its attachments, its text (its plain text, else its HTML or Rich Text Format
+(RTF) read as text), what else it says of itself, and its internet headers
+whole. Nothing in it is run, and nothing it points to fetched.
+\\<mail-view-mode>\\[push-button] on an attachment opens it here, from a copy
+only you can read: a message as a message, a PDF, an Office document or a
+picture as rimu shows it, drawn shut in the sandbox, anything else safely.
+\\[mail-open-attachment-outside] opens that copy in the desktop's program,
+after asking. \\[forward-button] and \\[backward-button] go from one
+attachment to the next. \\[mail-view-pages] shows it as it looks, its HTML
+drawn as pages, nothing fetched. \\[mail-view-file-text] shows the file of the
+message itself, as text. \\[quit-window] closes it, back to the list it was
+opened from."
   :lighter "Mail" :interactive nil)
 
 (defvar *mail-views* '()
@@ -63,10 +65,13 @@ contents are not what its name says."
     (values
      (format nil "~a~:[~;, hidden from its reader~]~:[~;, shown in the text~]"
              (cond (message (let ((subject (one-line (mail-subject message))))
-                              (format nil "a message~@[: ~a~]" (and (not (equal subject (one-line (mail-attachment-name attachment)))) subject))))
+                              (format nil
+                                      "a message~@[: ~a~]"
+                                      (and (not (equal subject (one-line (mail-attachment-name attachment)))) subject))))
                    (octets (let ((sample (subseq octets 0 (min (length octets) +binary-sample+))))
                              (multiple-value-bind (words kind) (octets-kind sample)
-                               (setf disagrees (and kind (kind-name-disagrees-p kind (or (mail-attachment-name attachment) "")) t))
+                               (setf disagrees
+                                     (and kind (kind-name-disagrees-p kind (or (mail-attachment-name attachment) "")) t))
                                (format nil "~a, ~a~@[, said to be ~a~]~:[~;, NOT what its name says~]"
                                        (octets-words (length octets))
                                        (or words (if (binary-head-p sample) "binary" "text"))
@@ -116,13 +121,19 @@ text alone, no buttons."
                   (put name :link (let ((a attachment)) (lambda () (funcall open a))))))
             (multiple-value-bind (words disagrees) (mail-attachment-words attachment)
               (put (format nil "  ~a~%" words) (and disagrees :warning))))))
-      (heading (format nil "Text~@[ (~a)~]" (case (mail-body-kind mail) (:html "HTML read as text") (:rtf "RTF read as text"))))
+      (heading (format nil
+                       "Text~@[ (~a)~]"
+                       (case (mail-body-kind mail) (:html "HTML read as text") (:rtf "RTF read as text"))))
       (let ((body (or (mail-body mail) "(none)")))
         (put (if brief
                  (let ((end (loop with at = 0 repeat *mail-brief-lines*
-                                  do (setf at (let ((n (position #\Newline body :start at))) (if n (1+ n) (length body))))
+                                  do (setf at
+                                           (let ((n (position #\Newline body :start at))) (if n (1+ n) (length body))))
                                   finally (return at))))
-                   (format nil "~a~:[~;~%...~]" (string-right-trim '(#\Newline) (subseq body 0 end)) (< end (length body))))
+                   (format nil
+                           "~a~:[~;~%...~]"
+                           (string-right-trim '(#\Newline) (subseq body 0 end))
+                           (< end (length body))))
                  (string-right-trim '(#\Newline) body)))
         (put (string #\Newline)))
       (unless brief
@@ -201,7 +212,8 @@ a mailbox's list (*MAIL-PREVIEWS*), its name saying so."
                     (lambda (buffer)
                       (setf (buffer-local buffer 'mail-source) (cons native safe))
                       (start-job-thread (make-mail-read-job buffer native)
-                                        (lambda (job) (setf (mail-read-job-mail job) (outlook-read-file (mail-read-job-path job))))
+                                        (lambda (job)
+                                          (setf (mail-read-job-mail job) (outlook-read-file (mail-read-job-path job))))
                                         :name "tuatara mail reading")))))
 
 ;;; Attachments
@@ -213,7 +225,8 @@ for you alone and read only: made the first time, and again when it has gone."
     (if (and copy (path-stamp copy))
         copy
         (setf (mail-attachment-copy-path attachment)
-              (write-private-copy (attachment-file-name (mail-attachment-name attachment)) (mail-attachment-octets attachment))))))
+              (write-private-copy (attachment-file-name (mail-attachment-name attachment))
+                                  (mail-attachment-octets attachment))))))
 
 (defparameter *mail-attachment-views* '(pdf-view-visit office-view-visit image-view-visit)
   "The views an attachment is shown by, as a file of its kind is in rimu: a
@@ -235,7 +248,8 @@ where you keep your files."
           ((mail-attachment-octets attachment)
            (let ((copy (mail-attachment-copy attachment)))
              (cond ((outlook-message-kind copy) (show-buffer (mail-view-buffer copy :safe t)))
-                   ((some (lambda (view) (funcall view copy (lambda (buffer) (show-buffer buffer)))) *mail-attachment-views*))
+                   ((some (lambda (view) (funcall view copy (lambda (buffer) (show-buffer buffer))))
+                          *mail-attachment-views*))
                    (t (visit-path copy :safe t)))
              (message "~a opened from a copy only you can read; \\<mail-view-mode>\\[mail-open-attachment-outside] in the message opens it outside" name)))
           (t (message "~a: ~a" name (or (mail-attachment-why attachment) "nothing to open"))))))
@@ -255,9 +269,12 @@ agrees; see *open-externally-kinds*). That program is not shut in the sandbox."
   (let ((attachment (mail-attachment-at-point)))
     (cond ((null attachment) (message "No attachment at point: \\<mail-view-mode>\\[forward-button] goes to the next"))
           ((mail-attachment-message attachment)
-           (message "~a is a message: \\<mail-view-mode>\\[push-button] opens it here" (one-line (mail-attachment-name attachment))))
+           (message "~a is a message: \\<mail-view-mode>\\[push-button] opens it here"
+                    (one-line (mail-attachment-name attachment))))
           ((null (mail-attachment-octets attachment))
-           (message "~a: ~a" (one-line (mail-attachment-name attachment)) (or (mail-attachment-why attachment) "nothing to open")))
+           (message "~a: ~a"
+                    (one-line (mail-attachment-name attachment))
+                    (or (mail-attachment-why attachment) "nothing to open")))
           (t (open-externally-file (mail-attachment-copy attachment))))))
 
 (define-command mail-view-file-text ()
@@ -288,9 +305,9 @@ without its angle brackets and spaces, %XX read as the octets they stand for."
   (let ((id (string-trim '(#\< #\> #\Space #\Tab) text)))
     (percent-decoded id)))
 
-(defun mail-page-html (html attachments folder)
-  "HTML, a message's, made ready to be drawn from FOLDER: each picture it
-shows from among ATTACHMENTS (cid:, by its Content-ID) written into FOLDER
+(defun mail-page-html (html attachments directory)
+  "HTML, a message's, made ready to be drawn from DIRECTORY: each picture it
+shows from among ATTACHMENTS (cid:, by its Content-ID) written into DIRECTORY
 and pointed to there, by a name of its own. Returns it, and as a second value
 how many pictures, styles and the like it would fetch from the internet
 \(*MAIL-FETCHING-PATTERN*), which drawing it never does."
@@ -300,14 +317,15 @@ how many pictures, styles and the like it would fetch from the internet
              (lambda (match id)
                (let* ((id (mail-content-id id))
                       (attachment (find-if (lambda (a) (and (mail-attachment-content-id a) (mail-attachment-octets a)
-                                                            (string= id (mail-content-id (mail-attachment-content-id a)))))
+                                                            (string= id
+                                                                     (mail-content-id (mail-attachment-content-id a)))))
                                            attachments)))
                  (cond ((null attachment) match)
                        ((gethash attachment written))
                        (t (let* ((type (native-file-type (or (mail-attachment-name attachment) "")))
                                  (name (format nil "part-~d~@[.~a~]" (incf count)
                                                (and type (cl-ppcre:scan "^[A-Za-z0-9]{1,5}$" type) type))))
-                            (write-new-file (path-join folder name) (mail-attachment-octets attachment))
+                            (write-new-file (path-join directory name) (mail-attachment-octets attachment))
                             (setf (gethash attachment written) name))))))
              :simple-calls t)
             (/ (length (cl-ppcre:all-matches *mail-fetching-pattern* html)) 2))))
@@ -324,7 +342,8 @@ own colours."
                    border-bottom:1px solid currentColor\">")
       (loop for (label value face) in (append (mail-header-lines mail)
                                               (and names (list (list "Attachments" (format nil "~{~a~^; ~}" names)))))
-            do (format out "<tr><th style=\"text-align:left;vertical-align:top;padding:0 3mm 1mm 0;white-space:nowrap\">~a</th>~
+            do (format out
+                       "<tr><th style=\"text-align:left;vertical-align:top;padding:0 3mm 1mm 0;white-space:nowrap\">~a</th>~
                             <td style=\"padding:0 0 1mm;overflow-wrap:anywhere;font-weight:~:[normal~;bold~]\">~a</td></tr>"
                        (xml-escape label) (eq face :strong) (xml-escape value)))
       (format out "</table>"))))
@@ -333,7 +352,8 @@ own colours."
   "MAIL's internet headers whole, as they came, as HTML: a page of their own
 after the message, or NIL when it has none."
   (when (mail-headers mail)
-    (format nil "<div style=\"break-before:page;font:10pt sans-serif\"><p style=\"margin:0 0 3mm;font-weight:bold\">Internet headers</p>~
+    (format nil
+            "<div style=\"break-before:page;font:10pt sans-serif\"><p style=\"margin:0 0 3mm;font-weight:bold\">Internet headers</p>~
                  <pre style=\"margin:0;font:8pt monospace;white-space:pre-wrap;overflow-wrap:anywhere\">~a</pre></div>"
             (xml-escape (string-right-trim '(#\Newline) (remove #\Return (mail-headers mail)))))))
 
@@ -351,15 +371,17 @@ tag, else at its end."
     (concatenate 'string (subseq html 0 start) (mail-page-head mail) (subseq html start end)
                  (or (mail-page-foot mail) "") (subseq html end))))
 
-(defun mail-pages-pdf (fd folder)
+(defun mail-pages-pdf (fd directory)
   "The PDF *OUTLOOK-PAGE-PROGRAM* (WeasyPrint) draws, shut in, of the message's
 HTML open at the file descriptor (FD) (MAIL-PAGE-HTML), as a sealed file in memory (SANDBOX-PDF):
-laid out as on a screen, as its markup says, the pictures in FOLDER shown,
+laid out as on a screen, as its markup says, the pictures in DIRECTORY shown,
 your fonts used; nothing fetched, no script run. An error saying why when it
 draws none."
-  (sandbox-pdf *outlook-page-program* '("-q" "-p" "-m" "screen" "-e" "utf-8" "-u" "/tmp/parts/" "-s" "/tmp/page.css" "-" "-") fd
+  (sandbox-pdf *outlook-page-program*
+               '("-q" "-p" "-m" "screen" "-e" "utf-8" "-u" "/tmp/parts/" "-s" "/tmp/page.css" "-" "-")
+               fd
                :files (list (cons "/tmp/page.css" *mail-page-style*))
-               :directories (list (cons (string-right-trim "/" folder) "/tmp/parts"))))
+               :directories (list (cons (string-right-trim "/" directory) "/tmp/parts"))))
 
 (defstruct (mail-pages-job (:include job) (:constructor make-mail-pages-job (buffer mail)) (:copier nil))
   "The message MAIL, shown in BUFFER, being made ready to be drawn as it
@@ -371,21 +393,24 @@ none); FETCHING, how many things it would fetch from the internet."
 
 (define-job-words mail-pages-job
   :doing "Drawing the message"
-  :description (format nil "Drawing ~a as it looks" (or (one-line (mail-subject (mail-pages-job-mail job))) "a message"))
+  :description (format nil
+                       "Drawing ~a as it looks"
+                       (or (one-line (mail-subject (mail-pages-job-mail job))) "a message"))
   :verb "draw the message"
   :left-words "nothing drawn"
   :at-exit :quiet)
 
 (defun mail-pages-ready (job)
   "Write the HTML of JOB's message, made ready (MAIL-PAGE-HTML), into a new
-folder for you alone in the cache directory, with the pictures it shows."
+directory for you alone in the cache directory, with the pictures it shows."
   (let* ((mail (mail-pages-job-mail job))
          (html (funcall (mail-html mail))))
     (when html
-      (let ((folder (new-private-folder (private-cache-directory "mail-pages/"))))
-        (multiple-value-bind (ready fetching) (mail-page-html html (mail-attachments mail) folder)
+      (let ((directory (new-private-directory (private-cache-directory "mail-pages/"))))
+        (multiple-value-bind (ready fetching) (mail-page-html html (mail-attachments mail) directory)
           (setf (mail-pages-job-fetching job) fetching
-                (mail-pages-job-path job) (write-new-file (path-join folder "message.html") (mail-page-with-headers ready mail))))))))
+                (mail-pages-job-path job)
+                (write-new-file (path-join directory "message.html") (mail-page-with-headers ready mail))))))))
 
 (defmethod job-take-in ((job mail-pages-job))
   "Show the message as it looks, as pages, or say why it is not."
@@ -396,8 +421,11 @@ folder for you alone in the cache directory, with the pictures it shows."
           (t (let ((pages (pdf-view-make path :make (lambda (fd) (mail-pages-pdf fd (parent-path path)))
                                                :reading (lambda (pages)
                                                           (declare (ignore pages))
-                                                          (if (live-buffer-p shown) (show-buffer shown) (message "The message is closed")))
-                                               :words (format nil "A message as it looks, drawn by ~a~[~:;, ~:*~:d thing~:p from the internet not fetched~]"
+                                                          (if (live-buffer-p shown)
+                                                              (show-buffer shown)
+                                                              (message "The message is closed")))
+                                               :words (format nil
+                                                              "A message as it looks, drawn by ~a~[~:;, ~:*~:d thing~:p from the internet not fetched~]"
                                                               *outlook-page-program* fetching)
                                                :zoom :width)))
                (setf (buffer-name pages) (unique-buffer-name (format nil "~a (as it looks)" (buffer-name shown)))
@@ -418,7 +446,8 @@ A message of plain text alone looks as it is shown."
           ((null (mail-html mail)) (message "Its text is plain: it looks as it is shown here"))
           ((live-buffer-p pages) (show-buffer pages))
           ((not (sandbox-find-program *outlook-page-program*))
-           (message "Messages are drawn as they look by ~a, which is not installed (its package: weasyprint)" *outlook-page-program*))
+           (message "Messages are drawn as they look by ~a, which is not installed (its package: weasyprint)"
+                    *outlook-page-program*))
           (t (start-job-thread (make-mail-pages-job buffer mail) #'mail-pages-ready :name "tuatara mail pages")))))
 
 ;;; Opening, previews, health
@@ -433,9 +462,13 @@ Returns the buffer, or NIL for a file of another kind."
     (when kind
       (let ((size (stamp-size (path-stamp native))))
         (if (> size *outlook-largest-file*)
-            (progn (file-view-refuses "~a opens as text: it has more than *outlook-largest-file* octets" (native-file-name native))
+            (progn
+              (file-view-refuses "~a opens as text: it has more than *outlook-largest-file* octets"
+                                 (native-file-name native))
                    nil)
-            (file-view-show native (remove-if-not #'live-buffer-p *mail-views*) (lambda (b) (car (buffer-local b 'mail-source)))
+            (file-view-show native
+                            (remove-if-not #'live-buffer-p *mail-views*)
+                            (lambda (b) (car (buffer-local b 'mail-source)))
                             (lambda () (mail-view-buffer native)) show))))))
 
 (defun outlook-preview-text (fd path size kind octets)

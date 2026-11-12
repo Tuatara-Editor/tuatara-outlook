@@ -169,7 +169,8 @@ type and contents, an attached item read as one while DEPTH is below
                (data (gethash #x3701 p))
                (name (or (msg-string p #x3707 codepage) (msg-string p #x3704 codepage) (msg-string p #x3001 codepage)))
                (attachment (make-mail-attachment :name name :mime (msg-string p #x370E codepage)
-                                                 :hidden (msg-value p #x7FFE) :content-id (msg-string p #x3712 codepage))))
+                                                 :hidden (msg-value p #x7FFE)
+                                                 :content-id (msg-string p #x3712 codepage))))
           (cond ((null data) (setf (mail-attachment-why attachment) "no contents"))
                 ((vectorp (cdr data)) (setf (mail-attachment-octets attachment) (cdr data)))
                 ((and (consp (cdr data)) (eql (msg-value p #x3705) 5))
@@ -178,8 +179,10 @@ type and contents, an attached item read as one while DEPTH is below
                           (not (member (cdr (cdr data)) *msg-items*)))
                      (let ((inner (msg-mail cfb (cdr (cdr data)) :depth (1+ depth) :header 24)))
                        (setf (mail-attachment-message attachment) inner)
-                       (unless name (setf (mail-attachment-name attachment) (or (mail-subject inner) "an attached item"))))
-                     (setf (mail-attachment-why attachment) "an item nested too deep, or too often, to read (*outlook-nesting-limit*)")))
+                       (unless name
+                         (setf (mail-attachment-name attachment) (or (mail-subject inner) "an attached item"))))
+                     (setf (mail-attachment-why attachment)
+                           "an item nested too deep, or too often, to read (*outlook-nesting-limit*)")))
                 (t (setf (mail-attachment-why attachment) "an embedded object, not read")))
           (unless (mail-attachment-name attachment)
             (setf (mail-attachment-name attachment) (format nil "attachment ~a" (subseq (cfb-entry-name storage) 20))))
@@ -188,12 +191,12 @@ type and contents, an attached item read as one while DEPTH is below
   (setf (mail-attachments mail) (nreverse (mail-attachments mail))))
 
 (defun msg-mail (cfb entry &key (depth 0) (header 32))
-  "The MAIL the item in the storage ENTRY of the compound file (CFB) is (the root for an item of
-its own, HEADER 32; an attached one, HEADER 24): its sender, recipients,
-dates and body (its plain text, else its HTML read as text, else its
-compressed Rich Text Format (RTF) read as text), what it says of itself, its internet headers,
-and its attachments, an attached item read as one when DEPTH is below
-*OUTLOOK-NESTING-LIMIT*."
+  "The MAIL the item in the storage ENTRY of the compound file (CFB) is (the
+root for an item of its own, HEADER 32; an attached one, HEADER 24). It has
+its sender, recipients, dates and body (its plain text, else its HTML read as
+text, else its compressed Rich Text Format (RTF) read as text), what it says
+of itself, its internet headers, and its attachments. An attached item is
+read as one when DEPTH is below *OUTLOOK-NESTING-LIMIT*."
   (push entry *msg-items*)
   (let* ((properties (msg-properties cfb entry header))
          (codepage (or (msg-value properties #x3FFD) (msg-value properties #x3FDE)))
@@ -214,7 +217,9 @@ and its attachments, an attached item read as one when DEPTH is below
       (mail-detail mail "Conversation" (text #x0070))
       (mail-detail mail "Importance" (case (value #x0017) (0 "low") (2 "high")))
       (mail-detail mail "Sensitivity" (case (value #x0036) (1 "personal") (2 "private") (3 "confidential")))
-      (mail-detail mail "Code page" (and codepage (format nil "~d~@[ (~a)~]" codepage (mail-codepage-charset codepage))))
+      (mail-detail mail
+                   "Code page"
+                   (and codepage (format nil "~d~@[ (~a)~]" codepage (mail-codepage-charset codepage))))
       (msg-body mail properties codepage)
       (msg-attachments mail cfb entry codepage depth)
       mail)))

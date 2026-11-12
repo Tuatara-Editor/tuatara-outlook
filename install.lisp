@@ -24,11 +24,11 @@ what reads them."
   (commands-for-mode 'mail-view-mode "a message (an Outlook item, a saved mail, a message of a mailbox)"
                      'mail-open-attachment-outside 'mail-view-file-text 'mail-view-pages)
   (entry-list-keys 'mailbox-mode "the list of a mailbox")
-  (define-keys (mode-keymap 'mailbox-mode) '(("h" mailbox-back-to-folder) ("C" mailbox-export) ("d" :undefined)))
-  (define-keys (mode-keymap 'mailbox-mode) '(("C-c o h" mailbox-back-to-folder) ("C-c o c" mailbox-export)))
+  (define-keys (mode-keymap 'mailbox-mode) '(("h" mailbox-back-to-directory) ("C" mailbox-export) ("d" :undefined)))
+  (define-keys (mode-keymap 'mailbox-mode) '(("C-c o h" mailbox-back-to-directory) ("C-c o c" mailbox-export)))
   (label-keys (mode-keymap 'mailbox-mode) '(("C-c o" "outlook")))
   (commands-for-mode 'mailbox-mode "the list of a mailbox" 'mailbox-export 'mailbox-export-eml 'mailbox-export-msg
-                     'mailbox-back-to-folder)
+                     'mailbox-back-to-directory)
   (entry-preview-keys 'mailbox-mode "the list of a mailbox")
   (pushnew 'mail-visit *file-views*)
   (pushnew 'mailbox-visit *file-views*)

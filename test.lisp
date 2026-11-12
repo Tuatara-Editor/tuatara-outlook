@@ -62,7 +62,8 @@ first the root. Streams below 4,096 octets go in the mini stream."
            (next fat-count))
       (labels ((put (at value count) (tuatara.io:octets-put-integer out value count :at at))
                (run (count) (let ((start next))
-                              (dotimes (k count) (setf (aref fat (+ start k)) (if (< k (1- count)) (+ start k 1) #xFFFFFFFE)))
+                              (dotimes (k count)
+                                (setf (aref fat (+ start k)) (if (< k (1- count)) (+ start k 1) #xFFFFFFFE)))
                               (incf next count)
                               (if (plusp count) start #xFFFFFFFE)))
                (sector (n) (* 512 (1+ n))))
@@ -96,7 +97,10 @@ first the root. Streams below 4,096 octets go in the mini stream."
                      (put (+ at 120) (cfbw-entry-size entry) 8)))
           ;; unused entries of the last directory sector: no links
           (loop for k from (length entries) below (* 4 dir-count)
-                do (let ((at (+ (sector dir-start) (* 128 k)))) (put (+ at 68) #xFFFFFFFF 4) (put (+ at 72) #xFFFFFFFF 4) (put (+ at 76) #xFFFFFFFF 4)))
+                do (let ((at (+ (sector dir-start) (* 128 k))))
+                     (put (+ at 68) #xFFFFFFFF 4)
+                     (put (+ at 72) #xFFFFFFFF 4)
+                     (put (+ at 76) #xFFFFFFFF 4)))
           (loop for value across mini-fat for k from 0 do (put (+ (sector mini-fat-start) (* 4 k)) value 4))
           (replace out mini :start1 (sector mini-start))
           (dolist (entry big) (replace out (cfbw-entry-octets entry) :start1 (sector (cfbw-entry-start entry))))))
@@ -211,18 +215,35 @@ attached item nested INNER-DEPTH deep."
          (#x0C1E #x001F "EX")
          (#x5D01 #x001F "kea@example.org")
          (#x1035 #x001F "<survey-1@example.org>")
-         (#x007D #x001F ,(format nil "Received: from mail.example.org by mx.example.net; Tue, 6 Oct 2026 20:15:30 +0000~c~cX-Origin: tested~c~c"
+         (#x007D #x001F
+                 ,(format nil
+                          "Received: from mail.example.org by mx.example.net; Tue, 6 Oct 2026 20:15:30 +0000~c~cX-Origin: tested~c~c"
                                  #\Return #\Newline #\Return #\Newline)))
        (ecase body
          (:plain '((#x1000 #x001F "Twelve kea counted at dawn.")))
-         (:html `((#x1013 #x0102 ,(sb-ext:string-to-octets "<html><head><meta charset='utf-8'><style>p{}</style><script>alert(1)</script></head><body><p>Kea &amp; kaka seen</p><p><a href='https://example.org/count'>the count</a></p><img src='https://example.org/track.png' alt='tracker'></body></html>" :external-format :utf-8))))
-         (:rtf `((#x1009 #x0102 ,(lzfu-test-octets (append (list '(0 11)) (rtf-test-tokens "\\ansicpg1252 {\\fonttbl{\\f0 Arial;}}Kea \\'e9t\\'e9\\par \\u8364?done}"))))))))
+         (:html `((#x1013 #x0102
+                          ,(sb-ext:string-to-octets "<html><head><meta charset='utf-8'><style>p{}</style><script>alert(1)</script></head><body><p>Kea &amp; kaka seen</p><p><a href='https://example.org/count'>the count</a></p><img src='https://example.org/track.png' alt='tracker'></body></html>"
+                                                    :external-format
+                                                    :utf-8))))
+         (:rtf `((#x1009 #x0102
+                         ,(lzfu-test-octets (append (list '(0 11))
+                                                    (rtf-test-tokens "\\ansicpg1252 {\\fonttbl{\\f0 Arial;}}Kea \\'e9t\\'e9\\par \\u8364?done}"))))))))
       :children
-      (list (msg-test-storage "__recip_version1.0_#00000000" '((#x3001 #x001F "Ruru Canterbury") (#x39FE #x001F "ruru@example.org") (#x0C15 #x0003 1)) :header 8)
-            (msg-test-storage "__recip_version1.0_#00000001" '((#x3001 #x001F "Tui Rotorua") (#x39FE #x001F "tui@example.org") (#x0C15 #x0003 1)) :header 8)
-            (msg-test-storage "__recip_version1.0_#00000002" '((#x3001 #x001F "Weka Southland") (#x39FE #x001F "weka@example.org") (#x0C15 #x0003 2)) :header 8)
-            (msg-test-storage "__recip_version1.0_#00000003" '((#x3001 #x001F "Hidden Hoiho") (#x39FE #x001F "hoiho@example.org") (#x0C15 #x0003 3)) :header 8)
-            (msg-test-storage "__attach_version1.0_#00000000" `((#x3707 #x001F "kea.png") (#x3705 #x0003 1) (#x3701 #x0102 ,*png-test-octets*)) :header 8)
+      (list (msg-test-storage "__recip_version1.0_#00000000"
+                              '((#x3001 #x001F "Ruru Canterbury") (#x39FE #x001F "ruru@example.org") (#x0C15 #x0003 1))
+                              :header 8)
+            (msg-test-storage "__recip_version1.0_#00000001"
+                              '((#x3001 #x001F "Tui Rotorua") (#x39FE #x001F "tui@example.org") (#x0C15 #x0003 1))
+                              :header 8)
+            (msg-test-storage "__recip_version1.0_#00000002"
+                              '((#x3001 #x001F "Weka Southland") (#x39FE #x001F "weka@example.org") (#x0C15 #x0003 2))
+                              :header 8)
+            (msg-test-storage "__recip_version1.0_#00000003"
+                              '((#x3001 #x001F "Hidden Hoiho") (#x39FE #x001F "hoiho@example.org") (#x0C15 #x0003 3))
+                              :header 8)
+            (msg-test-storage "__attach_version1.0_#00000000"
+                              `((#x3707 #x001F "kea.png") (#x3705 #x0003 1) (#x3701 #x0102 ,*png-test-octets*))
+                              :header 8)
             (msg-test-storage "__attach_version1.0_#00000001" '((#x3705 #x0003 5)) :header 8 :children (list (inner 1))))))))
 
 (defun write-test-octets (path octets)
@@ -299,7 +320,9 @@ attached item nested INNER-DEPTH deep."
          (body (outlook::mail-body mail)))
     (is eq :rtf (outlook::mail-body-kind mail))
     (is string= (format nil "Kea été~%€done") body))
-  (is string= "{\\rtf1\\ansi" (tuatara.text:octets-latin-1 (outlook::lzfu-decompress (lzfu-test-octets (list '(0 11)))))))
+  (is string=
+      "{\\rtf1\\ansi"
+      (tuatara.text:octets-latin-1 (outlook::lzfu-decompress (lzfu-test-octets (list '(0 11)))))))
 
 (define-test (outlook crafted-compound-files)
   (let* ((good (msg-test-octets))
@@ -337,7 +360,10 @@ attached item nested INNER-DEPTH deep."
   (let* ((good (msg-test-octets))
          (cfb (outlook::cfb-read good))
          (entries (outlook::cfb-entries cfb))
-         (inner (find "__substg1.0_3701000D" entries :key (lambda (e) (and e (outlook::cfb-entry-name e))) :test #'equal))
+         (inner (find "__substg1.0_3701000D"
+                      entries
+                      :key (lambda (e) (and e (outlook::cfb-entry-name e)))
+                      :test #'equal))
          (circle (copy-seq good))
          (at (+ (* 512 (1+ (tuatara.io:octets-integer good 48 4))) (* 128 (outlook::cfb-entry-index inner)) 76))
          (start (get-internal-real-time)))
@@ -393,7 +419,9 @@ Epilogue.~%"
           (let ((o (coerce *png-test-octets* '(simple-array (unsigned-byte 8) (*)))))
             ;; in lines of 60, as mail writes it
             (let ((all (tuatara.io:base64-string o)))
-              (format nil "~{~a~^~%~}" (loop for at from 0 below (length all) by 60 collect (subseq all at (min (length all) (+ at 60))))))))
+              (format nil
+                      "~{~a~^~%~}"
+                      (loop for at from 0 below (length all) by 60 collect (subseq all at (min (length all) (+ at 60))))))))
   "A saved mail for the tests: encoded words, quoted-printable, base64, parts within parts, an attached picture and message.")
 
 (define-test (outlook internet-mail)
@@ -415,17 +443,34 @@ Epilogue.~%"
         (is string= "résumé.png" (outlook::mail-attachment-name (first attachments)))
         (is equalp *png-test-octets* (outlook::mail-attachment-octets (first attachments)))
         (is string= "Forwarded count" (outlook::mail-attachment-name (second attachments)))
-        (is string= "Inner text." (string-right-trim '(#\Newline) (outlook::mail-body (outlook::mail-attachment-message (second attachments)))))))
+        (is string=
+            "Inner text."
+            (string-right-trim '(#\Newline)
+                               (outlook::mail-body (outlook::mail-attachment-message (second attachments)))))))
   ;; quoted-printable and base64 on their own
-  (is string= "a=b é" (tuatara.text:charset-text (outlook::mime-quoted-printable-octets (sb-ext:string-to-octets (format nil "a=3Db =~%=C3=A9") :external-format :latin-1)) "utf-8"))
-  (is string= "Man" (tuatara.text:octets-latin-1 (tuatara.io:base64-octets (sb-ext:string-to-octets (format nil "TW~%Fu") :external-format :latin-1))))
-  (is string= "Ma" (tuatara.text:octets-latin-1 (tuatara.io:base64-octets (sb-ext:string-to-octets "TWE=" :external-format :latin-1))))
+  (is string=
+      "a=b é"
+      (tuatara.text:charset-text (outlook::mime-quoted-printable-octets (sb-ext:string-to-octets (format nil "a=3Db =~%=C3=A9") :external-format :latin-1)) "utf-8"))
+  (is string=
+      "Man"
+      (tuatara.text:octets-latin-1 (tuatara.io:base64-octets (sb-ext:string-to-octets (format nil "TW~%Fu")
+                                                                                      :external-format
+                                                                                      :latin-1))))
+  (is string=
+      "Ma"
+      (tuatara.text:octets-latin-1 (tuatara.io:base64-octets (sb-ext:string-to-octets "TWE=" :external-format :latin-1))))
   ;; a boundary that never comes: the body is the rest, and the message says so
-  (let ((mail (outlook::eml-read (sb-ext:string-to-octets (format nil "Subject: broken~%Content-Type: multipart/mixed; boundary=\"gone\"~%~%Only text.~%") :external-format :utf-8))))
+  (let ((mail (outlook::eml-read (sb-ext:string-to-octets (format nil
+                                                                  "Subject: broken~%Content-Type: multipart/mixed; boundary=\"gone\"~%~%Only text.~%")
+                                                          :external-format
+                                                          :utf-8))))
     (is string= "broken" (outlook::mail-subject mail))
     (true (some (lambda (note) (search "boundary" note)) (outlook::mail-notes mail))))
   ;; a closing line that never comes: the last part runs to the end
-  (let ((mail (outlook::eml-read (sb-ext:string-to-octets (format nil "Content-Type: multipart/mixed; boundary=b~%~%--b~%Content-Type: text/plain~%~%cut short~%") :external-format :utf-8))))
+  (let ((mail (outlook::eml-read (sb-ext:string-to-octets (format nil
+                                                                  "Content-Type: multipart/mixed; boundary=b~%~%--b~%Content-Type: text/plain~%~%cut short~%")
+                                                          :external-format
+                                                          :utf-8))))
     (has (outlook::mail-body mail) "cut short"))
   ;; a date of every kind, or none
   (is = (encode-universal-time 0 0 12 1 1 2026 0) (outlook::mail-date-time "1 Jan 26 12:00 GMT"))
@@ -458,10 +503,12 @@ Epilogue.~%"
 
 (defun outlook-busy-p ()
   "True while a message or a mailbox is being read, or a message drawn as it looks."
-  (or (some (lambda (job) (or (outlook::mail-read-job-p job) (outlook::mailbox-job-p job) (outlook::mail-pages-job-p job)))
+  (or (some (lambda (job)
+              (or (outlook::mail-read-job-p job) (outlook::mailbox-job-p job) (outlook::mail-pages-job-p job)))
             tuatara.runtime:*jobs*)
       (some (lambda (b) (let ((view (tuatara.defaults::pdf-view-of b)))
-                          (and view (or (tuatara.defaults::pdf-view-job view) (tuatara.defaults::pdf-view-text-job view)))))
+                          (and view
+                               (or (tuatara.defaults::pdf-view-job view) (tuatara.defaults::pdf-view-text-job view)))))
             tuatara.defaults::*pdf-views*)))
 
 (defun outlook-session (path steps &key (width 120) (height 40) cell-pixels)
@@ -551,7 +598,8 @@ CELL-PIXELS has the frontend show pictures. Returns the frontend and the editor.
 
 (define-test (outlook saved-mail-opened)
   (with-test-directory (dir)
-    (let ((path (write-test-octets (merge-pathnames "count.eml" dir) (sb-ext:string-to-octets *eml-test-text* :external-format :utf-8))))
+    (let ((path (write-test-octets (merge-pathnames "count.eml" dir)
+                                   (sb-ext:string-to-octets *eml-test-text* :external-format :utf-8))))
       (multiple-value-bind (f editor) (outlook-session path '())
         (declare (ignore f))
         (has (session-text editor) "Café survey")
@@ -570,19 +618,21 @@ CELL-PIXELS has the frontend show pictures. Returns the frontend and the editor.
 (define-test (outlook html-made-ready)
   ;; a picture shown by its Content-ID written beside the HTML and pointed to; one of no attachment left as it is
   (with-test-directory (dir)
-    (let* ((folder (namestring dir))
-           (picture (outlook::make-mail-attachment :name "kea.png" :octets *png-test-octets* :content-id "<kea%401@example.org>"))
+    (let* ((directory (namestring dir))
+           (picture (outlook::make-mail-attachment :name "kea.png"
+                                                   :octets *png-test-octets*
+                                                   :content-id "<kea%401@example.org>"))
            (other (outlook::make-mail-attachment :name "notes.txt" :octets (tuatara.text:string-octets "notes")))
            (html "<img src=\"cid:kea@1@example.org\"><img src='CID:kea%401@example.org'><img src=\"cid:gone\"><img src=\"https://example.org/track.png\"><div style=\"background:url( 'http://example.org/b.gif')\"></div><link rel=stylesheet href=\"//example.org/s.css\"><a href=\"https://example.org/\">a link</a>"))
-      (multiple-value-bind (ready fetching) (outlook::mail-page-html html (list other picture) folder)
+      (multiple-value-bind (ready fetching) (outlook::mail-page-html html (list other picture) directory)
         (has ready "<img src=\"part-1.png\"><img src='part-1.png'><img src=\"cid:gone\">")
         ;; the picture, the background and the style would be fetched; a link is never followed
         (is = 3 fetching)
-        (is equal '("part-1.png") (mapcar #'first (tuatara.io:directory-entries folder)))
+        (is equal '("part-1.png") (mapcar #'first (tuatara.io:directory-entries directory)))
         (is equalp *png-test-octets* (tuatara.io:file-octets (merge-pathnames "part-1.png" dir))))
       ;; a name an attachment gives is never used but for a plain ending
       (let ((odd (outlook::make-mail-attachment :name "x.p/n g" :octets *png-test-octets* :content-id "odd")))
-        (has (outlook::mail-page-html "<img src=cid:odd>" (list odd) folder) "src=part-1>")))))
+        (has (outlook::mail-page-html "<img src=cid:odd>" (list odd) directory) "src=part-1>")))))
 
 (define-test (outlook page-head)
   ;; the headers drawn at the start of the body, written as text, never as markup
@@ -602,7 +652,8 @@ CELL-PIXELS has the frontend show pictures. Returns the frontend and the editor.
       (false (search "logo.png" head)))
     ;; the internet headers on a page of their own, before the last end of the body
     (false (outlook::mail-page-foot mail))
-    (setf (outlook::mail-headers mail) (format nil "Received: from <mx>~c~cX-Note: a & b~c~c" #\Return #\Newline #\Return #\Newline))
+    (setf (outlook::mail-headers mail)
+          (format nil "Received: from <mx>~c~cX-Note: a & b~c~c" #\Return #\Newline #\Return #\Newline))
     (let ((foot (outlook::mail-page-foot mail)))
       (has foot "Received: from &lt;mx&gt;
 X-Note: a &amp; b</pre>")
@@ -690,14 +741,17 @@ WeasyPrint installed in it and a program drawing PDFs."
   ;; what readpst writes, made by hand: readpst itself is run only where it is installed
   (with-test-directory (dir)
     (let* ((out (merge-pathnames "out/" dir))
-           (pst (write-test-octets (merge-pathnames "archive.pst" dir) (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
+           (pst (write-test-octets (merge-pathnames "archive.pst" dir)
+                                   (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
            (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
              (job (outlook::make-mailbox-job buffer pst (namestring out))))
       (put-test-file (merge-pathnames "Outlook Data File/Inbox/1.eml" out)
-                     (format nil "From: Kea <kea@example.org>~%Subject: First~%Date: Tue, 6 Oct 2026 09:00:00 +0000~%~%one~%"))
+                     (format nil
+                             "From: Kea <kea@example.org>~%Subject: First~%Date: Tue, 6 Oct 2026 09:00:00 +0000~%~%one~%"))
       (put-test-file (merge-pathnames "Outlook Data File/Inbox/2.eml" out) *eml-test-text*)
       (put-test-file (merge-pathnames "Outlook Data File/Inbox/10.eml" out) (format nil "Subject: Tenth~%~%ten~%"))
-      (put-test-file (merge-pathnames "Outlook Data File/Contacts/1.vcf" out) (format nil "BEGIN:VCARD~%FN:Kea~%END:VCARD~%"))
+      (put-test-file (merge-pathnames "Outlook Data File/Contacts/1.vcf" out)
+                     (format nil "BEGIN:VCARD~%FN:Kea~%END:VCARD~%"))
       (sb-posix:symlink "/etc/passwd" (namestring (merge-pathnames "Outlook Data File/Inbox/3.eml" out)))
       (is eq :pst (nth-value 1 (tuatara.io:octets-kind (tuatara.io:file-head pst))))
         (outlook::mailbox-list job)
@@ -716,7 +770,8 @@ WeasyPrint installed in it and a program drawing PDFs."
         (has text "2026-10-06")
         (has text "Café survey"))
       ;; each line its item
-      (let ((item (tuatara.defaults::entry-member (tuatara.defaults::list-entry-at buffer (tuatara.buffer:buffer-point buffer)))))
+      (let ((item (tuatara.defaults::entry-member (tuatara.defaults::list-entry-at buffer
+                                                                                   (tuatara.buffer:buffer-point buffer)))))
           (true (outlook::mailbox-item-p item)))
       (tuatara.buffer:kill-buffer buffer))))
 
@@ -726,7 +781,8 @@ WeasyPrint installed in it and a program drawing PDFs."
   "Write into OUT, as readpst would, the messages the search of a mailbox's
 list is tried on: a header not shown in the list, bodies quoted-printable and
 base64, an attachment's name, and one larger than the search looks through."
-  (flet ((put (name text) (put-test-file (merge-pathnames (concatenate 'string "Outlook Data File/Inbox/" name) out) text)))
+  (flet ((put (name text)
+              (put-test-file (merge-pathnames (concatenate 'string "Outlook Data File/Inbox/" name) out) text)))
     (put "1.eml" (format nil "From: Kea <kea@example.org>~%Subject: First~%X-Case-Number: walrus-7~%~%nothing here~%"))
     (put "2.eml" (format nil "From: Ruru <ruru@example.org>~%Subject: Second~%Content-Type: text/plain; charset=utf-8~%~
                               Content-Transfer-Encoding: quoted-printable~%~%Caf=C3=A9 and a gan=~%net seen~%"))
@@ -736,7 +792,10 @@ base64, an attachment's name, and one larger than the search looks through."
                               Content-Type: multipart/mixed; boundary=\"b\"~%~%--b~%Content-Type: text/plain~%~%see attached~%~
                               --b~%Content-Type: application/pdf; name=\"invoice-2026.pdf\"~%Content-Transfer-Encoding: base64~%~%~
                               JVBERi0xLjQK~%--b--~%"))
-    (put "5.eml" (format nil "From: Hoiho <hoiho@example.org>~%Subject: Fifth~%~%~a petrel~%" (make-string 400 :initial-element #\x)))))
+    (put "5.eml"
+         (format nil
+                 "From: Hoiho <hoiho@example.org>~%Subject: Fifth~%~%~a petrel~%"
+                 (make-string 400 :initial-element #\x)))))
 
 (defun mailbox-search-test-list (dir)
   "The list of the mailbox MAILBOX-SEARCH-TEST-MESSAGES writes in DIR, read
@@ -744,7 +803,8 @@ for it and its messages' text written as the listing job writes it, with
 *OUTLOOK-SEARCH-TEXT-LIMIT* small enough that the fifth is too large."
   (let* ((out (merge-pathnames "out/" dir))
          (texts (merge-pathnames "text/" dir))
-         (pst (write-test-octets (merge-pathnames "archive.pst" dir) (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
+         (pst (write-test-octets (merge-pathnames "archive.pst" dir)
+                                 (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
          (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
          (job (outlook::make-mailbox-job buffer pst (namestring out) (namestring texts))))
     (mailbox-search-test-messages out)
@@ -764,7 +824,8 @@ for it and its messages' text written as the listing job writes it, with
 (defun wait-for-mailbox-search ()
   "Wait, a few seconds at most, till no list is being filtered in the background."
   (let ((until (+ (get-internal-real-time) (* 10 internal-time-units-per-second))))
-    (loop while (and (some (lambda (job) (and (tuatara.defaults::search-filter-job-p job) (tuatara.runtime:job-running-p job)))
+    (loop while (and (some (lambda (job)
+                             (and (tuatara.defaults::search-filter-job-p job) (tuatara.runtime:job-running-p job)))
                            tuatara.runtime:*jobs*)
                      (< (get-internal-real-time) until))
           do (sleep 0.01))))
@@ -802,7 +863,11 @@ and the subjects kept."
         (false (search "PDF-1" (fourth texts))))
       (has (tuatara.buffer:buffer-string list) "1 message too large to be searched whole")
       (flet ((narrowed (pattern)
-               (nth-value 1 (mailbox-search-session list (list (format nil "C-s ~a" (tuatara.tests::rimu-typed pattern)) :searched :look)))))
+               (nth-value 1
+                          (mailbox-search-session list
+                                                  (list (format nil "C-s ~a" (tuatara.tests::rimu-typed pattern))
+                                                        :searched
+                                                        :look)))))
         ;; a header the list does not show
         (is equal '("First") (narrowed "walrus-7"))
         ;; quoted-printable, its soft line break joined and its UTF-8 read; base64
@@ -887,17 +952,21 @@ and the subjects kept."
 (define-test (outlook mailbox-marked-and-copied-out)
   (with-test-directory (dir)
     (let* ((out (merge-pathnames "out/" dir))
-           (pst (write-test-octets (merge-pathnames "archive.pst" dir) (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
+           (pst (write-test-octets (merge-pathnames "archive.pst" dir)
+                                   (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
            (list (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
            (job (outlook::make-mailbox-job list pst (namestring out)))
            (sent (encode-universal-time 0 0 9 6 10 2026 0)))
-      (flet ((put (name text) (put-test-file (merge-pathnames (concatenate 'string "Outlook Data File/" name) out) text))
-             (copied (folder) (sort (mapcar (lambda (p) (tuatara.io:native-file-name (namestring p)))
-                                            (directory (merge-pathnames "*.*" folder)))
+      (flet ((put (name text)
+                  (put-test-file (merge-pathnames (concatenate 'string "Outlook Data File/" name) out) text))
+             (copied (directory) (sort (mapcar (lambda (p) (tuatara.io:native-file-name (namestring p)))
+                                            (directory (merge-pathnames "*.*" directory)))
                                     #'string<))
-             (text-of (folder name) (uiop:read-file-string (merge-pathnames name folder))))
+             (text-of (directory name) (uiop:read-file-string (merge-pathnames name directory))))
         ;; readpst -m writes each message as .eml and .msg, and leaves temp_file_attachment behind
-        (put "Inbox/1.eml" (format nil "From: Kea <kea@example.org>~%Subject: Re: a/b?~%Date: Tue, 6 Oct 2026 09:00:00 +0000~%~%one~%"))
+        (put "Inbox/1.eml"
+             (format nil
+                     "From: Kea <kea@example.org>~%Subject: Re: a/b?~%Date: Tue, 6 Oct 2026 09:00:00 +0000~%~%one~%"))
         (put "Inbox/1.msg" "the first as an Outlook item")
         (put "Inbox/2.eml" (format nil "Subject: Second~%~%two~%"))
         (put "Inbox/temp_file_attachment" "left over")
@@ -917,7 +986,7 @@ and the subjects kept."
                 (copies (namestring (merge-pathnames "copies/" dir))))
             (tuatara.tests::run-keys
              (list (lambda () (tuatara:show-buffer list))
-                   ;; h asks before it goes back to the folder: no, and the list stays
+                   ;; h asks before it goes back to the directory: no, and the list stays
                    "h n" (lambda () (setf stayed (tuatara:current-buffer)))
                    ;; m marks the message on the line and moves down; RET and l on a folder's line fold it
                    "m" (lambda () (setf marked (tuatara.defaults::list-marked list :marked)))
@@ -928,7 +997,7 @@ and the subjects kept."
                    "h" (lambda () (setf moved (tuatara:current-buffer)))
                    "q" (lambda () (setf back (tuatara:current-buffer)))
                    ;; C opens the menu of copying out: m copies the one marked as an Outlook item,
-                   ;; into a folder asked for, made for it
+                   ;; into a directory asked for, made for it
                    (format nil "C m C-a C-k ~a C-j" (tuatara.tests::rimu-typed copies))
                    #'wait-for-mailbox-export :tick)
              :width 140 :height 30)
@@ -939,9 +1008,11 @@ and the subjects kept."
             (dolist (keys '("w" "b" "W" "B" "v" "%"))
               (is eq :undefined (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::mailbox-mode)
                                                             (tuatara.frontend:parse-key-sequence keys))))
-            (false (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::mailbox-mode) (tuatara.frontend:parse-key-sequence "V")))
+            (false (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::mailbox-mode)
+                                               (tuatara.frontend:parse-key-sequence "V")))
             (is eq list stayed)
-            (has (tuatara.buffer:buffer-string list) "RET or l opens the item on the line, a folder's line folds; P in a message shows it as it looks, q comes back;")
+            (has (tuatara.buffer:buffer-string list)
+                 "RET or l opens the item on the line, a folder's line folds; P in a message shows it as it looks, q comes back;")
             (has (first (rest shown)) "▸ Outlook Data File/Inbox (2)")
             (false (search "Second" (first (rest shown))))
             (has (first shown) "Second")
@@ -988,22 +1059,23 @@ and the subjects kept."
             (has (second second) "two"))
           (false after)
           (false (find-if (lambda (b) (search "(preview)" (tuatara.buffer:buffer-name b))) tuatara.buffer:*buffers*)))
-        ;; h, answered yes: the list closed, its folder listed by rimu, point on the mailbox
-        (let ((folder nil))
+        ;; h, answered yes: the list closed, its directory listed by rimu, point on the mailbox
+        (let ((directory nil))
           (tuatara.tests::run-keys
            (list (lambda () (tuatara:show-buffer list))
-                 "h y" (lambda () (setf folder (tuatara:current-buffer))))
+                 "h y" (lambda () (setf directory (tuatara:current-buffer))))
            :width 140 :height 30)
           (false (tuatara.buffer:live-buffer-p list))
-          (true (tuatara.defaults::rimu-list-p folder))
-          (is string= "archive.pst" (tuatara.io:native-file-name (tuatara.defaults::shown-file folder)))
-          (tuatara.buffer:kill-buffer folder))
+          (true (tuatara.defaults::rimu-list-p directory))
+          (is string= "archive.pst" (tuatara.io:native-file-name (tuatara.defaults::shown-file directory)))
+          (tuatara.buffer:kill-buffer directory))
         (when (tuatara.buffer:live-buffer-p list) (tuatara.buffer:kill-buffer list))))))
 
 (define-test (outlook mailbox-without-readpst)
   (with-test-directory (dir)
     (let ((pst (write-test-octets (merge-pathnames "archive.pst" dir)
-                                  (concatenate '(vector (unsigned-byte 8)) (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)
+                                  (concatenate '(vector (unsigned-byte 8))
+                                               (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)
                                                (make-array 600 :initial-element 0)))))
       (let ((tuatara-user:*outlook-readpst-program* "no-such-readpst"))
         ;; opened as any file, saying how to get readpst
@@ -1038,7 +1110,13 @@ and the subjects kept."
     (let ((path (write-test-octets (merge-pathnames "survey.msg" dir) (msg-test-octets))))
       (tuatara.io:call-with-file path
                                  (lambda (fd name size)
-                                     (let ((text (outlook::outlook-preview-text fd name size :ole (tuatara.io:read-fd-start fd name size 4096))))
+                                     (let ((text (outlook::outlook-preview-text fd
+                                                                                name
+                                                                                size
+                                                                                :ole (tuatara.io:read-fd-start fd
+                                                                                                               name
+                                                                                                               size
+                                                                                                               4096))))
                                      (has text "Kea survey results")
                                      (has text "kea.png")
                                      (has text "Twelve kea"))))))
@@ -1056,10 +1134,14 @@ and the subjects kept."
                             (outlook::make-cfb-entry :name "a" :type :storage :right 2 :child 3 :index 1)
                             (outlook::make-cfb-entry :name "b" :type :storage :child 3 :index 2)
                             (outlook::make-cfb-entry :name "shared" :type :stream :start 0 :size 60 :index 3)))
-           (cfb (outlook::%make-cfb :octets (make-array 1024 :element-type '(unsigned-byte 8)) :sector-size 512 :sectors 1
+           (cfb (outlook::%make-cfb :octets (make-array 1024 :element-type '(unsigned-byte 8))
+                                    :sector-size 512
+                                    :sectors 1
                                            :entries entries :cutoff 4096
                                            :mini-stream (make-array 4096 :element-type '(unsigned-byte 8))
-                                           :mini-fat (make-array 64 :element-type '(unsigned-byte 32) :initial-element #xFFFFFFFE))))
+                                           :mini-fat (make-array 64
+                                                                 :element-type '(unsigned-byte 32)
+                                                                 :initial-element #xFFFFFFFE))))
       (is equal '("shared") (mapcar #'outlook::cfb-entry-name (outlook::cfb-children cfb (aref entries 1))))
       (false (outlook::cfb-children cfb (aref entries 2)))
       (setf (outlook::cfb-entry-size (aref entries 3)) 60)
@@ -1095,26 +1177,35 @@ and the subjects kept."
       (true (find-if (lambda (n) (search "Only its first 5 parts" n)) (outlook::mail-notes mail)))))
   ;; the limit is the message's, its multiparts together
   (let ((outlook::*mime-part-limit* 4)
-        (inner (format nil "Content-Type: multipart/mixed; boundary=i~%~%--i~%Content-Type: text/plain; name=a.txt~%~%one~%--i~%Content-Type: text/plain; name=b.txt~%~%two~%--i--~%")))
-    (let ((mail (outlook-eml (format nil "Content-Type: multipart/mixed; boundary=b~%~%--b~%~a--b~%~a--b--~%" inner inner))))
+        (inner (format nil
+                       "Content-Type: multipart/mixed; boundary=i~%~%--i~%Content-Type: text/plain; name=a.txt~%~%one~%--i~%Content-Type: text/plain; name=b.txt~%~%two~%--i--~%")))
+    (let ((mail (outlook-eml (format nil
+                                     "Content-Type: multipart/mixed; boundary=b~%~%--b~%~a--b~%~a--b--~%"
+                                     inner
+                                     inner))))
       (is = 3 (length (outlook::mail-attachments mail)))
       (true (find-if (lambda (n) (search "Only its first 4 parts" n)) (outlook::mail-notes mail))))))
 
 (define-test (outlook attached-message-sent-encoded)
   ;; a message attached in base64 is read as a message
   (let* ((inner (format nil "Subject: Kea survey~%From: tui@example.org~%~%The count is in.~%"))
-         (mail (outlook-eml (format nil "Subject: forwarded~%Content-Type: multipart/mixed; boundary=b~%~%--b~%Content-Type: text/plain~%~%See below.~%~
+         (mail (outlook-eml (format nil
+                                    "Subject: forwarded~%Content-Type: multipart/mixed; boundary=b~%~%--b~%Content-Type: text/plain~%~%See below.~%~
                                          --b~%Content-Type: message/rfc822~%Content-Transfer-Encoding: base64~%~%~a~%--b--~%"
                                     (tuatara.io:base64-string (tuatara.text:string-octets inner)))))
          (attachment (first (outlook::mail-attachments mail))))
     (true attachment)
     (is string= "Kea survey" (outlook::mail-attachment-name attachment))
     (true (outlook::mail-attachment-message attachment))
-    (is string= "The count is in." (string-trim '(#\Newline) (outlook::mail-body (outlook::mail-attachment-message attachment))))))
+    (is string=
+        "The count is in."
+        (string-trim '(#\Newline) (outlook::mail-body (outlook::mail-attachment-message attachment))))))
 
 (define-test (outlook parameters-split)
   ;; a backslash in quotes takes the character after it, a ; there among them
-  (is equal '("text/plain" " name=\"a\\\";b\"" " charset=utf-8") (outlook::mime-split-parameters "text/plain; name=\"a\\\";b\"; charset=utf-8")))
+  (is equal
+      '("text/plain" " name=\"a\\\";b\"" " charset=utf-8")
+      (outlook::mime-split-parameters "text/plain; name=\"a\\\";b\"; charset=utf-8")))
 
 (define-test (outlook attribute-scanners-made-once)
   ;; an attribute looked up makes no scanner of its own
@@ -1125,8 +1216,12 @@ and the subjects kept."
 
 (define-test (outlook attachment-unlike-its-name-told)
   ;; an attachment whose contents are not what its name says is told as a second value, not by its words
-  (true (nth-value 1 (outlook::mail-attachment-words (outlook::make-mail-attachment :name "invoice.pdf" :octets *png-test-octets*))))
-  (false (nth-value 1 (outlook::mail-attachment-words (outlook::make-mail-attachment :name "kea.png" :octets *png-test-octets*)))))
+  (true (nth-value 1
+                   (outlook::mail-attachment-words (outlook::make-mail-attachment :name "invoice.pdf"
+                                                                                  :octets *png-test-octets*))))
+  (false (nth-value 1
+                    (outlook::mail-attachment-words (outlook::make-mail-attachment :name "kea.png"
+                                                                                   :octets *png-test-octets*)))))
 
 (define-test (outlook readpst-files-counted)
   ;; every file readpst wrote counted, folders within folders too; the list told when it holds only some
@@ -1148,7 +1243,8 @@ and the subjects kept."
   ;; the most files a mailbox's list takes in is a setting; past it the list says so
   (with-test-directory (dir)
     (let* ((out (merge-pathnames "out/" dir))
-           (pst (write-test-octets (merge-pathnames "archive.pst" dir) (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
+           (pst (write-test-octets (merge-pathnames "archive.pst" dir)
+                                   (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
            (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
            (job (outlook::make-mailbox-job buffer pst (namestring out))))
       (dolist (n '(1 2 3))
@@ -1172,6 +1268,10 @@ and the subjects kept."
   (loop for (mode keys command) in '((outlook::mail-view-mode "C-c o o" outlook::mail-open-attachment-outside)
                                      (outlook::mail-view-mode "C-c o t" outlook::mail-view-file-text)
                                      (outlook::mail-view-mode "C-c o p" outlook::mail-view-pages)
-                                     (outlook::mailbox-mode "C-c o h" outlook::mailbox-back-to-folder)
+                                     (outlook::mailbox-mode "C-c o h" outlook::mailbox-back-to-directory)
                                      (outlook::mailbox-mode "C-c o c" outlook::mailbox-export))
-        do (is eq command (tuatara.command:lookup-key (tuatara:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys)) "~a" keys)))
+        do (is eq
+               command
+               (tuatara.command:lookup-key (tuatara:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys))
+               "~a"
+               keys)))
