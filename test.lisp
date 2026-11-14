@@ -260,6 +260,16 @@ attached item nested INNER-DEPTH deep."
   "Check that TEXT holds PART."
   (true (search part text) "~s in~%~a" part text))
 
+(defun point-to-line-of (buffer text)
+  "Put the point of BUFFER at the start of its first line holding TEXT, so
+that a test reaches a line of a list however many lines stand above it."
+  (let* ((whole (tuatara.buffer:buffer-string buffer))
+         (at (search text whole)))
+    (assert at () "~s not in~%~a" text whole)
+    (setf (tuatara.buffer:buffer-point buffer)
+          (let ((start (position #\Newline whole :end at :from-end t)))
+            (if start (1+ start) 0)))))
+
 ;;; Compound files
 
 (define-test (outlook item-read)
@@ -1319,10 +1329,11 @@ picture; and a message of neither."
       (tuatara.tests::run-keys
        (list (lambda () (tuatara:show-buffer list))
              "C-s g a n n e t | a l b a t r o s s RET" #'wait-for-mailbox-search :tick
-             "M-< C-n C-n C-n C-n C-n C-n C-n C-n m"
+             (lambda () (point-to-line-of list "Second")) "m"
              (lambda () (setf after-mark (tuatara.buffer:buffer-string list)
                               jobs (count-if #'tuatara.defaults::search-filter-job-p tuatara.runtime:*jobs*)))
-             "M-< C-n C-n C-n C-n C-n C-n C-n RET" (lambda () (setf after-fold (tuatara.buffer:buffer-string list))))
+             (lambda () (point-to-line-of list "Outlook Data File/Inbox")) "RET"
+             (lambda () (setf after-fold (tuatara.buffer:buffer-string list))))
        :width 140 :height 30)
       (has after-mark "Filtered by gannet|albatross: 2 of 5 items")
       (is = 0 jobs)
@@ -1414,7 +1425,11 @@ picture; and a message of neither."
                                                (tuatara.frontend:parse-key-sequence "V")))
             (is eq list stayed)
             (has (tuatara.buffer:buffer-string list)
-                 "RET or l opens the item on the line, a folder's line folds; P in a message shows it as it looks, q comes back;")
+                 "RET or l opens the item on the line, a folder's line folds; P in a")
+            ;; filled to the help column, so that the line reads whole in a narrow window
+            (true (every (lambda (line) (<= (length line) tuatara:*help-column*))
+                         (subseq (uiop:split-string (tuatara.buffer:buffer-string list) :separator '(#\Newline)) 1 4))
+                  "the words over the list are filled")
             (has (first (rest shown)) "▸ Outlook Data File/Inbox (2)")
             (false (search "Second" (first (rest shown))))
             (has (first shown) "Second")

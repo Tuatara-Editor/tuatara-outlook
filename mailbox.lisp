@@ -491,6 +491,13 @@ is :NONE, and its subject."
           (and (listp labels) (list (cons (format nil "~{~a~^, ~}" labels) :list-label)))
           (list (cons (or (mailbox-item-subject item) "(no subject)") (list-mark-face mark)))))
 
+(defun filled-words (text)
+  "TEXT with its words filled into lines no longer than *HELP-COLUMN*
+\(WRITE-FILLED), so that a mailbox's words above its list read whole in a
+window of any width."
+  (with-output-to-string (out)
+    (write-filled out "" text)))
+
 (defun mailbox-render (buffer job &optional (point :first))
   "Fill BUFFER, a mailbox's list, with what JOB read: a line on the mailbox,
 then each folder, a section that folds, and its items, their marks kept
@@ -510,14 +517,15 @@ was. Its searches narrow it, matching each message's headers and contents
                             :heading)
                       (format nil
                               "~a~%"
-                              (substitute-command-keys
-                               (format nil
-                                       "\\<mailbox-mode>\\`RET' or \\`l' opens the item on the line, a folder's ~
-                                        line folds; \\<mail-view-mode>\\[mail-view-pages] in a message shows it as ~
-                                        it looks, \\[quit-window] comes back; ~
-                                        \\<mailbox-mode>\\[regex-search-forward] narrows the list to the items ~
-                                        whose headers or contents match; \\[list-mark-entry] marks, ~
-                                        \\[mailbox-export] copies out.")))))
+                              (filled-words
+                               (substitute-command-keys
+                                (format nil
+                                        "\\<mailbox-mode>\\`RET' or \\`l' opens the item on the line, a folder's ~
+                                         line folds; \\<mail-view-mode>\\[mail-view-pages] in a message shows it as ~
+                                         it looks, \\[quit-window] comes back; ~
+                                         \\<mailbox-mode>\\[regex-search-forward] narrows the list to the items ~
+                                         whose headers or contents match; \\[list-mark-entry] marks, ~
+                                         \\[mailbox-export] copies out."))))))
          (partial (loop for (nil . items) in folders sum (count-if-not #'mailbox-item-whole items)))
          (notes (loop for note in (append (reverse (mailbox-job-notes job))
                                           (and (plusp partial)
@@ -529,7 +537,7 @@ was. Its searches narrow it, matching each message's headers and contents
                                                              partial
                                                              *outlook-search-text-limit*
                                                              (octets-words *outlook-largest-file*)))))
-                      collect (cons (format nil "~a~%" note) :warning))))
+                      collect (cons (format nil "~a~%" (filled-words note)) :warning))))
     (set-search-filtering buffer :text (lambda (entry where) (mailbox-item-part-text job (entry-member entry) where))
                                  :nouns "items" :searches t
                                  :parts (mailbox-field-names (mailbox-job-field-names job))
