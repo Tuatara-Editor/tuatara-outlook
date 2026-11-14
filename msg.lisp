@@ -228,6 +228,57 @@ read as one when DEPTH is below *OUTLOOK-NESTING-LIMIT*."
       (msg-attachments mail cfb entry codepage depth)
       mail)))
 
+(defparameter *msg-field-names*
+  '((#x0017 "importance") (#x001A "message-class") (#x0026 "priority") (#x0036 "sensitivity") (#x0037 "subject")
+    (#x0039 "client-submit-time") (#x003B "sent-representing-search-key") (#x003D "subject-prefix")
+    (#x0042 "sent-representing-name") (#x0050 "reply-recipient-names") (#x0057 "message-to-me")
+    (#x0058 "message-cc-me") (#x0064 "sent-representing-address-type") (#x0065 "sent-representing-email-address")
+    (#x0070 "conversation-topic") (#x0071 "conversation-index") (#x0C1A "sender-name") (#x0C1D "sender-search-key")
+    (#x0C1E "sender-address-type") (#x0C1F "sender-email-address") (#x0E02 "display-bcc") (#x0E03 "display-cc")
+    (#x0E04 "display-to") (#x0E06 "message-delivery-time") (#x0E07 "message-flags") (#x0E08 "message-size")
+    (#x0E1D "normalized-subject") (#x0FF9 "record-key") (#x1035 "internet-message-id")
+    (#x1039 "internet-references") (#x1042 "in-reply-to-id") (#x1046 "original-message-id") (#x3007 "creation-time")
+    (#x3008 "last-modification-time") (#x300B "search-key") (#x3FDE "internet-codepage")
+    (#x3FFA "last-modifier-name") (#x3FFD "message-codepage") (#x5D01 "sender-smtp-address")
+    (#x5D02 "sent-representing-smtp-address"))
+  "The names Microsoft's MS-OXPROPS gives the properties of an Outlook item,
+each (NUMBER NAME), as the fields of a message are named (MSG-FIELDS).")
+
+(defparameter *msg-contents-properties* '(#x007D #x1000 #x1009 #x1013)
+  "The properties of an Outlook item that hold its contents, not what it says
+of itself: its internet headers and its bodies, plain, compressed RTF and HTML.")
+
+(defun msg-fields (octets)
+  "What the Outlook item in OCTETS (a .msg) says of itself, each (NAME . TEXT):
+each of its properties but those of its contents (*MSG-CONTENTS-PROPERTIES*)
+and the named ones, NAME the name MS-OXPROPS gives it (*MSG-FIELD-NAMES*), or
+0x and its number for one not named there;
+TEXT a string as it is, a time in universal time, importance, sensitivity and
+the message flags in words, a number written, octets in hexadecimal. In the
+order of their numbers; an error when OCTETS are no Outlook item."
+  (let* ((cfb (cfb-read octets))
+         (properties (msg-properties cfb (aref (cfb-entries cfb) 0) 32))
+         (codepage (or (msg-value properties #x3FFD) (msg-value properties #x3FDE)))
+         (fields '()))
+    (maphash (lambda (id entry)
+               (unless (member id *msg-contents-properties*)
+                 (destructuring-bind (type . value) entry
+                   (let ((text (cond ((eql id #x0017) (case value (0 "low") (1 "normal") (2 "high")))
+                                     ((eql id #x0036) (case value (0 "none") (1 "personal") (2 "private")
+                                                        (3 "confidential")))
+                                     ((eql id #x0E07) (msg-flag-words value))
+                                     ((eql type #x0040) (utc-time-words value))
+                                     ((eql type #x000B) (if value "true" "false"))
+                                     ((and (eql type #x0102) (vectorp value)) (octets-hex value))
+                                     ((consp value) nil)
+                                     (t (msg-string properties id codepage)))))
+                     (when (and text (plusp (length text)))
+                       (push (list id (or (second (assoc id *msg-field-names*)) (format nil "0x~(~4,'0x~)" id))
+                                   (one-line text))
+                             fields))))))
+             properties)
+    (mapcar (lambda (field) (cons (second field) (third field))) (sort fields #'< :key #'first))))
+
 (defun msg-read (octets)
   "The MAIL the Outlook item in OCTETS (a .msg) is; an error saying why when
 it is not one, or is made to be read without end."

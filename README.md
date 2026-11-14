@@ -57,15 +57,19 @@ here.
 | A mailbox | `n`, `p`                        | Go to the next item and the one before, over the folders' lines.                                                                                                                                                                                                       |
 | A mailbox | `TAB`, `S-TAB`                  | Folds or unfolds the folder the line is in; every folder.                                                                                                                                                                                                              |
 | A mailbox | `m`, `u`, `U`, `t`              | Marks the message on the line (`>`) and moves down; takes its mark off; takes every mark off; marks those shown that are not marked and unmarks those marked, as in rimu. A count marks as many.                                                                       |
-| A mailbox | `C`                             | Opens the menu of copying out the messages marked, or the one on the line: `e` as saved mail (`.eml`), `m` as Outlook items (`.msg`), then asks for the directory (made when it is not there). `C-h` there lists the menu.                                             |
+| A mailbox | `C`                             | Opens the menu of copying out the messages marked, or the one on the line: `e` as saved mail (`.eml`), `m` as Outlook items (`.msg`), then asks for the directory (made when it is not there); `b` into one mbox file, asked for; `a` first for every message shown. `C-h` there lists the menu. |
+| A mailbox | `+`, `-`                        | Puts labels of your own on the messages marked, or the one on the line, several apart by commas, those used before offered; takes labels off them, chosen from those they carry (see Labels).                                                                  |
+| A mailbox | `L`                             | Narrows the list to the messages carrying a label, or any of several, chosen from those used in the mailbox; with `C-u`, to those carrying none of them. A filter kept with the others (see Labels).                                                                  |
 | A mailbox | `P`                             | Turns off and on the preview: the message on the line shown in a window beside the list, read as any message is, following the cursor (see Seeing a message beside the list).                                                                                          |
 | A mailbox | `C-s`, `C-r`                    | Narrows the list, as a regular expression is typed, to the messages whose headers or contents match (see Searching a mailbox). `RET` keeps the pattern as a filter, `C-g` lets the one typed go.                                                                       |
+| A mailbox | `C-x / f`, `C-x / h`            | Narrows the list to the messages one field of which a pattern matches, or hides them: the field asked for first, any header the mailbox's messages have, an attachment's name, a label, or what the Outlook item says of itself (see Filtering by a field).          |
 | A mailbox | `C-x / l`                       | Lists the filters narrowing the list, each with how many items it leaves; there `d` takes away the filter on the line and `D` all of them.                                                                                                                             |
 | A mailbox | `C-x / r`                       | Takes every filter away: the whole list again.                                                                                                                                                                                                                         |
 | A message | `q`                             | Closes it, back to the mailbox (or wherever it was opened from); `h` moves the cursor left, as everywhere.                                                                                                                                                             |
 | A mailbox | `q`                             | Closes it.                                                                                                                                                                                                                                                             |
 | A mailbox | `h`                             | Asks, then closes it and goes back to its directory in rimu, on the mailbox. The moves by word (`w`, `b`, `W`, `B`) do nothing in the list; `V` is the one selection, of whole lines.                                                                                  |
 | A mailbox | `C-c o h`, `C-c o c`            | The same as `h` and `C`, under outlook's own prefix.                                                                                                                                                                                                                   |
+| A mailbox | `C-c o +`, `C-c o -`, `C-c o l` | The same as `+`, `-` and `L`.                                                                                                                                                                                                                                          |
 
 ## Mailboxes
 
@@ -75,6 +79,28 @@ written to your cache directory, each twice, as saved mail and as an Outlook
 item, so that they can be copied out as either; they are deleted when the
 list is closed. Install libpst from your system's packages
 (`readpst` on the `PATH` of the system's own program directories).
+
+## Attachments earlier in a conversation
+
+A reply or a forward quotes the earlier mails of its conversation but seldom
+carries their attachments. When the mailbox holds those earlier mails, a
+message opened from its list ends with "Attachments earlier in this
+conversation": each attachment under the subject, sender and date of the
+message it came with and how it was found (by In-Reply-To, by References, by
+the conversation index of the header or of the Outlook item), said too when
+one Message-ID is given to several messages. `RET` on one opens it as the message's own attachments
+open, from a copy only you can read, shut in the sandbox, nothing in it run.
+
+The earlier mails are found by the Message-IDs the message's `In-Reply-To`
+and `References` headers name, and theirs in turn; when those find none, by
+Outlook's conversation index (the `Thread-Index` header, or the
+PR_CONVERSATION_INDEX readpst writes in the Outlook item): its first 22
+octets name the conversation and each reply adds 5, so a message whose index
+is the start of this one's is earlier in the same conversation. The links are
+read as the mailbox is listed and looked up in tables made once; reading the
+earlier mails is part of reading the message, in the background. In the
+Enron sample mailbox (71 messages) every message has a conversation index,
+none has `In-Reply-To` or `References`, and two find an earlier message.
 
 ## Seeing a message as it looks
 
@@ -123,6 +149,58 @@ Copying runs in the background; the message line then says how many were
 copied and which could not be. Marks stay on messages a filter hides, and
 `C` copies them too: the question names how many it copies.
 
+`a` in the menu, All shown, switches from the messages marked to every
+message the list's filters leave, those under folded folders too, marked or
+not: `C a e` copies out as saved mail all that a search, a label or a field
+filter left.
+
+`b` collects the messages into one mbox file, the format most mail programs
+import (`M-x mailbox-export-mbox` does the same without the menu): each
+message as readpst wrote it, after a `From ` line with its sender's address
+and when it was sent, a line of a message beginning with `From ` (after any
+number of `>`) written with one `>` more, as the mboxrd form does, so that
+reading it back gives each message as it was. It asks for the file; a name
+taken gets `(2)`, `(3)` and so on, and nothing is overwritten. It is written
+in the background; a copy stopped half-way is deleted. Contacts and
+appointments are left out.
+
+Tuatara cannot write a `.pst` mailbox: that is a later item on its roadmap.
+Until then, `.eml`, `.msg` and `.mbox` are the ways out.
+
+## Labels
+
+`+` in a mailbox's list puts labels of your own on the messages marked with
+`m`, or with none marked on the one on the line: type one or several, apart by
+commas, the labels used before offered as you type; `RET` on the empty choice
+ends the question. Each message's labels are shown on its line, in a column
+of their own while any message carries one. `-` takes labels off, chosen from
+those the messages carry.
+
+The labels are kept for you alone in Tuatara's state directory
+(`outlook/labels/`), never in the mailbox nor beside it, in a file named by
+the mailbox's SHA-256 sum: whenever that mailbox is opened again, a copy of it
+too, its labels come back, and a mailbox changed in any way starts with none.
+A message is known by its folder, its Message-ID and the SHA-256 sum of its
+headers as readpst wrote them; two messages of a folder alike in all three (a
+Message-ID forged or copied, headers alike) are told apart by their order.
+The numbers readpst gives its files are not used: they follow the order of
+the folder and change when deleted items are read or left out. The mailbox is
+summed from the copy readpst reads, so it is read once, and nothing is
+written near it.
+
+Each change is a line added to the end of the mailbox's labels file, in one
+write while holding the file's lock, so two sessions labelling the same
+mailbox lose nothing of each other's; the file is read from the first line,
+and written again with only the labels it leaves once it has grown long.
+
+`L` narrows the list to the messages carrying a label, or any of several,
+chosen apart by commas from the labels its messages carry; `C-u L` to those
+carrying none of them. It is one of the list's filters, as a search kept with
+`RET` is (see Searching a mailbox): it narrows what the filters before it
+left, `C-x / l` lists it and `C-x / r` takes every filter away. Labels are
+told apart by case: `kea` is not `Kea`. A message labelled or unlabelled while
+such a filter is on is shown or hidden at once, as the filters now say.
+
 ## Searching a mailbox
 
 `C-s` (or `C-r`) in a mailbox's list does not move through its lines: it
@@ -152,6 +230,43 @@ searched, and of one larger than `*outlook-largest-file*` only its headers;
 the list says how many such messages there are. Nothing in a message is run,
 attachments other than text are never decoded, and the mailbox and what
 readpst wrote are never changed.
+
+## Filtering by a field
+
+`C-x / f` in a mailbox's list keeps the messages one field of which a
+pattern matches, and `C-x / h` hides them. It asks for the field first, the
+names completed from those found in the mailbox as it was listed: `from`,
+`to`, `cc`, `bcc`, `subject`, `date`, `attachment name` (an attachment's
+name) and `your label` first, then every other header its messages have
+(`received`, `message-id`, `in-reply-to`, `references`, `reply-to`,
+`return-path`, `x-mailer`, `x-originating-ip` and the rest), and what the
+Outlook item readpst wrote of each message says of itself, named `outlook`, a
+space and the name Microsoft gives the property: `outlook importance`,
+`outlook sensitivity`, `outlook message-class`, `outlook client-submit-time`,
+`outlook message-delivery-time`, `outlook message-flags`,
+`outlook conversation-topic`, `outlook conversation-index`,
+`outlook sender-name`, `outlook sender-address-type`,
+`outlook sender-email-address`, `outlook sent-representing-name`,
+`outlook display-to` and so on, each one readpst writes. The question says
+beside each whether it is a header or one of these. The names Tuatara makes
+up hold a space, which no header's name may, so a header such as
+`Attachment:` or `Label:` in a message stays a header and never poses as one
+of them; a line whose name holds a space is no header and is not offered.
+Named properties, Outlook's categories among them, are not written by
+readpst, so they cannot be filtered by.
+
+Then it asks for the pattern: a regular expression, or literal text after
+`M-r`, exactly as Tuatara's search reads it. It is tried on that field's
+values alone; a message with a header many times (`received`) is kept when
+any of them matches, and a message without the field is not kept by
+`C-x / f` (and not hidden by `C-x / h`). The filter stacks with the others
+(searches kept, labels) and is listed by `C-x / l`. Opening a message the list
+was narrowed to lights the header lines that matched, from the header's name
+to the match.
+
+A pattern used often can be saved under a name with Tuatara's
+`M-x save-named-pattern` (a regular expression, or literal text after `M-r`,
+remembered as either) and given later as `[[:name:]]` in any pattern.
 
 ## Settings
 

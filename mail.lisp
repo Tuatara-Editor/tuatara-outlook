@@ -104,10 +104,12 @@ identifier. DETAILS is more of what the item says of itself, each (LABEL .
 TEXT). BODY is its text to show, read from BODY-KIND (:plain, :html, :rtf, or
 NIL for none). HTML is a function giving the HTML its body is written in, when
 it has one, read only when asked. HEADERS is its internet headers as they
-came, or NIL. ATTACHMENTS is each a MAIL-ATTACHMENT. NOTES is what could not
-be read of it, in words."
+came, or NIL. ATTACHMENTS is each a MAIL-ATTACHMENT. EARLIER is the
+attachments of the earlier messages of its conversation, each (WORDS .
+ATTACHMENTS), WORDS saying which message they came with. NOTES is what could
+not be read of it, in words."
   from to cc bcc subject sent received date-text message-id
-  (details '()) body body-kind html headers (attachments '()) (notes '()))
+  (details '()) body body-kind html headers (attachments '()) (earlier '()) (notes '()))
 
 (setf (documentation 'mail-p 'function) "True when OBJECT is a MAIL.")
 

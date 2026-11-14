@@ -100,27 +100,37 @@ those it has, who it is from and to, its subject, dates and Message-ID."
 
 (defun mail-pieces (mail &key brief (open (constantly nil)))
   "The pieces (as RENDER-PIECES takes them) showing MAIL: its headers, its
-attachments, each a button doing OPEN, a function of the attachment; its
-text; what it says of itself, what could not be read of it and its internet
-headers. With BRIEF, its headers, its attachments' names and the start of its
-text alone, no buttons."
+attachments, each a button doing OPEN, a function of the attachment, and
+those of the earlier messages of its conversation, each under the words
+saying which message it came with; its text; what it says of itself, what
+could not be read of it and its internet headers. With BRIEF, its headers,
+its attachments' names and the start of its text alone, no buttons."
   (collecting-pieces (put)
     (flet ((heading (text) (put (format nil "~%~a~%" text) :heading)))
       (loop for (label value face) in (mail-header-lines mail)
             do (put (format nil "~11a " label) :list-label)
                (put value face)
                (put (string #\Newline)))
-      (let ((attachments (mail-attachments mail)))
-        (when attachments
-          (heading (format nil "Attachments: ~d" (length attachments)))
-          (dolist (attachment attachments)
-            (put "  ")
-            (let ((name (or (one-line (mail-attachment-name attachment)) "(no name)")))
-              (if brief
-                  (put name :strong)
-                  (put name :link (let ((a attachment)) (lambda () (funcall open a))))))
-            (multiple-value-bind (words disagrees) (mail-attachment-words attachment)
-              (put (format nil "  ~a~%" words) (and disagrees :warning))))))
+      (flet ((attachment-lines (attachments indent)
+               (dolist (attachment attachments)
+                 (put indent)
+                 (let ((name (or (one-line (mail-attachment-name attachment)) "(no name)")))
+                   (if brief
+                       (put name :strong)
+                       (put name :link (let ((a attachment)) (lambda () (funcall open a))))))
+                 (multiple-value-bind (words disagrees) (mail-attachment-words attachment)
+                   (put (format nil "  ~a~%" words) (and disagrees :warning))))))
+        (let ((attachments (mail-attachments mail)))
+          (when attachments
+            (heading (format nil "Attachments: ~d" (length attachments)))
+            (attachment-lines attachments "  ")))
+        (let ((earlier (and (not brief) (mail-earlier mail))))
+          (when earlier
+            (heading (format nil "Attachments earlier in this conversation: ~d"
+                             (reduce #'+ earlier :key (lambda (e) (length (cdr e))))))
+            (loop for (words . attachments) in earlier
+                  do (put (format nil "  ~a~%" (one-line words)) :list-label)
+                     (attachment-lines attachments "    ")))))
       (heading (format nil
                        "Text~@[ (~a)~]"
                        (case (mail-body-kind mail) (:html "HTML read as text") (:rtf "RTF read as text"))))
@@ -156,8 +166,9 @@ and the start of its text (MAIL-PIECES)."
 
 (defun mail-render (buffer mail)
   "Show MAIL in BUFFER, a message's buffer: its text made of MAIL-PIECES, its
-attachments buttons, point at its start."
-  (let ((attachments (mail-attachments mail)))
+attachments buttons, those of the earlier messages of its conversation too,
+point at its start."
+  (let ((attachments (append (mail-attachments mail) (loop for (nil . more) in (mail-earlier mail) append more))))
     (multiple-value-bind (text spans buttons)
         (pieces-text (mail-pieces mail :open #'mail-open-attachment))
       (set-made-text buffer text :spans spans :buttons buttons)
@@ -179,10 +190,12 @@ of its own called NAME (made unique)."
 
 ;;; Read in the background
 
-(defstruct (mail-read-job (:include job) (:constructor make-mail-read-job (buffer path)) (:copier nil))
+(defstruct (mail-read-job (:include job) (:constructor make-mail-read-job (buffer path &optional earlier))
+                         (:copier nil))
   "The message in the file at PATH being read for BUFFER, a job; MAIL, what was
-read."
-  path mail)
+read. EARLIER is the earlier messages of its conversation whose attachments
+it shows, each (PATH . WORDS)."
+  path mail earlier)
 
 (setf (documentation 'mail-read-job-p 'function) "True when OBJECT is a MAIL-READ-JOB.")
 
@@ -201,20 +214,35 @@ read."
 (defvar *mail-previews* '()
   "The buffers showing a message in the preview beside a mailbox's list.")
 
-(defun mail-view-buffer (native &key safe name preview)
+(defun mail-read-earlier (earlier)
+  "The attachments of EARLIER, messages each (PATH . WORDS), as a message's
+EARLIER holds them: each read as a message is (OUTLOOK-READ-FILE), those
+carrying attachments, each (WORDS . ATTACHMENTS); one that cannot be read
+left out."
+  (loop for (path . words) in earlier
+        for mail = (handler-case (outlook-read-file path) (error () nil))
+        when (and mail (mail-attachments mail))
+          collect (cons words (mail-attachments mail))))
+
+(defun mail-view-buffer (native &key safe name preview earlier)
   "The buffer showing the message in the file at NATIVE (an Outlook item or a
 saved mail), read in the background when there is none yet; called NAME, or
 by the file's name; SAFE when the file is to be shown as text safely
 \(\\[mail-view-file-text]). With PREVIEW, one of its own for the preview beside
-a mailbox's list (*MAIL-PREVIEWS*), its name saying so."
+a mailbox's list (*MAIL-PREVIEWS*), its name saying so. EARLIER, the earlier
+messages of its conversation, each (PATH . WORDS), are read with it for
+their attachments (MAIL-READ-EARLIER)."
   (let ((name (format nil "~a~:[~; (preview)~]" (or (one-line name) (native-file-name native)) preview)))
     (reading-buffer (if preview '*mail-previews* '*mail-views*) (lambda (b) (car (buffer-local b 'mail-source))) native
                     name (format nil "Reading ~a...~%" name) 'mail-view-mode
                     (lambda (buffer)
                       (setf (buffer-local buffer 'mail-source) (cons native safe))
-                      (start-job-thread (make-mail-read-job buffer native)
+                      (start-job-thread (make-mail-read-job buffer native earlier)
                                         (lambda (job)
-                                          (setf (mail-read-job-mail job) (outlook-read-file (mail-read-job-path job))))
+                                          (let ((mail (outlook-read-file (mail-read-job-path job))))
+                                            (when (mail-p mail)
+                                              (setf (mail-earlier mail) (mail-read-earlier (mail-read-job-earlier job))))
+                                            (setf (mail-read-job-mail job) mail)))
                                         :name "tuatara mail reading")))))
 
 ;;; Attachments

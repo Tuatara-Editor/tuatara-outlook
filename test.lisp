@@ -783,43 +783,61 @@ WeasyPrint installed in it and a program drawing PDFs."
 
 ;;; A mailbox's list narrowed by its messages' headers and contents
 
-(defun mailbox-search-test-messages (out)
-  "Write into OUT, as readpst would, the messages the search of a mailbox's
-list is tried on: a header not shown in the list, bodies quoted-printable and
-base64, an attachment's name, and one larger than the search looks through."
-  (flet ((put (name text)
-              (put-test-file (merge-pathnames (concatenate 'string "Outlook Data File/Inbox/" name) out) text)))
-    (put "1.eml" (format nil "From: Kea <kea@example.org>~%Subject: First~%X-Case-Number: walrus-7~%~%nothing here~%"))
-    (put "2.eml" (format nil "From: Ruru <ruru@example.org>~%Subject: Second~%Content-Type: text/plain; charset=utf-8~%~
-                              Content-Transfer-Encoding: quoted-printable~%~%Caf=C3=A9 and a gan=~%net seen~%"))
-    (put "3.eml" (format nil "From: Tui <tui@example.org>~%Subject: Third~%Content-Type: text/plain~%~
-                              Content-Transfer-Encoding: base64~%~%dGhlIGFsYmF0cm9zcyBmbGllcw==~%"))
-    (put "4.eml" (format nil "From: Weka <weka@example.org>~%Subject: Fourth~%MIME-Version: 1.0~%~
-                              Content-Type: multipart/mixed; boundary=\"b\"~%~%--b~%Content-Type: text/plain~%~%see attached~%~
-                              --b~%Content-Type: application/pdf; name=\"invoice-2026.pdf\"~%Content-Transfer-Encoding: base64~%~%~
-                              JVBERi0xLjQK~%--b--~%"))
-    (put "5.eml"
-         (format nil
-                 "From: Hoiho <hoiho@example.org>~%Subject: Fifth~%~%~a petrel~%"
-                 (make-string 400 :initial-element #\x)))))
+(defun mailbox-search-test-messages ()
+  "The messages the search of a mailbox's list is tried on, each (NAME .
+TEXT) as readpst would write it: a header not shown in the list, bodies
+quoted-printable and base64, an attachment's name, and one larger than the
+search looks through."
+  (list (cons "Inbox/1.eml"
+              (format nil "From: Kea <kea@example.org>~%Subject: First~%X-Case-Number: walrus-7~%~%nothing here~%"))
+        (cons "Inbox/2.eml"
+              (format nil "From: Ruru <ruru@example.org>~%Subject: Second~%Content-Type: text/plain; charset=utf-8~%~
+                           Content-Transfer-Encoding: quoted-printable~%~%Caf=C3=A9 and a gan=~%net seen~%"))
+        (cons "Inbox/3.eml"
+              (format nil "From: Tui <tui@example.org>~%Subject: Third~%Content-Type: text/plain~%~
+                           Content-Transfer-Encoding: base64~%~%dGhlIGFsYmF0cm9zcyBmbGllcw==~%"))
+        (cons "Inbox/4.eml"
+              (format nil "From: Weka <weka@example.org>~%Subject: Fourth~%MIME-Version: 1.0~%~
+                           Content-Type: multipart/mixed; boundary=\"b\"~%~%--b~%Content-Type: text/plain~%~%~
+                           see attached~%--b~%Content-Type: application/pdf; name=\"invoice-2026.pdf\"~%~
+                           Content-Transfer-Encoding: base64~%~%JVBERi0xLjQK~%--b--~%"))
+        (cons "Inbox/5.eml"
+              (format nil "From: Hoiho <hoiho@example.org>~%Subject: Fifth~%~%~a petrel~%"
+                      (make-string 400 :initial-element #\x)))))
 
-(defun mailbox-search-test-list (dir)
-  "The list of the mailbox MAILBOX-SEARCH-TEST-MESSAGES writes in DIR, read
-for it and its messages' text written as the listing job writes it, with
-*OUTLOOK-SEARCH-TEXT-LIMIT* small enough that the fifth is too large."
+(defun mailbox-test-list (dir files &key (sum "0f1e2d3c") (search-limit tuatara-user:*outlook-search-text-limit*))
+  "The list of a mailbox whose items readpst would have written as FILES, each
+(NAME . TEXT), NAME from the mailbox's top folder and TEXT a string or octets,
+into DIR: read for it, its
+messages' text written as the listing job writes it, searched as far as
+SEARCH-LIMIT, its sum taken to be SUM (NIL for none made). Returns the list
+and the job."
+  (ensure-directories-exist dir)
   (let* ((out (merge-pathnames "out/" dir))
          (texts (merge-pathnames "text/" dir))
          (pst (write-test-octets (merge-pathnames "archive.pst" dir)
                                  (sb-ext:string-to-octets "!BDN    SM" :external-format :latin-1)))
          (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
          (job (outlook::make-mailbox-job buffer pst (namestring out) (namestring texts))))
-    (mailbox-search-test-messages out)
+    (loop for (name . text) in files
+          for path = (merge-pathnames (concatenate 'string "Outlook Data File/" name) out)
+          do (if (stringp text)
+                 (put-test-file path text)
+                 (write-test-octets (ensure-directories-exist path) text)))
     (ensure-directories-exist texts)
-    (let ((tuatara-user:*outlook-search-text-limit* 300))
+    (setf (outlook::mailbox-job-sum job) sum)
+    (let ((tuatara-user:*outlook-search-text-limit* search-limit))
       (outlook::mailbox-list job))
     (tuatara.modes:set-major-mode buffer 'outlook::mailbox-mode)
+    (setf (tuatara.buffer:buffer-local buffer 'outlook::mailbox-path) pst)
     (outlook::mailbox-render buffer job)
-    buffer))
+    (values buffer job)))
+
+(defun mailbox-search-test-list (dir)
+  "The list of the mailbox MAILBOX-SEARCH-TEST-MESSAGES writes in DIR, read
+for it and its messages' text written as the listing job writes it, with
+*OUTLOOK-SEARCH-TEXT-LIMIT* small enough that the fifth is too large."
+  (values (mailbox-test-list dir (mailbox-search-test-messages) :search-limit 300)))
 
 (defun mailbox-subjects (buffer)
   "The subjects of the messages BUFFER, a mailbox's list, shows."
@@ -861,7 +879,7 @@ and the subjects kept."
       ;; the text written for each message: every header, the text parts decoded, attachments by name
       (let ((texts (loop for entry across (coerce (tuatara.buffer:buffer-local list 'tuatara.defaults::list-entries) 'vector)
                          for item = (tuatara.defaults::entry-member entry)
-                         when (outlook::mailbox-item-p item) collect (outlook::mailbox-item-search-text item nil))))
+                         when (outlook::mailbox-item-p item) collect (outlook::mailbox-item-search-text item))))
         (has (first texts) "x-case-number: walrus-7")
         (has (second texts) "Café and a gannet seen")
         (has (third texts) "the albatross flies")
@@ -912,6 +930,384 @@ and the subjects kept."
           (is eq shown (cdr tuatara.defaults::*search-lit*))
           (setf tuatara.defaults::*search-lit* nil tuatara.defaults::*search-lit-shown* nil)
           (tuatara.buffer:kill-buffer shown)))
+      (tuatara.buffer:kill-buffer list))))
+
+;;; Labels
+
+(defun mailbox-test-subject-line (list subject)
+  "The line of LIST, a mailbox's list, that shows SUBJECT, or NIL."
+  (find-if (lambda (line) (search subject line))
+           (uiop:split-string (tuatara.buffer:buffer-string list) :separator '(#\Newline))))
+
+(defun mailbox-test-go-to (list subject)
+  "A step for RUN-KEYS: point on the line of LIST that shows SUBJECT."
+  (lambda ()
+    (let ((lines (uiop:split-string (tuatara.buffer:buffer-string list) :separator '(#\Newline))))
+      (setf (tuatara.buffer:buffer-point list)
+            (tuatara.buffer:buffer-goto-line list (position-if (lambda (line) (search subject line)) lines))))))
+
+(defun wait-for-mailbox-labels ()
+  "Wait, a few seconds at most, till no mailbox's labels are being written."
+  (let ((until (+ (get-internal-real-time) (* 10 internal-time-units-per-second))))
+    (loop while (and (some (lambda (job) (and (outlook::mailbox-labels-job-p job) (tuatara.runtime:job-running-p job)))
+                           tuatara.runtime:*jobs*)
+                     (< (get-internal-real-time) until))
+          do (sleep 0.01))))
+
+(defparameter *mailbox-label-test-messages*
+  (list (cons "Inbox/1.eml" (format nil "From: Kea <kea@example.org>~%Subject: First~%Message-ID: <one@example.org>~%~%a~%"))
+        (cons "Inbox/2.eml" (format nil "From: Ruru <ruru@example.org>~%Subject: Second~%~%b~%"))
+        (cons "Inbox/3.eml" (format nil "From: Tui <tui@example.org>~%Subject: Third~%Message-ID: <three@example.org>~%~%c~%")))
+  "The messages labelled in the tests: two with a Message-ID, one known by its headers alone.")
+
+(define-test (outlook mailbox-labels)
+  (with-test-directory (dir)
+    (let ((sum (format nil "test~36r" (random (expt 2 40)))))
+      (multiple-value-bind (list job) (mailbox-test-list dir *mailbox-label-test-messages* :sum sum)
+        (let ((items (cdr (first (outlook::mailbox-job-folders job)))))
+          ;; known by the folder, the Message-ID (empty for none) and the sum of the headers
+          (true (uiop:string-prefix-p (format nil "Outlook Data File/Inbox~c<one@example.org>~c" #\Tab #\Tab)
+                                      (outlook::mailbox-item-identity (first items))))
+          (is = (+ (length (format nil "Outlook Data File/Inbox~c~c" #\Tab #\Tab)) 64)
+              (length (outlook::mailbox-item-identity (second items)))))
+        ;; no labels yet: no column for them
+        (false (search "Labels" (tuatara.buffer:buffer-string list)))
+        ;; + on the line, two labels typed, then the empty choice ends the question; m marks two, + labels both
+        (tuatara.tests::run-keys
+         (list (lambda () (tuatara:show-buffer list))
+               (mailbox-test-go-to list "First") "+ u r g e n t RET k e a SPC c a s e RET RET"
+               (mailbox-test-go-to list "Second") "m m + u r g RET RET" #'wait-for-mailbox-labels :tick)
+         :width 140 :height 30)
+        (has (mailbox-test-subject-line list "First") "urgent, kea case")
+        (has (mailbox-test-subject-line list "Second") "urgent")
+        (has (mailbox-test-subject-line list "Third") "urgent")
+        (has (tuatara.buffer:buffer-string list) "Labels")
+        ;; kept in the state directory by the mailbox's sum, nothing written beside the mailbox
+        (let ((file (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
+          (has (uiop:read-file-string file) (format nil "+~curgent~cOutlook Data File/Inbox~c<one@example.org>~c"
+                                                    #\Tab #\Tab #\Tab #\Tab))
+          (is equal '("archive.pst" "out" "text")
+              (sort (mapcar #'first (tuatara.io:directory-entries (namestring dir))) #'string<)))
+        (true (member "kea case" (outlook::mailbox-label-names) :test #'string=))
+        ;; - takes one off the line's message, chosen from those it carries
+        (tuatara.tests::run-keys
+         (list (lambda () (tuatara:show-buffer list))
+               "U" (mailbox-test-go-to list "First") "- u r g e n t RET RET" #'wait-for-mailbox-labels :tick)
+         :width 140 :height 30)
+        (false (search "urgent" (mailbox-test-subject-line list "First")))
+        (has (mailbox-test-subject-line list "First") "kea case")
+        (tuatara.buffer:kill-buffer list))
+      ;; the mailbox read again: its labels back
+      (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "again/" dir) *mailbox-label-test-messages*
+                                                         :sum sum)
+        (is equal '(("kea case") ("urgent") ("urgent"))
+            (mapcar (lambda (item) (outlook::mailbox-item-labels job item)) (cdr (first (outlook::mailbox-job-folders job)))))
+        (tuatara.buffer:kill-buffer list))
+      ;; no sum made: labels said not to be kept
+      (multiple-value-bind (list) (mailbox-test-list (merge-pathnames "nosum/" dir) *mailbox-label-test-messages* :sum nil)
+        (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "First") "+")
+                                 :width 140 :height 30)
+        (false (search "Labels" (tuatara.buffer:buffer-string list)))
+        (tuatara.buffer:kill-buffer list)))))
+
+(defun mailbox-test-label (job subject &rest labels)
+  "Put LABELS on the message of the mailbox JOB read whose subject is SUBJECT."
+  (let ((item (find subject (loop for (nil . items) in (outlook::mailbox-job-folders job) append items)
+                    :key #'outlook::mailbox-item-subject :test #'equal)))
+    (setf (gethash (outlook::mailbox-item-identity item) (outlook::mailbox-job-labels job)) labels)))
+
+(define-test (outlook mailbox-filtered-by-labels)
+  (with-test-directory (dir)
+    (multiple-value-bind (list job) (mailbox-test-list dir *mailbox-label-test-messages*)
+      (mailbox-test-label job "First" "urgent" "kea case")
+      (mailbox-test-label job "Third" "seen")
+      (outlook::mailbox-render list job)
+      (flet ((shown (keys)
+               (nth-value 1 (mailbox-search-session list (append (list "C-x / r") keys (list :searched :look))))))
+        ;; L: those carrying a label, or any of several; C-u L: those carrying none of them
+        (is equal '("First") (shown '("L u r g RET RET")))
+        (is equal '("your label: ^(?:urgent)$")
+            (mapcar #'tuatara.defaults::search-filter-words (tuatara:search-filters list)))
+        (is equal '("First" "Third") (shown '("L u r g RET s e e n RET RET")))
+        (is equal '("Second" "Third") (shown '("C-u L u r g RET RET")))
+        ;; a label with a regex's characters in it matches only itself
+        (mailbox-test-label job "Second" "a.b")
+        (outlook::mailbox-render list job)
+        (is equal '("Second") (shown '("L a . b RET RET")))
+        ;; with the other filters: a search kept, then a label
+        (is equal '("Third") (shown '("C-s T h RET" :searched "C-u L u r g RET RET")))
+        ;; the field label offered by C-x / f, a pattern of your own
+        (is equal '("First") (shown '("C-x / f y o u r SPC l a b e l RET k e a RET"))))
+      (tuatara.buffer:kill-buffer list))))
+
+(define-test (outlook mailbox-entries-called-messages)
+  ;; what the list's words for marked and acted-on entries call one of a mailbox's
+  (with-test-directory (dir)
+    (let ((list (mailbox-test-list dir *mailbox-label-test-messages*)))
+      (is string= "message" (tuatara:list-entry-noun (tuatara.modes:buffer-major-mode list)))
+      (tuatara.buffer:kill-buffer list))))
+
+(define-test (outlook mailbox-labels-kept-apart-and-together)
+  (with-test-directory (dir)
+    (let ((sum (format nil "test~36r" (random (expt 2 40))))
+          (twins (list (cons "Inbox/1.eml" (format nil "Subject: First~%Message-ID: <same@example.org>~%~%a~%"))
+                       (cons "Inbox/2.eml" (format nil "Subject: Second~%Message-ID: <same@example.org>~%~%b~%"))
+                       (cons "Inbox/3.eml" (format nil "Subject: Third~%~%c~%"))
+                       (cons "Inbox/4.eml" (format nil "Subject: Third~%~%d~%")))))
+      ;; one Message-ID forged or copied, headers alike: each message its own identity
+      (multiple-value-bind (list job) (mailbox-test-list dir twins :sum sum)
+        (let ((identities (mapcar #'outlook::mailbox-item-identity (cdr (first (outlook::mailbox-job-folders job))))))
+          (is = 4 (length (remove-duplicates identities :test #'string=)))
+          (true (search (format nil "~c2" #\Tab) (fourth identities))))
+        (tuatara.buffer:kill-buffer list))
+      ;; two sessions with the same mailbox open, each labelling: neither's labels lost
+      (multiple-value-bind (one one-job) (mailbox-test-list (merge-pathnames "one/" dir) *mailbox-label-test-messages* :sum sum)
+        (multiple-value-bind (two two-job) (mailbox-test-list (merge-pathnames "two/" dir) *mailbox-label-test-messages* :sum sum)
+          (flet ((item (job subject) (find subject (cdr (first (outlook::mailbox-job-folders job)))
+                                           :key #'outlook::mailbox-item-subject :test #'string=)))
+            (tuatara.tests::run-keys
+             (list (lambda ()
+                     (outlook::mailbox-relabel one-job (list (item one-job "First")) (lambda (had) (append had '("from one"))))
+                     (outlook::mailbox-relabel two-job (list (item two-job "Second")) (lambda (had) (append had '("from two"))))
+                     (outlook::mailbox-relabel two-job (list (item two-job "Second")) (lambda (had) (remove "from two" had :test #'string=)))
+                     (outlook::mailbox-relabel two-job (list (item two-job "Third")) (lambda (had) (append had '("Kea")))))
+                   #'wait-for-mailbox-labels :tick #'wait-for-mailbox-labels :tick)
+             :width 140 :height 30))
+          (tuatara.buffer:kill-buffer two))
+        (tuatara.buffer:kill-buffer one))
+      (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "three/" dir) *mailbox-label-test-messages* :sum sum)
+        (is equal '(("from one") nil ("Kea"))
+            (mapcar (lambda (item) (outlook::mailbox-item-labels job item)) (cdr (first (outlook::mailbox-job-folders job)))))
+        ;; told apart by case: kea is not Kea; a label put on while the filter is on shows at once
+        (mailbox-test-label job "First" "kea")
+        (outlook::mailbox-render list job)
+        (is equal '("First")
+            (nth-value 1 (mailbox-search-session
+                          list (list (lambda () (tuatara:add-search-filter list (outlook::mailbox-labels-pattern '("kea"))
+                                                                           :part "your label" :ignore-case nil))
+                                     :searched :look))))
+        (let ((seen nil))
+          (tuatara.tests::run-keys
+           (list (lambda () (tuatara:show-buffer list))
+                 (lambda ()
+                   (outlook::mailbox-relabel job (list (second (cdr (first (outlook::mailbox-job-folders job)))))
+                                             (lambda (had) (append had '("kea")))))
+                 #'wait-for-mailbox-search :tick (lambda () (setf seen (mailbox-subjects list))))
+           :width 140 :height 30)
+          (is equal '("First" "Second") seen))
+        (tuatara.buffer:kill-buffer list))
+      ;; a journal grown long is written again shorter, the same labels left
+      (let ((path (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
+        (dotimes (i 300)
+          (tuatara.io:append-to-file path (format nil "+~cx~cA~%-~cx~cA~%" #\Tab #\Tab #\Tab #\Tab)))
+        (let ((before (length (outlook::mailbox-journal-lines path)))
+              (labels (outlook::mailbox-read-labels (outlook::mailbox-labels-name sum))))
+          (true (> before 600))
+          (true (< (length (outlook::mailbox-journal-lines path)) 20))
+          (is = (hash-table-count labels) (hash-table-count (outlook::mailbox-replay-labels (outlook::mailbox-journal-lines path)))))))))
+
+(define-test (outlook mailbox-labels-journal-mended-and-apart)
+  (with-test-directory (dir)
+    ;; a last line cut short by a crash: the next change starts on a line of its own
+    (let ((path (namestring (merge-pathnames "journal" dir))))
+      (tuatara.io:append-to-file path (format nil "+~ca~cX" #\Tab #\Tab))
+      (outlook::mailbox-append-lines path (list (outlook::mailbox-label-line "+" "b" "Y")))
+      (let ((table (outlook::mailbox-replay-labels (outlook::mailbox-journal-lines path))))
+        (is equal '("a") (gethash "X" table))
+        (is equal '("b") (gethash "Y" table))))
+    ;; read with deleted items or without: two journals, as readpst's order differs
+    (is string= "kea" (let ((tuatara-user:*outlook-include-deleted* nil)) (outlook::mailbox-labels-name "kea")))
+    (is string= "kea.with-deleted" (let ((tuatara-user:*outlook-include-deleted* t)) (outlook::mailbox-labels-name "kea")))))
+
+;;; Filtered by one field of the messages
+
+(defun mailbox-field-test-messages ()
+  "The messages filtered by a field in the tests: headers many times and of
+every kind, attachments, a subject with a regex's characters, and an
+Outlook item beside the first."
+  (list (cons "Inbox/1.eml"
+              (format nil "From: Kea <kea@example.org>~%To: Ruru <ruru@example.org>~%Subject: First [draft] plan~%~
+                           Received: from a.example.org by b.example.net~%~
+                           Received: from relay.example.org (203.0.113.9) by a.example.org~%~
+                           X-Mailer: Kererū Mail 2~%Message-ID: <one@example.org>~%~
+                           Attachment: budget, as a header~%Outlook importance: high~%~%one~%"))
+        (cons "Inbox/1.msg" (msg-test-octets))
+        (cons "Inbox/2.eml"
+              (format nil "From: Tui <tui@example.org>~%To: Kea <kea@example.org>~%Cc: Weka <weka@example.org>~%~
+                           Subject: Second d plan~%Received: from c.example.org by d.example.net~%~
+                           In-Reply-To: <one@example.org>~%MIME-Version: 1.0~%~
+                           Content-Type: multipart/mixed; boundary=\"b\"~%~%--b~%Content-Type: text/plain~%~%two~%~
+                           --b~%Content-Type: application/pdf; name=\"budget 2026.pdf\"~%~
+                           Content-Transfer-Encoding: base64~%~%JVBERi0xLjQK~%--b--~%"))
+        (cons "Inbox/3.eml" (format nil "From: Weka <weka@example.org>~%Subject: Third~%~%three~%"))))
+
+(define-test (outlook mailbox-filtered-by-fields)
+  (with-test-directory (dir)
+    (multiple-value-bind (list job) (mailbox-test-list dir (mailbox-field-test-messages))
+      (flet ((shown (keys)
+               (nth-value 1 (mailbox-search-session list (append (list "C-x / r") keys (list :searched :look))))))
+        ;; the fields found, the usual ones first, every header and the Outlook item's
+        (let ((names (outlook::mailbox-field-names (outlook::mailbox-job-field-names job))))
+          (is equal '("from" "to" "cc" "bcc" "subject" "date" "attachment name" "your label")
+              (mapcar #'car (subseq names 0 8)))
+          (dolist (name '("received" "x-mailer" "message-id" "in-reply-to" "attachment" "outlook message-class"
+                          "outlook sender-address-type" "outlook client-submit-time" "outlook message-flags"))
+            (true (assoc name names :test #'string=) "~a offered" name))
+          ;; a header's name never one Tuatara makes up: Attachment: is a header, and one with a space no field
+          (is string= "a header" (cdr (assoc "attachment" names :test #'string=)))
+          (is string= "the name of an attachment" (cdr (assoc "attachment name" names :test #'string=)))
+          (false (assoc "outlook importance" names :test #'string=)))
+        ;; one field alone: Received, any of many; a field a message has not is no match
+        (is equal '("First") (shown '("C-x / f r e c e i v e d RET 2 0 3 \\ . 0 \\ . 1 1 3 RET")))
+        (is equal '("First" "Second") (shown '("C-x / f r e c e i v e d RET e x a m p l e RET")))
+        (is equal '("Second") (shown '("C-x / f c c RET w e k a RET")))
+        (is equal '("Second") (shown '("C-x / f t o RET k e a RET")))
+        (is equal '() (shown '("C-x / f t o RET w e k a RET")))
+        (is equal '("Second") (shown '("C-x / f i n - r e p l y - t o RET o n e RET")))
+        (is equal '("Second") (shown '("C-x / f a t t a c h m e n t SPC n a m e RET b u d g e t RET")))
+        (is equal '("First") (shown '("C-x / f a t t a c h m e n t RET b u d g e t RET")))
+        (is equal '("First") (shown '("C-x / f x - m a i l e r RET k e r e r RET")))
+        ;; what the Outlook item says of itself
+        (is equal '("First") (shown '("C-x / f o u t l o o k SPC m e s s a g e - c l a s s RET I P M RET")))
+        (is equal '("First") (shown '("C-x / f o u t l o o k SPC s e n d e r - a d d r e s s - t y p e RET ^ E X $ RET")))
+        ;; a regular expression by default, literal text with M-r
+        (is equal '("First" "Second" "Third") (shown '("C-x / f s u b j e c t RET [ d r a f t ] RET")))
+        (is equal '("First") (shown '("C-x / f s u b j e c t RET M-r [ d r a f t ] RET")))
+        (is equal '("Third") (shown '("C-x / h s u b j e c t RET p l a n RET")))
+        ;; with the other filters
+        (is equal '("Second") (shown '("C-s p l a n RET" :searched "C-x / f c c RET . RET")))
+        ;; a named pattern saved as literal text, used by its name
+        (unwind-protect
+             (progn (tuatara.tests::run-keys
+                     (list "M-x s a v e - n a m e d - p a t t e r n RET M-r [ d r a f t ] RET b r a c k e t e d RET RET"))
+                    (is equal '("First") (shown '("C-x / f s u b j e c t RET [ [ : b r a c k e t e d : ] ] RET"))))
+          (tuatara.defaults::state-list-drop tuatara.defaults::*saved-patterns* (list "bracketed"))
+          (remhash "bracketed" tuatara.syntax::**own-named-patterns**)))
+      ;; the message opened lights the header's line that matched, from its name
+      (setf tuatara.defaults::*search-lit* nil)
+      (mailbox-search-session list (list "C-x / r C-x / f r e c e i v e d RET r e l a y RET" :searched))
+      (tuatara:light-search-filters list list)
+      (has (tuatara.defaults::search-state-string (car tuatara.defaults::*search-lit*)) "(?m:^(?i:received):[^\\n]*?(?:relay))")
+      (setf tuatara.defaults::*search-lit* nil tuatara.defaults::*search-lit-shown* nil)
+      (tuatara.buffer:kill-buffer list))))
+
+;;; Copied out: all shown, and into one mbox file
+
+(define-test (outlook mailbox-copied-out-shown-and-as-mbox)
+  (with-test-directory (dir)
+    (multiple-value-bind (list job)
+        (mailbox-test-list dir (list (cons "Inbox/1.eml" (format nil "From: Kea <kea@example.org>~%Subject: First~%~
+                                                                       Date: Tue, 6 Oct 2026 09:00:00 +0000~%~%~
+                                                                       From the start~%>From quoted~%Fromage~%no end"))
+                                     (cons "Inbox/2.eml" (format nil "Return-Path: <ruru@example.org>~%Subject: Second~%~%two~%"))
+                                     (cons "Inbox/3.eml" (format nil "Subject: Third~%~%three~%"))))
+      (declare (ignore job))
+      (let ((copies (namestring (merge-pathnames "copies/" dir)))
+            (mbox (namestring (merge-pathnames "all.mbox" dir))))
+        ;; narrowed to two, one marked: a, All shown, copies the two the filter leaves
+        (tuatara.tests::run-keys
+         (list (lambda () (tuatara:show-buffer list))
+               "C-s ^ s u b j e c t : SPC ( F i r s t | T h i r d ) RET" #'wait-for-mailbox-search :tick
+               (mailbox-test-go-to list "Third") "m" "TAB"
+               (format nil "C a e C-a C-k ~a C-j" (tuatara.tests::rimu-typed copies))
+               #'wait-for-mailbox-export :tick)
+         :width 140 :height 30)
+        (is equal (list (format nil "~a First.eml" (tuatara:format-time "%F %H%M" (encode-universal-time 0 0 9 6 10 2026 0)))
+                        "Third.eml")
+            (sort (mapcar #'first (tuatara.io:directory-entries copies)) #'string<))
+        ;; b: the one marked into one mbox file; again, a name taken gets (2)
+        (dolist (keys (list (format nil "C b C-a C-k ~a C-j" (tuatara.tests::rimu-typed mbox))
+                            (format nil "C a b C-a C-k ~a C-j" (tuatara.tests::rimu-typed mbox))))
+          (tuatara.tests::run-keys
+           (list (lambda () (tuatara:show-buffer list)) "C-x / r" (mailbox-test-go-to list "First") "U m" keys
+                 #'wait-for-mailbox-export :tick)
+           :width 140 :height 30))
+        (let ((one (uiop:read-file-string mbox))
+              (all (uiop:read-file-string (merge-pathnames "all (2).mbox" dir))))
+          (is string= (format nil "From kea@example.org Tue Oct  6 09:00:00 2026~%From: Kea <kea@example.org>~%~
+                                   Subject: First~%Date: Tue, 6 Oct 2026 09:00:00 +0000~%~%~
+                                   >From the start~%>>From quoted~%Fromage~%no end~%~%")
+              one)
+          ;; all of them, each after its From line, the address it came back to first
+          (is = 3 (/ (length (cl-ppcre:all-matches "(?m)^From " all)) 2))
+          (has all (format nil "~%From ruru@example.org "))
+          (has all (format nil "~%From MAILER-DAEMON "))))
+      (tuatara.buffer:kill-buffer list))))
+
+;;; Attachments earlier in a conversation
+
+(defun mailbox-thread-test-messages ()
+  "Two conversations: one linked by Message-ID and In-Reply-To, its first
+message carrying a PDF; one by Outlook's conversation index, its first a
+picture; and a message of neither."
+  (flet ((with-attachment (headers name type)
+           (format nil "~aMIME-Version: 1.0~%Content-Type: multipart/mixed; boundary=\"b\"~%~%--b~%~
+                        Content-Type: text/plain~%~%see attached~%--b~%Content-Type: ~a; name=\"~a\"~%~
+                        Content-Transfer-Encoding: base64~%~%JVBERi0xLjQK~%--b--~%"
+                   headers type name)))
+    (list (cons "Inbox/1.eml" (with-attachment (format nil "Subject: First~%Message-ID: <first@example.org>~%~
+                                                           Date: Tue, 6 Oct 2026 09:00:00 +0000~%")
+                                               "budget.pdf" "application/pdf"))
+          (cons "Inbox/2.eml" (format nil "Subject: Second~%Message-ID: <second@example.org>~%~
+                                           In-Reply-To: <first@example.org>~%~%Re: the budget~%"))
+          (cons "Inbox/3.eml" (format nil "Subject: Third~%References: <first@example.org> <second@example.org>~%~
+                                           Message-ID: <third@example.org>~%~%Re: Re: the budget~%"))
+          (cons "Inbox/4.eml" (with-attachment (format nil "Subject: Fourth~%Thread-Index: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ==~%")
+                                               "map.pdf" "application/pdf"))
+          (cons "Inbox/5.eml" (format nil "Subject: Fifth~%Thread-Index: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgIC~%~%fwd~%"))
+          (cons "Inbox/6.eml" (format nil "Subject: Sixth~%~%alone~%")))))
+
+(define-test (outlook mailbox-earlier-attachments)
+  (with-test-directory (dir)
+    (multiple-value-bind (list job) (mailbox-test-list dir (mailbox-thread-test-messages))
+      (let* ((items (cdr (first (outlook::mailbox-job-folders job))))
+             (tables (outlook::mailbox-job-threads job)))
+        (flet ((earlier (n) (mapcar (lambda (found) (outlook::mailbox-item-subject (car found)))
+                                    (outlook::mailbox-earlier-items tables (nth n items))))
+               (how (n) (mapcar #'cdr (outlook::mailbox-earlier-items tables (nth n items)))))
+          ;; by In-Reply-To and References, followed back; by the conversation index; none for the first or one alone
+          (is equal '("First") (earlier 1))
+          (is equal '("First") (earlier 2))
+          (is equal '("Fourth") (earlier 4))
+          (is equal '() (earlier 0))
+          (is equal '() (earlier 5))
+          ;; each says how it was found
+          (is equal '("by In-Reply-To") (how 1))
+          (is equal '("by References") (how 2))
+          (is equal '("by conversation index: header") (how 4))))
+      ;; one Message-ID given to two messages: both found, and said
+      (multiple-value-bind (list job)
+          (mailbox-test-list (merge-pathnames "twice/" dir)
+                             (append (mailbox-thread-test-messages)
+                                     (list (cons "Inbox/7.eml"
+                                                 (format nil "Subject: Seventh~%Message-ID: <first@example.org>~%~
+                                                              Date: Wed, 7 Oct 2026 09:00:00 +0000~%MIME-Version: 1.0~%~
+                                                              Content-Type: multipart/mixed; boundary=\"b\"~%~%--b~%~
+                                                              Content-Type: text/plain~%~%x~%--b~%~
+                                                              Content-Type: application/pdf; name=\"other.pdf\"~%~
+                                                              Content-Transfer-Encoding: base64~%~%JVBERi0xLjQK~%--b--~%")))))
+        (let ((found (outlook::mailbox-earlier-items (outlook::mailbox-job-threads job)
+                                                     (second (cdr (first (outlook::mailbox-job-folders job)))))))
+          (is equal '("First" "Seventh") (mapcar (lambda (f) (outlook::mailbox-item-subject (car f))) found))
+          (true (every (lambda (f) (search "<first@example.org> is the Message-ID of 2 messages" (cdr f))) found)))
+        (tuatara.buffer:kill-buffer list))
+      ;; the reply opened: the first's attachment at its end, opened as the message's own are
+      (let ((shown nil) (opened nil))
+        (tuatara.tests::run-keys
+         (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "Third") "RET"
+               #'wait-for-mail-reading :tick
+               (lambda () (setf shown (tuatara.buffer:buffer-string (tuatara:current-buffer))))
+               (lambda ()
+                 (let ((buffer (tuatara:current-buffer)))
+                   (setf (tuatara.buffer:buffer-point buffer)
+                         (first (first (tuatara.buffer:buffer-local buffer 'outlook::mail-attachment-places))))))
+               "RET" (lambda () (setf opened (tuatara.buffer:buffer-name (tuatara:current-buffer)))))
+         :width 140 :height 40)
+        (has shown "Attachments earlier in this conversation: 1")
+        (has shown "(by References)")
+        (has shown "First")
+        (has shown "budget.pdf")
+        (true (search "budget" opened) "~a" opened))
       (tuatara.buffer:kill-buffer list))))
 
 ;;; Marked, folded, opened and copied out
