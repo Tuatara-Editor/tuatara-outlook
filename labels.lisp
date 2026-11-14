@@ -11,8 +11,11 @@
 ;;;; SHA-256 sum of its headers as readpst wrote them, which stay the same
 ;;;; each time the mailbox is read; the numbers readpst names its files by do
 ;;;; not, as they follow the order of the folder and whether deleted items are
-;;;; read. The labels file is written whole, in the background, after each
-;;;; change.
+;;;; read. Each change is a line added to the file in the
+;;;; background. A line beginning @ tells what the file is for, so that the
+;;;; label manager can show it: the mailbox's file name, where it was last
+;;;; opened, its size, its sum and when its labels last changed; the latest
+;;;; such line holds, and a file with none still reads.
 
 (in-package #:outlook)
 
@@ -52,7 +55,7 @@ readpst wrote them, so that no two share labels."
                        (setf (mailbox-item-identity item) (format nil "~a~c~d" identity #\Tab count))))))))))
 
 (defun mailbox-journal-lines (path)
-  "The lines of the journal at PATH, a labels file or the names file, in the
+  "The lines of the journal at PATH, a labels file, in the
 order they were written; none when there is no such file."
   (let ((text (file-text path :missing nil)))
     (and text (remove "" (uiop:split-string text :separator (string #\Newline)) :test #'string=))))
@@ -75,6 +78,37 @@ makes no sense is passed over."
                   ((string= "-" line :end2 first)
                    (let ((left (remove label had :test #'string=)))
                      (if left (setf (gethash identity table) left) (remhash identity table)))))))))))
+
+(defun mailbox-meta-text (meta)
+  "The journal's line for META, a list of a mailbox's file name, path, size,
+SHA-256 sum and when its labels last changed (a universal time): @, a tab,
+mailbox, and the five apart by tabs, a tab within a name or path made a space."
+  (destructuring-bind (name path size sum changed) meta
+    (format nil "@~cmailbox~c~a~c~a~c~d~c~a~c~d~%" #\Tab #\Tab (substitute #\Space #\Tab (one-line name)) #\Tab
+            (substitute #\Space #\Tab (one-line path)) #\Tab size #\Tab sum #\Tab changed)))
+
+(defun mailbox-meta-line (job &optional changed)
+  "The journal's line telling which mailbox the labels of JOB, a mailbox read,
+are of (MAILBOX-META-TEXT): its file's name, its path as it was opened, its
+size, its sum and when its labels last changed, CHANGED, now when not given."
+  (let ((path (mailbox-job-path job)))
+    (mailbox-meta-text (list (native-file-name path) (native path)
+                             (or (ignore-errors (stamp-size (path-stamp path))) 0)
+                             (mailbox-job-sum job) (or changed (get-universal-time))))))
+
+(defun mailbox-journal-meta (lines)
+  "What the latest @ line of the journal LINES tells (MAILBOX-META-LINE): a
+list of the file's name, its path, its size, its sum and when its labels
+changed; NIL for a journal with none."
+  (let ((found nil))
+    (dolist (line lines found)
+      (when (uiop:string-prefix-p (format nil "@~cmailbox~c" #\Tab #\Tab) line)
+        (let ((fields (uiop:split-string line :separator '(#\Tab))))
+          (when (= (length fields) 7)
+            (let ((size (parse-integer (fifth fields) :junk-allowed t))
+                  (changed (parse-integer (seventh fields) :junk-allowed t)))
+              (when (and size changed)
+                (setf found (list (third fields) (fourth fields) size (sixth fields) changed))))))))))
 
 (defun mailbox-label-line (sign label identity)
   "The journal's line putting LABEL on the message IDENTITY, SIGN +, or
@@ -99,6 +133,9 @@ meanwhile; when it holds more than twice as many lines as that, and
        (when (> (length lines) (+ (* 2 live) *mailbox-journal-slack*))
          (replace-file path
                        (with-output-to-string (out)
+                         (let ((meta (mailbox-journal-meta lines)))
+                           (when meta
+                             (write-string (mailbox-meta-text meta) out)))
                          (maphash (lambda (identity labels)
                                     (dolist (label labels) (write-string (mailbox-label-line "+" label identity) out)))
                                   table))
@@ -123,24 +160,32 @@ grown long (MAILBOX-COMPACT-LABELS)."
   (let ((path (path-join (mailbox-label-directory) name)))
     (when (> (length (mailbox-journal-lines path)) *mailbox-journal-slack*)
       (mailbox-compact-labels path))
-    (mailbox-replay-labels (mailbox-journal-lines path))))
+    (let ((lines (mailbox-journal-lines path)))
+      (values (mailbox-replay-labels lines) (mailbox-journal-meta lines) (and lines t)))))
 
-(defun mailbox-label-names ()
-  "Every label put on a message of any mailbox, as the names journal of the
-labels' directory keeps them, a line each, + and a tab before it."
-  (remove-duplicates (loop for line in (mailbox-journal-lines (path-join (mailbox-label-directory) "names"))
-                           for name = (and (uiop:string-prefix-p (format nil "+~c" #\Tab) line)
-                                           (mailbox-clean-label (subseq line 2)))
-                           when name collect name)
-                     :test #'string= :from-end t))
+(defun mailbox-note-mailbox (job meta)
+  "Add a line to the labels journal of JOB, a mailbox just read, telling what
+mailbox it is (MAILBOX-META-LINE) when META, what the journal told before
+(MAILBOX-JOURNAL-META), is not what it now is: another name, path, size or
+sum, or none. When its labels last changed stays as it was. Nothing is
+written for a mailbox that has no journal; a lock not had in a few seconds
+leaves it for the next time."
+  (let* ((now (mailbox-journal-meta (list (mailbox-meta-line job 0))))
+         (path (path-join (mailbox-label-directory) (mailbox-job-labels-name job))))
+    (unless (equal (subseq now 0 4) (and meta (subseq meta 0 4)))
+      (call-with-state-lock
+       path (lambda ()
+              (mailbox-append-lines path (list (mailbox-meta-line job (or (fifth meta)
+                                                                          (ignore-errors (file-write-date path))
+                                                                          0)))))
+       :wait 5))))
 
 (defstruct (mailbox-labels-job (:include job)
-                               (:constructor make-mailbox-labels-job (buffer journal lines names))
+                               (:constructor make-mailbox-labels-job (buffer journal lines))
                                (:copier nil))
   "Changes to the labels of a mailbox being kept, a job: LINES, added to the
-end of the labels journal named JOURNAL (MAILBOX-LABELS-NAME), and NAMES, the
-lines of the labels not used before, added to the names journal."
-  journal lines names)
+end of the labels journal named JOURNAL (MAILBOX-LABELS-NAME)."
+  journal lines)
 
 (setf (documentation 'mailbox-labels-job-p 'function) "True when OBJECT is a MAILBOX-LABELS-JOB.")
 
@@ -161,34 +206,27 @@ holding the journal's lock."
                                  lines))))
 
 (defun mailbox-labels-work (job)
-  "Add JOB's lines to the end of the mailbox's labels journal, and its names
-to the names journal, each in one write while holding the journal's lock, so
-that what other sessions add meanwhile is kept and a journal written again
-shorter (MAILBOX-COMPACT-LABELS) loses nothing; an error when the lock is not
-had in a few seconds."
-  (let ((directory (mailbox-label-directory)))
-    (flet ((add (name lines)
-             (when lines
-               (let ((path (path-join directory name)))
-                 (unless (call-with-state-lock path (lambda () (mailbox-append-lines path lines) t) :wait 5)
-                   (error "~a is held by another session" path))))))
-      (add (mailbox-labels-job-journal job) (mailbox-labels-job-lines job))
-      (add "names" (mailbox-labels-job-names job)))))
+  "Add JOB's lines to the end of the mailbox's labels journal in one write
+while holding the journal's lock, so that what other sessions add meanwhile is
+kept and a journal written again shorter (MAILBOX-COMPACT-LABELS) loses
+nothing; an error when the lock is not had in a few seconds."
+  (when (mailbox-labels-job-lines job)
+    (let ((path (path-join (mailbox-label-directory) (mailbox-labels-job-journal job))))
+      (unless (call-with-state-lock path (lambda () (mailbox-append-lines path (mailbox-labels-job-lines job)) t)
+                                    :wait 5)
+        (error "~a is held by another session" path)))))
 
-(defun mailbox-keep-labels (job lines names)
-  "Have LINES, changes to the labels of JOB, a mailbox read, and NAMES, lines
-of labels not used before, added to their journals in the background; once
-the writing under way has ended when there is one (MAILBOX-LABELS-JOB's
-JOB-TAKE-IN starts it then)."
+(defun mailbox-keep-labels (job lines)
+  "Have LINES, changes to the labels of JOB, a mailbox read, added to its
+journal in the background; once the writing under way has ended when there is
+one (MAILBOX-LABELS-JOB's JOB-TAKE-IN starts it then)."
   (setf (mailbox-job-labels-pending job)
-        (cons (append (car (mailbox-job-labels-pending job)) lines)
-              (append (cdr (mailbox-job-labels-pending job)) names)))
+        (append (mailbox-job-labels-pending job) lines (and lines (list (mailbox-meta-line job)))))
   (let ((writer (mailbox-job-labels-writer job)) (pending (mailbox-job-labels-pending job)))
-    (unless (or (and writer (job-running-p writer)) (and (null (car pending)) (null (cdr pending))))
+    (unless (or (and writer (job-running-p writer)) (null pending))
       (setf (mailbox-job-labels-pending job) nil
             (mailbox-job-labels-writer job)
-            (start-job-thread (make-mailbox-labels-job (job-buffer job) (mailbox-job-labels-name job) (car pending)
-                                                       (cdr pending))
+            (start-job-thread (make-mailbox-labels-job (job-buffer job) (mailbox-job-labels-name job) pending)
                               #'mailbox-labels-work :name "tuatara mailbox labels")))))
 
 (defmethod job-take-in ((job mailbox-labels-job))
@@ -200,7 +238,7 @@ changes made meanwhile."
     (when (live-buffer-p list)
       (let ((mailbox (buffer-local list 'mailbox-job)))
         (when mailbox
-          (mailbox-keep-labels mailbox nil nil))))))
+          (mailbox-keep-labels mailbox nil))))))
 
 (defun mailbox-item-labels (job item)
   "The labels on ITEM of the mailbox JOB read, a list."
@@ -214,6 +252,11 @@ changes made meanwhile."
              (mailbox-job-labels job))
     (sort seen #'string<)))
 
+(defvar *mailbox-labels-forgetting* '()
+  "The journals being forgotten by the label manager (OUTLOOK-LABELS-FORGET)
+that a job in the background has not finished with: no label is put on their
+mailboxes meanwhile, as it would make a journal again.")
+
 (defun mailbox-labelled-items ()
   "The mailbox read for the list here and the messages a label command acts
 on: those marked, or the one on the line; as two values. NIL, said, when
@@ -223,6 +266,8 @@ there are none, or when the mailbox's labels cannot be kept."
          (items (remove-if-not (lambda (item) (and (mailbox-item-p item) (mailbox-item-identity item)))
                                (list-acted-on list))))
     (cond ((null job) (message "The mailbox is not listed yet") nil)
+          ((member (mailbox-job-labels-name job) *mailbox-labels-forgetting* :test #'equal)
+           (message "The labels of this mailbox are being forgotten: wait a moment") nil)
           ((null (mailbox-job-labels job))
            (message "No labels can be kept for this mailbox: its SHA-256 sum could not be made") nil)
           ((null items) (message "No message on this line") nil)
@@ -232,21 +277,19 @@ there are none, or when the mailbox's labels cannot be kept."
   "Give each of ITEMS of the mailbox JOB read the labels CHANGE, a function of
 its labels, makes of them; keep the changes, show the list again and work its
 filters out again, so that a filter on labels leaves what it now matches."
-  (let ((table (mailbox-job-labels job)) (lines '()) (known (mailbox-label-names)) (names '()))
+  (let ((table (mailbox-job-labels job)) (lines '()))
     (dolist (item items)
       (let* ((identity (mailbox-item-identity item))
              (had (gethash identity table))
              (labels (funcall change had)))
         (dolist (label labels)
           (unless (member label had :test #'string=)
-            (push (mailbox-label-line "+" label identity) lines)
-            (unless (or (member label known :test #'string=) (member label names :test #'string=))
-              (push label names))))
+            (push (mailbox-label-line "+" label identity) lines)))
         (dolist (label had)
           (unless (member label labels :test #'string=)
             (push (mailbox-label-line "-" label identity) lines)))
         (if labels (setf (gethash identity table) labels) (remhash identity table))))
-    (mailbox-keep-labels job (nreverse lines) (mapcar (lambda (name) (format nil "+~c~a~%" #\Tab name)) (nreverse names)))
+    (mailbox-keep-labels job (nreverse lines))
     (let ((list (job-buffer job)))
       (mailbox-render list job :keep)
       (refilter-search-filters list))))
@@ -265,8 +308,7 @@ the messages carrying them."
       (let ((labels (remove nil (mapcar #'mailbox-clean-label
                                         (read-several (format nil "Label ~a with: "
                                                               (list-question nil "message" items :name-of #'mailbox-item-name))
-                                                      (lambda () (union (mailbox-labels-used job) (mailbox-label-names)
-                                                                        :test #'string=))
+                                                      (lambda () (mailbox-labels-used job))
                                                       :none "no label" :more "no more labels")))))
         (if (null labels)
             (message "No label given: nothing labelled")

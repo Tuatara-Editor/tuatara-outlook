@@ -959,7 +959,8 @@ and the subjects kept."
 (defun wait-for-mailbox-labels ()
   "Wait, a few seconds at most, till no mailbox's labels are being written."
   (let ((until (+ (get-internal-real-time) (* 10 internal-time-units-per-second))))
-    (loop while (and (some (lambda (job) (and (outlook::mailbox-labels-job-p job) (tuatara.runtime:job-running-p job)))
+    (loop while (and (some (lambda (job) (and (or (outlook::mailbox-labels-job-p job) (outlook::mailbox-labels-manager-job-p job))
+                                              (tuatara.runtime:job-running-p job)))
                            tuatara.runtime:*jobs*)
                      (< (get-internal-real-time) until))
           do (sleep 0.01))))
@@ -981,7 +982,7 @@ and the subjects kept."
           (is = (+ (length (format nil "Outlook Data File/Inbox~c~c" #\Tab #\Tab)) 64)
               (length (outlook::mailbox-item-identity (second items)))))
         ;; no labels yet: no column for them
-        (false (search "Labels" (tuatara.buffer:buffer-string list)))
+        (false (search "Labels" (mailbox-test-subject-line list "Subject")))
         ;; + on the line, two labels typed, then the empty choice ends the question; m marks two, + labels both
         (tuatara.tests::run-keys
          (list (lambda () (tuatara:show-buffer list))
@@ -991,14 +992,14 @@ and the subjects kept."
         (has (mailbox-test-subject-line list "First") "urgent, kea case")
         (has (mailbox-test-subject-line list "Second") "urgent")
         (has (mailbox-test-subject-line list "Third") "urgent")
-        (has (tuatara.buffer:buffer-string list) "Labels")
+        (has (mailbox-test-subject-line list "Subject") "Labels")
         ;; kept in the state directory by the mailbox's sum, nothing written beside the mailbox
         (let ((file (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
           (has (uiop:read-file-string file) (format nil "+~curgent~cOutlook Data File/Inbox~c<one@example.org>~c"
                                                     #\Tab #\Tab #\Tab #\Tab))
           (is equal '("archive.pst" "out" "text")
               (sort (mapcar #'first (tuatara.io:directory-entries (namestring dir))) #'string<)))
-        (true (member "kea case" (outlook::mailbox-label-names) :test #'string=))
+        (is equal '("kea case" "urgent") (outlook::mailbox-labels-used job))
         ;; - takes one off the line's message, chosen from those it carries
         (tuatara.tests::run-keys
          (list (lambda () (tuatara:show-buffer list))
@@ -1017,8 +1018,73 @@ and the subjects kept."
       (multiple-value-bind (list) (mailbox-test-list (merge-pathnames "nosum/" dir) *mailbox-label-test-messages* :sum nil)
         (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "First") "+")
                                  :width 140 :height 30)
-        (false (search "Labels" (tuatara.buffer:buffer-string list)))
+        (false (search "Labels" (mailbox-test-subject-line list "Subject")))
         (tuatara.buffer:kill-buffer list)))))
+
+(define-test (outlook mailbox-labels-offered-per-mailbox)
+  (with-test-directory (dir)
+    (let ((one (format nil "test~36r" (random (expt 2 40)))) (two (format nil "test~36r" (random (expt 2 40)))))
+      (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "one/" dir) *mailbox-label-test-messages*
+                                                         :sum one)
+        (outlook::mailbox-relabel job (list (first (cdr (first (outlook::mailbox-job-folders job)))))
+                                  (lambda (had) (append had '("only here"))))
+        (wait-for-mailbox-labels)
+        (is equal '("only here") (outlook::mailbox-labels-used job))
+        (tuatara.buffer:kill-buffer list))
+      ;; another mailbox is offered none of them
+      (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "two/" dir) *mailbox-label-test-messages*
+                                                         :sum two)
+        (is equal '() (outlook::mailbox-labels-used job))
+        (tuatara.buffer:kill-buffer list)))))
+
+(defun mailbox-test-meta (sum)
+  "What the journal of the mailbox SUM tells of the mailbox (MAILBOX-JOURNAL-META)."
+  (outlook::mailbox-journal-meta
+   (outlook::mailbox-journal-lines (tuatara.io:path-join (outlook::mailbox-label-directory)
+                                                         (outlook::mailbox-labels-name sum)))))
+
+(define-test (outlook mailbox-labels-journal-tells-its-mailbox)
+  (with-test-directory (dir)
+    (let ((sum (format nil "test~36r" (random (expt 2 40)))) (before (get-universal-time)))
+      ;; no labels, no journal: opening a mailbox writes nothing
+      (tuatara.buffer:kill-buffer (mailbox-test-list (merge-pathnames "none/" dir) *mailbox-label-test-messages*
+                                                     :sum sum))
+      (false (probe-file (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
+      ;; labelling tells the file's name, path, size, sum and when it changed
+      (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "one/" dir) *mailbox-label-test-messages*
+                                                         :sum sum)
+        (outlook::mailbox-relabel job (list (first (cdr (first (outlook::mailbox-job-folders job)))))
+                                  (lambda (had) (append had '("kea"))))
+        (wait-for-mailbox-labels)
+        (destructuring-bind (name path size meta-sum changed) (mailbox-test-meta sum)
+          (is string= "archive.pst" name)
+          (is string= (namestring (merge-pathnames "one/archive.pst" dir)) path)
+          (is = 10 size)
+          (is string= sum meta-sum)
+          (true (<= before changed (get-universal-time))))
+        (tuatara.buffer:kill-buffer list))
+      ;; opened from another place: the path is the latest, the change time stays
+      (let ((changed (fifth (mailbox-test-meta sum))))
+        (tuatara.buffer:kill-buffer (mailbox-test-list (merge-pathnames "two/" dir) *mailbox-label-test-messages*
+                                                       :sum sum))
+        (is string= (namestring (merge-pathnames "two/archive.pst" dir)) (second (mailbox-test-meta sum)))
+        (is = changed (fifth (mailbox-test-meta sum)))))
+    ;; a journal from before the line existed still reads, and is given one when opened
+    (let* ((sum (format nil "test~36r" (random (expt 2 40))))
+           (path (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
+      (outlook::mailbox-append-lines path (list (outlook::mailbox-label-line "+" "old" "X")))
+      (false (mailbox-test-meta sum))
+      (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "old/" dir) *mailbox-label-test-messages*
+                                                         :sum sum)
+        (is equal '("old") (gethash "X" (outlook::mailbox-job-labels job)))
+        (is string= "archive.pst" (first (mailbox-test-meta sum)))
+        (tuatara.buffer:kill-buffer list))
+      ;; written again shorter, the line stays
+      (outlook::mailbox-append-lines path (loop repeat 600 collect (outlook::mailbox-label-line "+" "old" "X")))
+      (let ((meta (mailbox-test-meta sum)))
+        (outlook::mailbox-read-labels (outlook::mailbox-labels-name sum))
+        (is equal meta (mailbox-test-meta sum))
+        (true (< (length (outlook::mailbox-journal-lines path)) 10))))))
 
 (defun mailbox-test-label (job subject &rest labels)
   "Put LABELS on the message of the mailbox JOB read whose subject is SUBJECT."
@@ -2317,3 +2383,442 @@ out, an attached message's too, and Attachments/NAME, an attachment's contents) 
         (destructuring-bind (data sub parent) (gethash #x21 (pst-test-nodes pst))
           (declare (ignore parent))
           (is equalp properties (sort (pst-test-pc pst data sub) #'< :key #'car)))))))
+
+;;; The label manager
+
+(defun manager-test-mailbox (dir name sum labelled)
+  "The list and job of the mailbox of *MAILBOX-LABEL-TEST-MESSAGES* read in
+the directory NAME of DIR with the SHA-256 sum SUM, its messages given the
+labels LABELLED says, each (SUBJECT LABEL ...), and kept."
+  (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames name dir) *mailbox-label-test-messages* :sum sum)
+    (loop for (subject . labels) in labelled
+          do (let ((item (find subject (loop for (nil . items) in (outlook::mailbox-job-folders job) append items)
+                               :key #'outlook::mailbox-item-subject :test #'equal)))
+               (outlook::mailbox-relabel job (list item) (lambda (had) (append had labels)))
+               (wait-for-mailbox-labels)))
+    (push list outlook::*mailboxes*)
+    (values list job)))
+
+(defun manager-test-sum ()
+  "A new SHA-256 sum for a mailbox of a test: 64 lowercase hexadecimal digits."
+  (format nil "~(~64,'0x~)" (random (expt 2 256))))
+
+(defun manager-test-open ()
+  "Open the label manager, as the command does, and wait for it to read the
+labels; its buffer."
+  (tuatara.tests::run-keys (list (lambda () (outlook::outlook-label-manager)) #'wait-for-mailbox-labels :tick)
+                           :width 140 :height 40)
+  (tuatara.buffer:find-buffer "*Mailbox labels*"))
+
+(defun manager-test-journal (sum)
+  "The table of labels the journal of the mailbox SUM leaves."
+  (outlook::mailbox-read-labels (outlook::mailbox-labels-name sum)))
+
+(defun manager-test-labels (job sum)
+  "The labels each message of the mailbox JOB read has in the journal of SUM
+as it is now, a list for each message in order, read afresh."
+  (let ((table (manager-test-journal sum)))
+    (mapcar (lambda (item) (gethash (outlook::mailbox-item-identity item) table))
+            (cdr (first (outlook::mailbox-job-folders job))))))
+
+(defun manager-test-go (manager sum text)
+  "A step for RUN-KEYS: point on the first line of MANAGER showing TEXT after
+the line of the mailbox whose sum is SUM (TEXT NIL: on that line itself)."
+  (lambda ()
+    (let* ((lines (uiop:split-string (tuatara.buffer:buffer-string manager) :separator '(#\Newline)))
+           (section (position-if (lambda (line) (search (subseq sum 0 8) line)) lines))
+           (line (if text (position-if (lambda (line) (search text line)) lines :start section) section)))
+      (setf (tuatara.buffer:buffer-point manager) (tuatara.buffer:buffer-goto-line manager line)))))
+
+(defun manager-test-keys (manager &rest steps)
+  "Run STEPS (RUN-KEYS' strings and functions) in a session showing MANAGER,
+then wait for the labels job they start and take it in."
+  (tuatara.tests::run-keys (append (list (lambda () (tuatara:show-buffer manager))) steps
+                                   (list #'wait-for-mailbox-labels :tick))
+                           :width 140 :height 40))
+
+(defun manager-test-refresh (manager)
+  "Read the journals and show them in MANAGER, as a job in the background does."
+  (setf outlook::*mailbox-label-sets* (outlook::mailbox-label-sets))
+  (outlook::mailbox-labels-render manager :keep))
+
+(defun manager-test-count (sum label)
+  "How many messages of the mailbox SUM carry LABEL, in its journal."
+  (loop for labels being the hash-values of (manager-test-journal sum) count (member label labels :test #'string=)))
+
+(defparameter *manager-test-labelled* '(("First" "mgrzeta" "mgrkea") ("Second" "mgrzeta"))
+  "The labels the mailboxes of the manager's tests start with.")
+
+(define-test (outlook label-manager-lists-mailboxes)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)))
+      (tuatara.buffer:kill-buffer (manager-test-mailbox dir "one/" sum *manager-test-labelled*))
+      (let* ((manager (manager-test-open))
+             (text (substitute #\Space #\Newline (tuatara.buffer:buffer-string manager)))
+             (line (mailbox-test-subject-line manager (subseq sum 0 8))))
+        ;; where they are kept and how much room, then the mailbox's file name, sum and counts
+        (has text "Labels are kept in ")
+        (has text "outlook/labels/")
+        (has text "outlook-label-manager")
+        (has text "taking ")
+        (has line "archive.pst")
+        (has line "2 labels on 2 messages")
+        (has line "there")
+        (has (mailbox-test-subject-line manager "mgrzeta") "2")
+        (has (mailbox-test-subject-line manager "mgrkea") "1")
+        ;; a file in the directory that is no mailbox's journal is not listed
+        (dolist (name (list "names" "x.tmp" (format nil "~a.lock" sum) "abc"))
+          (tuatara.io:append-to-file (tuatara.io:path-join (outlook::mailbox-label-directory) name)
+                                     (format nil "+~cmgrodd~cX~cY~cZ~%" #\Tab #\Tab #\Tab #\Tab)))
+        (manager-test-refresh manager)
+        (false (search "mgrodd" (tuatara.buffer:buffer-string manager)))
+        (tuatara.buffer:kill-buffer manager)))))
+
+(define-test (outlook mailbox-list-says-where-labels-are-kept)
+  (with-test-directory (dir)
+    (multiple-value-bind (list) (mailbox-test-list dir *mailbox-label-test-messages*)
+      (let ((text (substitute #\Space #\Newline (tuatara.buffer:buffer-string list))))
+        (has text (format nil "Labels are kept in ~a (M-x outlook-label-manager)"
+                          (tuatara:abbreviated-path (outlook::mailbox-label-directory)))))
+      ;; filled to the help column
+      (let* ((lines (uiop:split-string (tuatara.buffer:buffer-string list) :separator '(#\Newline)))
+             (start (position-if (lambda (line) (search "Labels are kept" line)) lines))
+             (paragraph (subseq lines start (position "" lines :start start :test #'string=))))
+        (true (rest paragraph))
+        (true (every (lambda (line) (<= (length line) tuatara:*help-column*)) paragraph))))))
+
+(define-test (outlook label-manager-renames-and-deletes)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)) (other (manager-test-sum)))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum *manager-test-labelled*)
+        (tuatara.buffer:kill-buffer (manager-test-mailbox dir "two/" other '(("First" "mgrzeta"))))
+        (let ((manager (manager-test-open)))
+          ;; R: rename a label of this mailbox only, on every message that has it; the list open shows it
+          (manager-test-keys manager (manager-test-go manager sum "mgrkea") "R C-a C-k m g r t u i RET")
+          (is equal '(("mgrzeta" "mgrtui") ("mgrzeta") nil) (manager-test-labels job sum))
+          (is = 1 (manager-test-count other "mgrzeta"))
+          (has (mailbox-test-subject-line list "First") "mgrtui")
+          (false (search "mgrkea" (mailbox-test-subject-line list "First")))
+          (has (mailbox-test-subject-line manager "mgrtui") "1")
+          ;; renamed to a label a message has: it only loses the old
+          (outlook::mailbox-change-labels (outlook::mailbox-labels-name sum)
+                                          (lambda (table)
+                                            (outlook::mailbox-rename-label-lines table "mgrtui" "mgrzeta")))
+          (is equal '(("mgrzeta") ("mgrzeta") nil) (manager-test-labels job sum))
+          (manager-test-refresh manager)
+          ;; d marks, x takes the label off every message of its mailbox, after asking
+          (manager-test-keys manager (manager-test-go manager sum "mgrzeta") "d x n o RET")
+          (is equal '(("mgrzeta") ("mgrzeta") nil) (manager-test-labels job sum))
+          (manager-test-keys manager (manager-test-go manager sum "mgrzeta") "d x y e s RET")
+          (is equal '(nil nil nil) (manager-test-labels job sum))
+          (is = 1 (manager-test-count other "mgrzeta"))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
+
+(define-test (outlook label-manager-forgets-and-opens)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)) (other (manager-test-sum)))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum *manager-test-labelled*)
+        (tuatara.buffer:kill-buffer (manager-test-mailbox dir "two/" other '(("First" "mgrzeta"))))
+        (let ((manager (manager-test-open))
+              (file (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
+          ;; D asks, saying how many labels and messages; no leaves everything
+          (manager-test-keys manager (manager-test-go manager sum nil) "D")
+          (true (probe-file file))
+          (manager-test-keys manager (manager-test-go manager sum nil) "D n o RET")
+          (true (probe-file file))
+          ;; yes forgets that mailbox's labels alone; the list open shows none, the other mailbox keeps its own
+          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (false (probe-file file))
+          ;; the lock file stays: sessions waiting for it hold the same one
+          (true (probe-file (concatenate 'string file ".lock")))
+          (is = 0 (hash-table-count (outlook::mailbox-job-labels job)))
+          (is = 1 (manager-test-count other "mgrzeta"))
+          (false (search (subseq sum 0 8) (tuatara.buffer:buffer-string manager)))
+          (let ((path (namestring (merge-pathnames "two/archive.pst" dir))))
+            (is equal path (second (outlook::mailbox-journal-meta
+                                    (outlook::mailbox-journal-lines
+                                     (tuatara.io:path-join (outlook::mailbox-label-directory)
+                                                           (outlook::mailbox-labels-name other)))))))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
+
+(defun manager-test-slow-writer (list job journal seconds)
+  "Make the mailbox JOB of LIST have a job keeping labels that ends after
+SECONDS, having added a line to the journal named JOURNAL as such a job does."
+  (setf (outlook::mailbox-job-labels-writer job)
+        (tuatara.runtime:start-job-thread
+         (outlook::make-mailbox-labels-job list journal nil)
+         (lambda (writer)
+           (declare (ignore writer))
+           (sleep seconds)
+           (let ((path (tuatara.io:path-join (outlook::mailbox-label-directory) journal)))
+             (outlook::mailbox-append-lines path (list (outlook::mailbox-label-line "+" "late" "X")))))
+         :name "tuatara test writer")))
+
+(define-test (outlook label-manager-waits-for-writers-before-forgetting)
+  (with-test-directory (dir)
+    (let* ((sum (manager-test-sum)) (journal (outlook::mailbox-labels-name sum)))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum *manager-test-labelled*)
+        (let ((manager (manager-test-open))
+              (file (tuatara.io:path-join (outlook::mailbox-label-directory) journal)))
+          ;; lines not yet kept are dropped, and a writer under way ends before the journal goes
+          (setf (outlook::mailbox-job-labels-pending job) (list (outlook::mailbox-label-line "+" "pending" "X")))
+          (manager-test-slow-writer list job journal 0.5)
+          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (false (outlook::mailbox-job-labels-pending job))
+          (false (probe-file file))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
+
+(define-test (outlook label-manager-leaves-mailboxes-being-written)
+  (with-test-directory (dir)
+    (let* ((sum (manager-test-sum)) (journal (outlook::mailbox-labels-name sum)))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum *manager-test-labelled*)
+        (let ((manager (manager-test-open)) (first (first (cdr (first (outlook::mailbox-job-folders job))))))
+          ;; a journal changed meanwhile is not shown while the mailbox's own changes are being kept
+          (outlook::mailbox-change-labels journal (lambda (table) (declare (ignore table))
+                                                    (list (outlook::mailbox-label-line
+                                                           "+" "other session" (outlook::mailbox-item-identity first)))))
+          (manager-test-slow-writer list job journal 0.5)
+          (tuatara.tests::run-keys
+           (list (lambda () (tuatara:show-buffer manager))
+                 (lambda () (outlook::mailbox-labels-start manager "reading" nil))
+                 (lambda () (loop while (outlook::mailbox-labels-working manager) do (sleep 0.01)))
+                 :tick)
+           :width 140 :height 40)
+          (is equal '("mgrzeta" "mgrkea") (outlook::mailbox-item-labels job first))
+          ;; and shown once they are
+          (let ((until (+ (get-internal-real-time) (* 5 internal-time-units-per-second))))
+            (loop while (and (tuatara.runtime:job-running-p (outlook::mailbox-job-labels-writer job))
+                             (< (get-internal-real-time) until))
+                  do (sleep 0.01)))
+          (manager-test-keys manager (lambda () (outlook::mailbox-labels-start manager "reading" nil)))
+          (true (member "other session" (outlook::mailbox-item-labels job first) :test #'string=))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
+
+(define-test (outlook label-manager-shows-what-it-has-read)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)))
+      (tuatara.buffer:kill-buffer (manager-test-mailbox dir "one/" sum '(("First" "cachelabel"))))
+      (let ((manager (manager-test-open))
+            (file (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
+        ;; showing, marking and taking the list in again read no journal: the cache is what is shown
+        (delete-file file)
+        (outlook::mailbox-labels-render manager :keep)
+        (has (mailbox-test-subject-line manager "cachelabel") "1")
+        ;; work is done in the background, said in the heading, and one at a time
+        (let ((release (sb-thread:make-semaphore)))
+          (true (outlook::mailbox-labels-start manager "renaming"
+                                               (lambda () (sb-thread:wait-on-semaphore release) "done")))
+          (has (tuatara.buffer:buffer-string manager) "(renaming...)")
+          (let ((working (outlook::mailbox-labels-working manager)))
+            (outlook::mailbox-labels-start manager "forgetting" nil)
+            (is eq working (outlook::mailbox-labels-working manager)))
+          (sb-thread:signal-semaphore release)
+          (manager-test-keys manager)
+          (false (search "(renaming...)" (tuatara.buffer:buffer-string manager)))
+          (false (mailbox-test-subject-line manager "cachelabel")))
+        (tuatara.buffer:kill-buffer manager)))))
+
+(define-test (outlook label-manager-copies-labels-out-and-in)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)) (other (manager-test-sum)))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum *manager-test-labelled*)
+        (tuatara.buffer:kill-buffer (manager-test-mailbox dir "two/" other '(("Third" "mgrtui"))))
+        (let* ((manager (manager-test-open))
+               (out (namestring (merge-pathnames "copy/" dir)))
+               (file (format nil "~alabels.txt" out)))
+          (ensure-directories-exist out)
+          ;; E writes a plain file: the sum, the mailbox's file name, each message's identity and labels;
+          ;; a name taken gets (2)
+          (dotimes (n 2)
+            (manager-test-keys manager (manager-test-go manager sum nil)
+                               (format nil "E C-a C-k ~a C-j" (tuatara.tests::rimu-typed file))))
+          (is equal '("labels (2).txt" "labels.txt")
+              (sort (mapcar #'first (tuatara.io:directory-entries out)) #'string<))
+          (let ((text (uiop:read-file-string file)))
+            (is string= (format nil "# tuatara-outlook-labels 1~%# sha256 ~a~%# file archive.pst~%~
+                                     # deleted-items ~:[no~;yes~]~%"
+                                sum tuatara-user:*outlook-include-deleted*)
+                (subseq text 0 (search (format nil "+~c" #\Tab) text)))
+            (has text (format nil "+~cmgrkea~cOutlook Data File/Inbox~c<one@example.org>~c" #\Tab #\Tab #\Tab #\Tab))
+            (is = 3 (count #\+ text)))
+          ;; the labels forgotten, then I reads them back; those in the mailbox already stay, others are added
+          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (is = 0 (hash-table-count (manager-test-journal sum)))
+          (outlook::mailbox-change-labels
+           (outlook::mailbox-labels-name sum)
+           (lambda (table)
+             (declare (ignore table))
+             (list (outlook::mailbox-label-line
+                    "+" "mgrzeta"
+                    (outlook::mailbox-item-identity (second (cdr (first (outlook::mailbox-job-folders job)))))))))
+          (manager-test-refresh manager)
+          (manager-test-keys manager (manager-test-go manager sum nil)
+                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+          (is equal '(("mgrzeta" "mgrkea") ("mgrzeta") nil) (manager-test-labels job sum))
+          (manager-test-keys manager (manager-test-go manager sum nil)
+                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+          (is equal '(("mgrzeta" "mgrkea") ("mgrzeta") nil) (manager-test-labels job sum))
+          ;; on another mailbox's line, a file of this one is refused and nothing changes
+          (manager-test-keys manager (manager-test-go manager other nil)
+                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+          (is = 1 (manager-test-count other "mgrtui"))
+          (is = 0 (manager-test-count other "mgrzeta"))
+          ;; anywhere but a mailbox's line it goes to the mailbox it is of, which may have been forgotten
+          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (manager-test-keys manager (lambda () (setf (tuatara.buffer:buffer-point manager) 0))
+                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+          (is equal '(("mgrzeta" "mgrkea") ("mgrzeta") nil) (manager-test-labels job sum))
+          ;; the mailbox list's keys: M and C-c o m open the manager
+          (dolist (key '("M" "C-c o m"))
+            (tuatara.buffer:kill-buffer manager)
+            (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer list)) key) :width 140 :height 40)
+            (true (tuatara.buffer:find-buffer "*Mailbox labels*"))
+            (setf manager (tuatara.buffer:find-buffer "*Mailbox labels*")))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
+
+(define-test (outlook label-manager-refuses-files-not-of-labels)
+  (with-test-directory (dir)
+    (let ((good (manager-test-sum)))
+      (flet ((file-with (sum &optional (name "archive.pst"))
+               (let ((path (namestring (merge-pathnames (format nil "f~d.txt" (random 100000)) dir))))
+                 (put-test-file path (format nil "# tuatara-outlook-labels 1~%# sha256 ~a~%# file ~a~%# deleted-items no~%~
+                                                  +~ca~cb~cc~cd~%" sum name #\Tab #\Tab #\Tab #\Tab))
+                 path)))
+        ;; the sum is the journal's file name: exactly 64 lowercase hexadecimal digits, nothing else
+        (is equal good (outlook::mailbox-read-labels-file (file-with good)))
+        (dolist (bad (list "." ".." "names" "abc.lock" "x.tmp" (make-string 300 :initial-element #\a)
+                           (format nil "~a~c~a" (subseq good 0 30) (code-char 0) (subseq good 31))
+                           (string-upcase good) (subseq good 1) (format nil "~a.with-deleted" good) "../etc"))
+          (false (outlook::mailbox-read-labels-file (file-with bad))))
+        ;; the file name is kept short and without control characters
+        (let ((name (nth-value 1 (outlook::mailbox-read-labels-file
+                                  (file-with good (format nil "a~cb~a" (code-char 7) (make-string 400 :initial-element #\x)))))))
+          (is = 255 (length name))
+          (false (find-if (lambda (c) (< (char-code c) 32)) name)))
+        ;; a file of other text is refused
+        (let ((bad (format nil "~abad.txt" (namestring dir))))
+          (put-test-file bad (format nil "just some text~%"))
+          (false (outlook::mailbox-read-labels-file bad)))))))
+
+(define-test (outlook label-manager-refuses-while-busy-and-forgetting)
+  (with-test-directory (dir)
+    (let* ((sum (manager-test-sum)) (journal (outlook::mailbox-labels-name sum)))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum *manager-test-labelled*)
+        (let ((manager (manager-test-open)) (release (sb-thread:make-semaphore))
+              (line (format nil "+~cpending~cX~cY~cZ~%" #\Tab #\Tab #\Tab #\Tab)))
+          ;; with a job under way, D says to wait and the lines not yet kept stay
+          (setf (outlook::mailbox-job-labels-pending job) (list line))
+          (outlook::mailbox-labels-start manager "working" (lambda () (sb-thread:wait-on-semaphore release) nil))
+          (tuatara.tests::run-keys
+           (list (lambda () (tuatara:show-buffer manager)) (manager-test-go manager sum nil)
+                 (lambda () (outlook::outlook-labels-forget))
+                 (lambda () (sb-thread:signal-semaphore release))
+                 #'wait-for-mailbox-labels :tick)
+           :width 140 :height 40)
+          (is equal (list line) (outlook::mailbox-job-labels-pending job))
+          (true (probe-file (tuatara.io:path-join (outlook::mailbox-label-directory) journal)))
+          (setf (outlook::mailbox-job-labels-pending job) nil)
+          ;; no label is put on a mailbox while its labels are being forgotten
+          (let ((outlook::*mailbox-labels-forgetting* (list journal)))
+            (tuatara.tests::run-keys
+             (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "First")
+                   (lambda () (false (outlook::mailbox-labelled-items))))
+             :width 140 :height 30))
+          (true (tuatara.tests::run-keys
+                 (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "First")
+                       (lambda () (true (outlook::mailbox-labelled-items))))
+                 :width 140 :height 30))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
+
+(define-test (outlook label-manager-says-what-went-wrong-and-reads-again)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)))
+      (tuatara.buffer:kill-buffer (manager-test-mailbox dir "one/" sum '(("First" "halflabel"))))
+      (let ((manager (manager-test-open)) (journal (outlook::mailbox-labels-name sum)) (working nil))
+        ;; an action that fails part way: what it did is shown, the failure said
+        (tuatara.tests::run-keys
+         (list (lambda () (tuatara:show-buffer manager))
+               (lambda ()
+                 (outlook::mailbox-labels-start
+                  manager "changing"
+                  (lambda ()
+                    (outlook::mailbox-change-labels
+                     journal (lambda (table) (declare (ignore table))
+                               (list (outlook::mailbox-label-line
+                                      "+" "extra" (format nil "Inbox~c~c~a" #\Tab #\Tab sum)))))
+                    (error "disk full"))))
+               (lambda () (setf working (outlook::mailbox-labels-working manager)))
+               #'wait-for-mailbox-labels)
+         :width 140 :height 30)
+        (has (outlook::mailbox-labels-manager-job-result working) "Not all were changed: ")
+        (has (outlook::mailbox-labels-manager-job-result working) "disk full")
+        (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer manager)) :tick) :width 140 :height 30)
+        (has (tuatara.buffer:buffer-string manager) "extra")
+        (tuatara.buffer:kill-buffer manager)))))
+
+(define-test (outlook label-manager-keeps-labels-given-during-a-job)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum '(("First" "before")))
+        (let ((manager (manager-test-open)) (first (first (cdr (first (outlook::mailbox-job-folders job))))))
+          ;; a job reads the labels, then one is given and kept before the job is taken in: not lost from the list
+          (outlook::mailbox-labels-start manager "reading" nil)
+          (loop while (outlook::mailbox-labels-working manager) do (sleep 0.01))
+          (outlook::mailbox-relabel job (list first) (lambda (had) (append had '("fresh"))))
+          (wait-for-mailbox-labels)
+          (manager-test-keys manager)
+          (is equal '("before" "fresh") (outlook::mailbox-item-labels job first))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
+
+(define-test (outlook label-manager-says-when-still-reading-or-empty)
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)) (release (sb-thread:make-semaphore)))
+      (tuatara.buffer:kill-buffer (manager-test-mailbox dir "one/" sum '(("First" "somelabel"))))
+      (let ((manager (manager-test-open)) (outlook::*mailbox-label-sets* nil))
+        ;; the first read not ended: said so, not 0 mailboxes
+        (outlook::mailbox-labels-start manager "reading the labels"
+                                       (lambda () (sb-thread:wait-on-semaphore release) nil))
+        (has (tuatara.buffer:buffer-string manager) "still reading")
+        (false (search "0 mailboxes" (tuatara.buffer:buffer-string manager)))
+        (sb-thread:signal-semaphore release)
+        (manager-test-keys manager)
+        ;; a mailbox with no labels is not written out
+        (let* ((set (outlook::mailbox-label-set-named (outlook::mailbox-labels-name sum)))
+               (out (namestring (merge-pathnames "empty.labels" dir))))
+          (declare (ignore set))
+          (outlook::mailbox-change-labels (outlook::mailbox-labels-name sum)
+                                          (lambda (table)
+                                            (loop for identity being the hash-keys of table using (hash-value labels)
+                                                  append (loop for label in labels
+                                                               collect (outlook::mailbox-label-line
+                                                                        "-" label identity)))))
+          (manager-test-refresh manager)
+          (let ((empty (outlook::mailbox-read-label-set (outlook::mailbox-labels-name sum) 0)))
+            (has (outlook::mailbox-export-labels empty out) "no labels to write")
+            (false (probe-file out))))
+        (tuatara.buffer:kill-buffer manager)))))
+
+(define-test (outlook label-manager-lets-go-of-a-mailbox-forgotten)
+  (with-test-directory (dir)
+    (let* ((sum (manager-test-sum)) (journal (outlook::mailbox-labels-name sum)) (release (sb-thread:make-semaphore)))
+      (tuatara.buffer:kill-buffer (manager-test-mailbox dir "one/" sum *manager-test-labelled*))
+      (let ((manager (manager-test-open)))
+        ;; not kept from labelling when the job is refused
+        (outlook::mailbox-labels-start manager "working" (lambda () (sb-thread:wait-on-semaphore release) nil))
+        (outlook::mailbox-labels-start manager "forgetting" nil :forgetting journal)
+        (false (member journal outlook::*mailbox-labels-forgetting* :test #'string=))
+        (sb-thread:signal-semaphore release)
+        (manager-test-keys manager)
+        ;; kept while the job is under way, let go once it is taken in, whatever its action did
+        (outlook::mailbox-labels-start manager "forgetting" (lambda () nil) :forgetting journal)
+        (true (member journal outlook::*mailbox-labels-forgetting* :test #'string=))
+        (manager-test-keys manager)
+        (false (member journal outlook::*mailbox-labels-forgetting* :test #'string=))
+        (tuatara.buffer:kill-buffer manager)))))

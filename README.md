@@ -60,6 +60,7 @@ here.
 | A mailbox | `C`                             | Opens the menu of copying out the messages marked, or the one on the line: `e` as saved mail (`.eml`), `m` as Outlook items (`.msg`), then asks for the directory (made when it is not there); `b` into one mbox file, `p` into a new Outlook mailbox (`.pst`), asked for; `a` first for every message shown. `C-h` there lists the menu. |
 | A mailbox | `+`, `-`                        | Puts labels of your own on the messages marked, or the one on the line, several apart by commas, those used before offered; takes labels off them, chosen from those they carry (see Labels).                                                                  |
 | A mailbox | `L`                             | Narrows the list to the messages carrying a label, or any of several, chosen from those used in the mailbox; with `C-u`, to those carrying none of them. A filter kept with the others (see Labels).                                                                  |
+| A mailbox | `M`                             | Opens the label manager (`M-x outlook-label-manager`, `C-c o m`): every mailbox that has labels, with its labels (see Labels). |
 | A mailbox | `P`                             | Turns off and on the preview: the message on the line shown in a window beside the list, read as any message is, following the cursor (see Seeing a message beside the list).                                                                                          |
 | A mailbox | `C-s`, `C-r`                    | Narrows the list, as a regular expression is typed, to the messages whose headers or contents match (see Searching a mailbox). `RET` keeps the pattern as a filter, `C-g` lets the one typed go.                                                                       |
 | A mailbox | `C-x / f`, `C-x / h`            | Narrows the list to the messages one field of which a pattern matches, or hides them: the field asked for first, any header the mailbox's messages have, an attachment's name, a label, or what the Outlook item says of itself (see Filtering by a field).          |
@@ -204,7 +205,8 @@ of their own while any message carries one. `-` takes labels off, chosen from
 those the messages carry.
 
 The labels are kept for you alone in Tuatara's state directory
-(`outlook/labels/`), never in the mailbox nor beside it, in a file named by
+(`~/.local/state/tuatara/outlook/labels/` unless `XDG_STATE_HOME` says
+otherwise), never in the mailbox nor beside it, in a file named by
 the mailbox's SHA-256 sum: whenever that mailbox is opened again, a copy of it
 too, its labels come back, and a mailbox changed in any way starts with none.
 A message is known by its folder, its Message-ID and the SHA-256 sum of its
@@ -227,6 +229,42 @@ carrying none of them. It is one of the list's filters, as a search kept with
 left, `C-x / l` lists it and `C-x / r` takes every filter away. Labels are
 told apart by case: `kea` is not `Kea`. A message labelled or unlabelled while
 such a filter is on is shown or hidden at once, as the filters now say.
+
+The label prompt offers only the labels of the mailbox it is in. A line
+beginning `@` in each labels file says which mailbox it is for: its file's
+name, the path it was last opened from, its size, its SHA-256 sum and when its
+labels last changed. A file from before it existed still reads, and is given
+the line the next time its mailbox is opened. The words above a mailbox's
+list say where the labels are kept.
+
+### The label manager
+
+`M-x outlook-label-manager`, or `M` (`C-c o m`) in a mailbox's list, lists
+every mailbox that has labels, one section each: its file's name, the path it
+was last opened from, whether the file is there now, the start of its SHA-256
+sum, how many labels and messages, and when they last changed; a mailbox read
+with its deleted items has a section of its own. Under it each label with the
+number of messages that carry it. The heading says where the labels are kept
+and how much room they take.
+
+| Key | What it does |
+| --- | --- |
+| `RET`, `l` | On a mailbox's line, opens the mailbox when its file is there. |
+| `R` (`C-c o r`) | Renames the label on the line, or each one marked, in its mailbox only; a message that has the new name already only loses the old. |
+| `d`, `x` | Mark labels for deletion and take them off every message of their mailbox, after asking. |
+| `D` (`C-c o f`) | Forgets every label of the mailbox on the line, after saying how many labels and messages that is. |
+| `E` (`C-c o e`) | Writes the mailbox's labels into a plain text file, in a directory you choose and never an evidence directory: its SHA-256 sum, its file's name, and each message's identity with its labels. |
+| `I` (`C-c o i`) | Reads such a file back into the mailbox with the sum it holds, adding to the labels there. On another mailbox's line it refuses; elsewhere it goes to the mailbox the file is of, which gets its labels back after they were forgotten. |
+
+Each change is lines added to the mailbox's journal, so labels another
+session put on meanwhile stay. Earlier versions kept a `names` file in the
+labels directory; it is left where it is and ignored, and can be deleted.
+
+The manager reads and changes the journals in the background, so it never
+holds the editor up: the heading says what is under way, and a second change
+waits for the first. A file read by `I` is accepted only when its sum is
+exactly 64 lowercase hexadecimal digits, the name of a journal; its file name
+is cut at 255 characters and control characters in it become spaces.
 
 ## Searching a mailbox
 

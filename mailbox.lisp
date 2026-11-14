@@ -262,8 +262,7 @@ when it could not be made; LABELS, the labels on its messages, a table from
 each one's identity to its labels (MAILBOX-READ-LABELS), or NIL without a sum.
 LABELS-NAME is the name of their journal (MAILBOX-LABELS-NAME), taken as it
 is listed. LABELS-WRITER is the job keeping them last started, and LABELS-PENDING the
-changes made since it took them, (LINES . NAMES) as MAILBOX-KEEP-LABELS takes
-them.
+journal lines of the changes made since it took them (MAILBOX-KEEP-LABELS).
 FIELD-NAMES is a table of the names of the fields of its messages
 \(MAILBOX-MESSAGE-FIELDS), found as they are listed; THREADS, the tables
 finding its messages by their links to earlier ones (MAILBOX-THREAD-TABLES),
@@ -463,8 +462,11 @@ its sum was made (MAILBOX-READ-LABELS)."
                   collect (cons (string-right-trim "/" relative)
                                 (loop for (name . msg) in files collect (item-of relative name msg))))
             (mailbox-job-threads job) (mailbox-thread-tables (mailbox-job-folders job))
-            (mailbox-job-labels-name job) (and (mailbox-job-sum job) (mailbox-labels-name (mailbox-job-sum job)))
-            (mailbox-job-labels job) (and (mailbox-job-labels-name job) (mailbox-read-labels (mailbox-job-labels-name job)))))
+            (mailbox-job-labels-name job) (and (mailbox-job-sum job) (mailbox-labels-name (mailbox-job-sum job)))))
+    (when (mailbox-job-labels-name job)
+      (multiple-value-bind (table meta kept) (mailbox-read-labels (mailbox-job-labels-name job))
+        (setf (mailbox-job-labels job) table)
+        (when kept (mailbox-note-mailbox job meta))))
     (mailbox-number-identities (mailbox-job-folders job))))
 
 (defparameter *mailbox-columns*
@@ -525,7 +527,8 @@ was. Its searches narrow it, matching each message's headers and contents
                                          it looks, \\[quit-window] comes back; ~
                                          \\<mailbox-mode>\\[regex-search-forward] narrows the list to the items ~
                                          whose headers or contents match; \\[list-mark-entry] marks, ~
-                                         \\[mailbox-export] copies out."))))))
+                                         \\[mailbox-export] copies out."))))
+                      (format nil "~a~%" (filled-words (format nil "~a." (mailbox-labels-place-words))))))
          (partial (loop for (nil . items) in folders sum (count-if-not #'mailbox-item-whole items)))
          (notes (loop for note in (append (reverse (mailbox-job-notes job))
                                           (and (plusp partial)
