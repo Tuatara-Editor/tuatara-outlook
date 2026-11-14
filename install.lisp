@@ -32,7 +32,7 @@ what reads them."
                                              ("C-c o l" mailbox-filter-labels)))
   (label-keys (mode-keymap 'mailbox-mode) '(("C-c o" "outlook")))
   (commands-for-mode 'mailbox-mode "the list of a mailbox" 'mailbox-export 'mailbox-export-eml 'mailbox-export-msg
-                     'mailbox-export-mbox
+                     'mailbox-export-mbox 'mailbox-export-pst
                      'mailbox-back-to-directory 'mailbox-label 'mailbox-unlabel 'mailbox-filter-labels)
   (entry-preview-keys 'mailbox-mode "the list of a mailbox")
   (pushnew 'mail-visit *file-views*)

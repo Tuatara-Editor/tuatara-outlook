@@ -7,49 +7,65 @@
 ;;;; others in a stream of its own (__substg1.0_NNNNTTTT); a storage for each
 ;;;; recipient and each attachment, laid out alike; an attachment that is an
 ;;;; item itself, a storage within, read as one to a depth. Named properties
-;;;; (those numbered from 0x8000) are left out.
+;;;; (those numbered from 0x8000) are left out. An item is read too as a
+;;;; message to be written in a new mailbox (pst.lisp), its properties as
+;;;; they are stored.
 
 (in-package #:outlook)
 
-(defun msg-properties (cfb entry header)
+(defun msg-stored-properties (cfb entry header)
   "The properties of the storage ENTRY of the compound file (CFB), an item, a
 recipient or an attachment, whose fixed-size properties' stream has HEADER
-octets before them: a hash table from each property's number to (TYPE . VALUE),
-VALUE a number, a universal time, T or NIL, octets, a string, or (:storage .
-ENTRY)."
-  (let ((table (make-hash-table)) (children (cfb-children cfb entry)))
-    (dolist (child children)
+octets before them, as they are stored: a list of (TAG . VALUE), TAG the
+property's number and type, VALUE the eight octets of a fixed-size one, the
+octets of a string, binary data or a GUID as its stream holds them, or
+\(:storage . ENTRY) for an object. Multiple values (streams of their own,
+-NNNNNNNN after) are left out."
+  (let ((properties '()))
+    (dolist (child (cfb-children cfb entry) (nreverse properties))
       (let ((name (cfb-entry-name child)))
         (cond
           ((and (eq (cfb-entry-type child) :stream) (string= name "__properties_version1.0"))
            (let ((octets (cfb-stream-octets cfb child)))
              (loop for at from header by 16
                    while (<= (+ at 16) (length octets))
-                   do (let* ((tag (cfb-number octets at 4)) (type (ldb (byte 16 0) tag)) (id (ldb (byte 16 16) tag))
-                             (value (case type
-                                      (#x0002 (octets-signed (cfb-number octets (+ at 8) 2) 16))
-                                      (#x0003 (octets-signed (cfb-number octets (+ at 8) 4) 32))
-                                      (#x000B (/= 0 (cfb-number octets (+ at 8) 2)))
-                                      (#x0014 (cfb-number octets (+ at 8) 8))
-                                      (#x0040 (filetime-universal-time (cfb-number octets (+ at 8) 8)))
-                                      (t :none))))
-                        (unless (eq value :none)
-                          (setf (gethash id table) (cons type value)))))))
-          ((and (>= (length name) 20) (string= "__substg1.0_" name :end2 12))
+                   do (let ((tag (cfb-number octets at 4)))
+                        (when (member (ldb (byte 16 0) tag)
+                                      '(#x0002 #x0003 #x0004 #x0005 #x0006 #x0007 #x000A #x000B #x0014 #x0040))
+                          (push (cons tag (subseq octets (+ at 8) (+ at 16))) properties))))))
+          ((and (= (length name) 20) (string= "__substg1.0_" name :end2 12))
            (let ((id (ignore-errors (parse-integer name :start 12 :end 16 :radix 16)))
                  (type (ignore-errors (parse-integer name :start 16 :end 20 :radix 16))))
-             ;; multiple values (their own streams, -NNNNNNNN after) are left out
-             (when (and id type (= (length name) 20) (< id #x8000))
-               (let ((old (car (gethash id table))))
-                 (case type
-                   ;; a string of Unicode before one of the item's code page
-                   ((#x001F #x001E #x0102)
-                    (unless (and (eql old #x001F) (/= type #x001F))
-                      (when (eq (cfb-entry-type child) :stream)
-                        (let ((octets (cfb-stream-octets cfb child)))
-                          (setf (gethash id table)
-                                (cons type (if (= type #x001F) (utf-16-text octets) octets)))))))
-                   (#x000D (setf (gethash id table) (cons type (cons :storage child))))))))))))
+             (when (and id type)
+               (case type
+                 ((#x001F #x001E #x0102 #x0048)
+                  (when (eq (cfb-entry-type child) :stream)
+                    (push (cons (logior (ash id 16) type) (cfb-stream-octets cfb child)) properties)))
+                 (#x000D (push (cons (logior (ash id 16) type) (cons :storage child)) properties)))))))))))
+
+(defun msg-properties (cfb entry header)
+  "The properties of the storage ENTRY of the compound file (CFB), an item, a
+recipient or an attachment, whose fixed-size properties' stream has HEADER
+octets before them (MSG-STORED-PROPERTIES): a hash table from each property's
+number to (TYPE . VALUE), VALUE a number, a universal time, T or NIL, octets,
+a string, or (:storage . ENTRY). Named ones of any size but fixed are left
+out."
+  (let ((table (make-hash-table)))
+    (loop for (tag . raw) in (msg-stored-properties cfb entry header)
+          for type = (ldb (byte 16 0) tag)
+          for id = (ldb (byte 16 16) tag)
+          for old = (car (gethash id table))
+          do (case type
+               (#x0002 (setf (gethash id table) (cons type (octets-signed (cfb-number raw 0 2) 16))))
+               (#x0003 (setf (gethash id table) (cons type (octets-signed (cfb-number raw 0 4) 32))))
+               (#x000B (setf (gethash id table) (cons type (/= 0 (cfb-number raw 0 2)))))
+               (#x0014 (setf (gethash id table) (cons type (cfb-number raw 0 8))))
+               (#x0040 (setf (gethash id table) (cons type (filetime-universal-time (cfb-number raw 0 8)))))
+               ;; a string of Unicode before one of the item's code page
+               ((#x001F #x001E #x0102)
+                (when (and (< id #x8000) (not (and (eql old #x001F) (/= type #x001F))))
+                  (setf (gethash id table) (cons type (if (= type #x001F) (utf-16-text raw) raw)))))
+               (#x000D (when (< id #x8000) (setf (gethash id table) (cons type raw))))))
     table))
 
 (defun msg-value (properties id)
@@ -284,3 +300,65 @@ order of their numbers; an error when OCTETS are no Outlook item."
 it is not one, or is made to be read without end."
   (let ((cfb (cfb-read octets)) (*msg-items* '()))
     (msg-mail cfb (aref (cfb-entries cfb) 0))))
+
+;;; An Outlook item as a message of a mailbox written
+
+(defun msg-eight-bit-text (octets charset)
+  "OCTETS, a string of an Outlook item, as text, the null after it left out:
+in CHARSET when one is given, else in UTF-8 when they are UTF-8, else in
+Windows-1252."
+  (let ((end (or (position 0 octets) (length octets))))
+    (if charset
+        (charset-text octets charset :end end)
+        (let ((text (octets-string octets :end end)))
+          (if (find-if (lambda (c) (<= #xDC80 (char-code c) #xDCFF)) text)
+              (charset-text octets "windows-1252" :end end)
+              text)))))
+
+(defun msg-pst-properties (cfb entry header charset depth)
+  "The properties of the storage ENTRY of the compound file (CFB), HEADER
+octets before its fixed-size ones (MSG-STORED-PROPERTIES), as PST-MESSAGE
+keeps them: named ones left out, a string of eight-bit characters read in
+CHARSET (MSG-EIGHT-BIT-TEXT) and made Unicode, a string's null left out, a
+fixed-size value cut to its size, and an attached item read as a message
+\(MSG-PST-MESSAGE) while DEPTH is below *OUTLOOK-NESTING-LIMIT*, never one
+being read already, and no more of them than *MSG-ITEM-LIMIT*."
+  (loop for (tag . raw) in (msg-stored-properties cfb entry header)
+        for type = (pst-property-type tag)
+        for value = (cond ((>= (ldb (byte 16 16) tag) #x8000) nil)
+                          ((pst-fixed-size type) (subseq raw 0 (pst-fixed-size type)))
+                          ((= type #x001E) (pst-text (msg-eight-bit-text raw charset)))
+                          ((= type #x001F)
+                           (let ((end (length raw)))
+                             (loop while (and (>= end 2) (zerop (aref raw (- end 1))) (zerop (aref raw (- end 2))))
+                                   do (decf end 2))
+                             (subseq raw 0 end)))
+                          ((= type #x000D)
+                           (and (< depth *outlook-nesting-limit*) (< (length *msg-items*) *msg-item-limit*)
+                                (not (member (cdr raw) *msg-items*))
+                                (msg-pst-message cfb (cdr raw) :header 24 :depth (1+ depth) :charset charset)))
+                          (t raw))
+        when value collect (cons (if (= type #x001E) (logior (logandc2 tag #xFFFF) #x001F) tag) value)))
+
+(defun msg-pst-message (cfb entry &key (header 32) (depth 0) charset)
+  "The item in the storage ENTRY of the compound file (CFB) (an item of its
+own, HEADER 32; an attached one, 24) as a PST-MESSAGE, to be written in a
+mailbox: its properties, its recipients' and its attachments', as
+MSG-PST-PROPERTIES reads them, its strings of eight-bit characters in the
+code page it names, else in CHARSET; an attached item as a message to a
+depth. A recipient with neither a name nor an address, as readpst writes for
+kinds of recipient a message has none of, is left out."
+  (push entry *msg-items*)
+  (let* ((properties (msg-properties cfb entry header))
+         (charset (or (mail-codepage-charset (or (msg-value properties #x3FFD) (msg-value properties #x3FDE)))
+                      charset)))
+    (flet ((each (prefix)
+             (loop for storage in (msg-children-named cfb entry prefix)
+                   collect (msg-pst-properties cfb storage 8 charset depth))))
+      (make-pst-message
+       :properties (msg-pst-properties cfb entry header charset depth)
+       :recipients (remove-if-not (lambda (recipient)
+                                    (some (lambda (tag) (plusp (length (pst-value recipient tag))))
+                                          '(#x3001001F #x3003001F #x39FE001F)))
+                                  (each "__recip_version1.0_#"))
+       :attachments (each "__attach_version1.0_#")))))

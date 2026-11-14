@@ -15,5 +15,5 @@
    :install "install pst-utils (Debian, Ubuntu) or libpst (Fedora)")
  '("weasyprint" "draws a message written in HTML as it looks" :install "install weasyprint"))
 
-(dolist (file '("mail" "cfb" "mime" "msg" "view" "mailbox" "labels" "fields" "thread" "install"))
+(dolist (file '("mail" "cfb" "mime" "pst" "msg" "view" "mailbox" "labels" "fields" "thread" "install"))
   (load-package-file (format nil "~a.lisp" file)))

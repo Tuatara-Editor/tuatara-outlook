@@ -1725,3 +1725,580 @@ picture; and a message of neither."
       (format t "~&html-text: ~,1f and ~,1f octets per character~%" small large)
       (true (< small 40))
       (true (< large 40)))))
+
+;;; Outlook mailboxes written, read back by a reader of the tests' own
+
+(defparameter *pst-test-unpermutation*
+  (let ((inverse (make-array 256 :element-type '(unsigned-byte 8))))
+    (dotimes (i 256 inverse) (setf (aref inverse (aref outlook::*pst-permutation* i)) i)))
+  "The inverse of the permutation data blocks are written with: [MS-PST] 5.1's mpbbI.")
+
+(defun pst-test-number (octets at count)
+  "The unsigned integer in COUNT octets of OCTETS from AT, least significant first."
+  (tuatara:octets-integer octets at count))
+
+(defstruct (pst-test (:constructor %make-pst-test (octets)))
+  "A mailbox's OCTETS read by the tests: its NODES (NID to (DATA SUB PARENT)), its BLOCKS (BID to
+\(IB . CB)), the 64-octet SLOTS its pages and blocks take, and the PROBLEMS found, in words."
+  octets (nodes (make-hash-table)) (blocks (make-hash-table)) (slots (make-hash-table)) (problems '()))
+
+(defun pst-test-problem (pst format &rest arguments)
+  "Note a problem of PST, FORMAT with ARGUMENTS."
+  (push (apply #'format nil format arguments) (pst-test-problems pst)))
+
+(defun pst-test-take (pst ib size what)
+  "Note that SIZE octets at IB of PST are taken by WHAT, a problem when some already were."
+  (loop for slot from (floor (- ib #x4400) 64) below (floor (- (+ ib size) #x4400) 64)
+        do (when (gethash slot (pst-test-slots pst)) (pst-test-problem pst "~a at ~x overlaps" what ib))
+           (setf (gethash slot (pst-test-slots pst)) t)))
+
+(defun pst-test-page (pst ib bid ptype)
+  "The page of PST at IB, checked: its type PTYPE, its CRC, its signature and BID."
+  (let* ((octets (pst-test-octets pst)) (page (subseq octets ib (+ ib 512))))
+    (unless (and (= ptype (aref page 496)) (= ptype (aref page 497))) (pst-test-problem pst "page ~x type" ib))
+    (unless (= (pst-test-number page 500 4) (outlook::pst-crc page :end 496)) (pst-test-problem pst "page ~x CRC" ib))
+    (unless (= (pst-test-number page 498 2)
+               (if (member ptype '(#x82 #x83 #x84 #x85)) 0 (outlook::pst-signature ib bid)))
+      (pst-test-problem pst "page ~x signature" ib))
+    (unless (= bid (pst-test-number page 504 8)) (pst-test-problem pst "page ~x BID" ib))
+    ;; a page's own identifier keeps its lowest bit clear ([MS-PST] 2.2.2.2)
+    (when (and (member ptype '(#x80 #x81 #x86)) (logbitp 0 bid)) (pst-test-problem pst "page ~x BID ~x odd" ib bid))
+    (pst-test-take pst ib 512 "page")
+    page))
+
+(defun pst-test-walk (pst ib bid ptype)
+  "Read the B-tree of PST whose root page is at IB with BID, of PTYPE: its nodes or blocks, each
+block checked (its trailer, CRC and signature), the keys in order."
+  (let* ((page (pst-test-page pst ib bid ptype))
+         (count (aref page 488)) (width (aref page 490)) (level (aref page 491)) (keys '()))
+    (dotimes (i count)
+      (let ((at (* i width)))
+        (push (pst-test-number page at 8) keys)
+        (cond ((plusp level)
+               (pst-test-walk pst (pst-test-number page (+ at 16) 8) (pst-test-number page (+ at 8) 8) ptype))
+              ((= ptype #x81)
+               (setf (gethash (pst-test-number page at 8) (pst-test-nodes pst))
+                     (list (pst-test-number page (+ at 8) 8) (pst-test-number page (+ at 16) 8)
+                           (pst-test-number page (+ at 24) 4))))
+              (t (let* ((bid (pst-test-number page at 8)) (block-ib (pst-test-number page (+ at 8) 8))
+                        (cb (pst-test-number page (+ at 16) 2)) (size (* 64 (ceiling (+ cb 16) 64)))
+                        (block (subseq (pst-test-octets pst) block-ib (+ block-ib size))))
+                   (setf (gethash bid (pst-test-blocks pst)) (cons block-ib cb))
+                   (unless (and (= cb (pst-test-number block (- size 16) 2))
+                                (= bid (pst-test-number block (- size 8) 8))
+                                (= (pst-test-number block (- size 14) 2) (outlook::pst-signature block-ib bid))
+                                (= (pst-test-number block (- size 12) 4) (outlook::pst-crc block :end cb)))
+                     (pst-test-problem pst "block ~x trailer" bid))
+                   (pst-test-take pst block-ib size "block"))))))
+    (unless (equal keys (sort (copy-list keys) #'>)) (pst-test-problem pst "page ~x keys out of order" ib))))
+
+(defun pst-test-read (octets)
+  "OCTETS, a Unicode mailbox, read and checked as [MS-PST] says (a PST-TEST): the header's magic,
+version and CRCs, both B-trees and every block, each allocation map (AMap) and page map, a free map
+where one is due, and the size the header gives."
+  (let ((pst (%make-pst-test octets)))
+    (unless (tuatara:octets-at-p octets "!BDN" 0) (pst-test-problem pst "no magic"))
+    (unless (and (= 23 (pst-test-number octets 10 2)) (= #x80 (aref octets 512)))
+      (pst-test-problem pst "not Unicode"))
+    (unless (= (pst-test-number octets 4 4) (outlook::pst-crc octets :start 8 :end 479))
+      (pst-test-problem pst "partial CRC"))
+    (unless (= (pst-test-number octets 524 4) (outlook::pst-crc octets :start 8 :end 524))
+      (pst-test-problem pst "full CRC"))
+    (unless (= (length octets) (pst-test-number octets 184 8)) (pst-test-problem pst "size"))
+    (when (logbitp 0 (pst-test-number octets 32 8)) (pst-test-problem pst "next page's BID odd"))
+    (pst-test-walk pst (pst-test-number octets 224 8) (pst-test-number octets 216 8) #x81)
+    (pst-test-walk pst (pst-test-number octets 240 8) (pst-test-number octets 232 8) #x80)
+    (let ((free 0))
+      (loop for start from #x4400 below (length octets) by 253952
+            for section from 0
+            do (let ((amap (pst-test-page pst start start #x84)))
+                 (when (zerop (mod section 8))
+                   ;; every page map's bits set, as Outlook writes them
+                   (unless (every (lambda (o) (= o #xFF)) (subseq (pst-test-page pst (+ start 512) (+ start 512) #x83) 0 496))
+                     (pst-test-problem pst "page map ~d" section)))
+                 (when (and (>= section 128) (zerop (mod (- section 128) 496)))
+                   (pst-test-page pst (+ start 1024) (+ start 1024) #x82))
+                 (dotimes (slot 3968)
+                   (let ((bit (ldb (byte 1 (- 7 (mod slot 8))) (aref amap (floor slot 8))))
+                         (taken (gethash (+ (* section 3968) slot) (pst-test-slots pst))))
+                     (when (zerop bit) (incf free))
+                     (unless (eq (= bit 1) (and taken t))
+                       (pst-test-problem pst "AMap ~d slot ~d" section slot)
+                       (return))))))
+      (unless (= (* 64 free) (pst-test-number octets 200 8)) (pst-test-problem pst "free octets")))
+    pst))
+
+(defun pst-test-data (pst bid)
+  "The data blocks of the data tree BID of PST, a list, each decoded when the mailbox is permuted."
+  (destructuring-bind (ib . cb) (gethash (logandc2 bid 1) (pst-test-blocks pst))
+    (let ((data (subseq (pst-test-octets pst) ib (+ ib cb))))
+      (if (logtest bid 2)
+          (loop for i below (pst-test-number data 2 2)
+                append (pst-test-data pst (pst-test-number data (+ 8 (* 8 i)) 8)))
+          (list (if (= 1 (aref (pst-test-octets pst) 513))
+                    (map 'vector (lambda (o) (aref *pst-test-unpermutation* o)) data)
+                    data))))))
+
+(defun pst-test-subnodes (pst bid)
+  "The subnodes of the subnode tree BID of PST: a table from each NID to (DATA SUB)."
+  (let ((table (make-hash-table)))
+    (unless (zerop bid)
+      (destructuring-bind (ib . cb) (gethash bid (pst-test-blocks pst))
+        (let ((block (subseq (pst-test-octets pst) ib (+ ib cb))))
+          (dotimes (i (pst-test-number block 2 2))
+            (if (zerop (aref block 1))
+                (let ((at (+ 8 (* 24 i))))
+                  (setf (gethash (pst-test-number block at 8) table)
+                        (list (pst-test-number block (+ at 8) 8) (pst-test-number block (+ at 16) 8))))
+                (maphash (lambda (k v) (setf (gethash k table) v))
+                         (pst-test-subnodes pst (pst-test-number block (+ 16 (* 16 i)) 8))))))))
+    table))
+
+(defun pst-test-heap (blocks)
+  "The items of the heap on BLOCKS (a node's data blocks), a table from each HID to its octets, and
+the user root its header names and its client signature, three values."
+  (let ((items (make-hash-table)))
+    (loop for block in blocks for k from 0
+          do (let* ((map (pst-test-number block 0 2)) (count (pst-test-number block map 2)))
+               (dotimes (i count)
+                 (setf (gethash (logior (ash (1+ i) 5) (ash k 16)) items)
+                       (subseq block (pst-test-number block (+ map 4 (* 2 i)) 2)
+                               (pst-test-number block (+ map 6 (* 2 i)) 2))))))
+    (values items (pst-test-number (first blocks) 4 4) (aref (first blocks) 3))))
+
+(defun pst-test-bth (items hid)
+  "The records of the B-tree on a heap whose header is the item HID of ITEMS, each (KEY . DATA)."
+  (let* ((header (gethash hid items)) (key (aref header 1)) (entry (aref header 2)))
+    (labels ((records (hid level)
+               (let ((data (and (plusp hid) (gethash hid items))))
+                 (if (zerop level)
+                     (loop for at from 0 below (length data) by (+ key entry)
+                           collect (cons (subseq data at (+ at key)) (subseq data (+ at key) (+ at key entry))))
+                     (loop for at from 0 below (length data) by (+ key 4)
+                           append (records (pst-test-number data (+ at key) 4) (1- level)))))))
+      (records (pst-test-number header 4 4) (aref header 3)))))
+
+(defun pst-test-value (pst items subnodes hnid)
+  "The value an HNID names: an item of ITEMS, or the data of one of SUBNODES of PST."
+  (if (zerop (logand hnid #x1F))
+      (gethash hnid items)
+      (apply #'concatenate '(vector (unsigned-byte 8)) (pst-test-data pst (first (gethash hnid subnodes))))))
+
+(defun pst-test-pc (pst data sub)
+  "The properties of the property context whose data tree is DATA and subnode tree SUB, each (TAG .
+OCTETS), a value of four octets or fewer cut to its size."
+  (multiple-value-bind (items root signature) (pst-test-heap (pst-test-data pst data))
+    (assert (= signature #xBC))
+    (let ((subnodes (pst-test-subnodes pst sub)))
+      (loop for (key . entry) in (pst-test-bth items root)
+            for type = (pst-test-number entry 0 2)
+            for size = (outlook::pst-fixed-size type)
+            collect (cons (logior (ash (pst-test-number key 0 2) 16) type)
+                          (if (and size (<= size 4))
+                              (subseq entry 2 (+ 2 size))
+                              (pst-test-value pst items subnodes (pst-test-number entry 2 4))))))))
+
+(defun pst-test-tc (pst data sub)
+  "The rows of the table context whose data tree is DATA and subnode tree SUB, in the order of their
+identifiers, each the properties it holds, (TAG . OCTETS)."
+  (multiple-value-bind (items root signature) (pst-test-heap (pst-test-data pst data))
+    (assert (= signature #x7C))
+    (let* ((info (gethash root items))
+           (columns (loop for i below (aref info 1) for at = (+ 22 (* 8 i))
+                          collect (list (pst-test-number info at 4) (pst-test-number info (+ at 4) 2)
+                                        (aref info (+ at 6)) (aref info (+ at 7)))))
+           (size (pst-test-number info 8 2)) (ceb (pst-test-number info 6 2))
+           (subnodes (pst-test-subnodes pst sub))
+           (rows-hnid (pst-test-number info 14 4))
+           (blocks (cond ((zerop rows-hnid) '())
+                         ((zerop (logand rows-hnid #x1F)) (list (gethash rows-hnid items)))
+                         (t (pst-test-data pst (first (gethash rows-hnid subnodes))))))
+           (rows (loop for block in blocks
+                       append (loop for at from 0 to (- (length block) size) by size
+                                    collect (subseq block at (+ at size))))))
+      (loop for (nil . index) in (pst-test-bth items (pst-test-number info 10 4))
+            collect (let ((row (nth (pst-test-number index 0 4) rows)))
+                      (loop for (tag offset width bit) in columns
+                            when (logbitp (- 7 (mod bit 8)) (aref row (+ ceb (floor bit 8))))
+                              collect (cons tag
+                                            (let ((cell (subseq row offset (+ offset width)))
+                                                  (size (outlook::pst-fixed-size (outlook::pst-property-type tag))))
+                                              (cond ((and size (<= size 8)) cell)
+                                                    (size (gethash (pst-test-number cell 0 4) items))
+                                                    (t (pst-test-value pst items subnodes
+                                                                       (pst-test-number cell 0 4))))))))))))
+
+(defun pst-test-hex (text)
+  "The octets the hexadecimal digits in TEXT stand for, anything else passed over."
+  (let ((digits (remove-if-not (lambda (c) (digit-char-p c 16)) text)))
+    (coerce (loop for i from 0 below (length digits) by 2
+                  collect (parse-integer digits :start i :end (+ i 2) :radix 16))
+            '(simple-array (unsigned-byte 8) (*)))))
+
+(define-test (outlook pst-checks-as-the-specification-gives)
+  ;; [MS-PST] 3.2's sample header: its two CRCs
+  (let ((header (pst-test-hex "21 42 44 4E 0E A9 9A 37 53 4D 17 00 13 00 01 01
+               5C 07 00 00 D0 7B 99 0B 04 00 00 00 01 00 00 00
+               54 02 00 00 00 00 00 00 45 00 00 00 00 04 00 00
+               00 04 00 00 04 04 00 00 00 40 00 00 02 00 01 00
+               04 04 00 00 00 04 00 00 00 04 00 00 00 80 00 00
+               00 04 00 00 00 04 00 00 00 04 00 00 00 04 00 00
+               04 04 00 00 04 04 00 00 04 04 00 00 00 04 00 00
+               00 04 00 00 00 04 00 00 00 04 00 00 00 04 00 00
+               00 04 00 00 00 04 00 00 00 04 00 00 00 04 00 00
+               00 04 00 00 00 04 00 00 00 04 00 00 00 04 00 00
+               00 04 00 00 00 04 00 00 0F 04 00 00 00 00 00 00
+               00 00 00 00 00 00 00 00 00 24 9F 00 00 00 00 00
+               00 44 9B 00 00 00 00 00 40 F2 12 00 00 00 00 00
+               00 00 00 00 00 00 00 00 4B 02 00 00 00 00 00 00
+               00 52 90 00 00 00 00 00 53 02 00 00 00 00 00 00
+               00 0A 90 00 00 00 00 00 02 00 00 00 00 00 00 00")))
+    (setf header (concatenate '(vector (unsigned-byte 8)) header (make-array 256 :initial-element #xFF)
+                              (pst-test-hex "80 01 00 00 34 14 00 00 00 00 00 00 D6 83 D2 1F")
+                              (make-array 36 :initial-element 0)))
+    (setf header (coerce header '(simple-array (unsigned-byte 8) (*))))
+    (is = 564 (length header))
+    (is = #x379AA90E (outlook::pst-crc header :start 8 :end 479))
+    (is = #x1FD283D6 (outlook::pst-crc header :start 8 :end 524)))
+  ;; the permutation of 5.1 is undone by its inverse, and begins as the table does
+  (let ((octets (coerce (loop for i below 512 collect (mod (* i 37) 256)) '(simple-array (unsigned-byte 8) (*)))))
+    (is = 65 (aref (outlook::pst-permute (make-array 1 :element-type '(unsigned-byte 8) :initial-element 0)) 0))
+    (is equalp octets (map 'vector (lambda (o) (aref *pst-test-unpermutation* o)) (outlook::pst-permute octets))))
+  ;; 5.5's signature: the halves of the offset and identifier exclusive-ored
+  (is = #xDEF0 (outlook::pst-signature #x12345678 #x9ABC))
+  ;; 3.8's heap, read by the tests' reader as 3.10 says the message store holds
+  (let ((heap (pst-test-hex "EC 00 EC BC 20 00 00 00 00 00 00 00 B5 02 06 00
+               40 00 00 00 34 0E 02 01 A0 00 00 00 38 0E 03 00
+               00 00 00 00 F9 0F 02 01 60 00 00 00 01 30 1F 00
+               80 00 00 00 DF 35 03 00 89 00 00 00 E0 35 02 01
+               C0 00 00 00 E3 35 02 01 00 01 00 00 E7 35 02 01
+               E0 00 00 00 33 66 0B 00 01 00 00 00 FA 66 03 00
+               0D 00 0E 00 FF 67 03 00 00 00 00 00 22 9D B5 0A
+               DC D9 94 43 85 DE 90 AE B0 7D 12 70 55 00 4E 00
+               49 00 43 00 4F 00 44 00 45 00 31 00 01 00 00 00
+               F5 5E F6 66 95 69 CC 4C 83 D1 D8 73 98 99 02 85
+               01 00 00 00 00 00 00 00 22 9D B5 0A DC D9 94 43
+               85 DE 90 AE B0 7D 12 70 22 80 00 00 00 00 00 00
+               22 9D B5 0A DC D9 94 43 85 DE 90 AE B0 7D 12 70
+               42 80 00 00 00 00 00 00 22 9D B5 0A DC D9 94 43
+               85 DE 90 AE B0 7D 12 70 62 80 00 00 08 00 00 00
+               0C 00 14 00 6C 00 7C 00 8C 00 A4 00 BC 00 D4 00
+               EC 00")))
+    (multiple-value-bind (items root signature) (pst-test-heap (list heap))
+      (is = #xBC signature)
+      (is = #x20 root)
+      (let ((records (pst-test-bth items root)))
+        (flet ((value (id)
+                 (pst-test-number (cdr (find id records :key (lambda (r) (pst-test-number (car r) 0 2)))) 2 4)))
+          (is = 11 (length records))
+          (is string= "UNICODE1" (tuatara:utf-16-text (gethash (value #x3001) items)))
+          (is = #x89 (value #x35DF))))))
+  ;; the same properties written as a property context by the writer, read back alike
+  (with-test-directory (dir)
+    (let* ((properties (list (outlook::pst-property #x0FF90102
+                                                    (pst-test-hex "22 9D B5 0A DC D9 94 43 85 DE 90 AE B0 7D 12 70"))
+                             (outlook::pst-property #x3001001F "UNICODE1") (outlook::pst-property #x35DF0003 #x89)
+                             (outlook::pst-property #x6633000B t) (outlook::pst-property #x67FF0003 0)
+                             (outlook::pst-property #x0E340102 (make-array 5000 :element-type '(unsigned-byte 8)
+                                                                                :initial-element 7))))
+           (path (namestring (merge-pathnames "one.pst" dir))))
+      (tuatara:call-with-free-file (namestring dir) "one.pst"
+                                   (lambda (fd path)
+                                     (let ((writer (outlook::make-pst-writer fd path)) (subnodes (list '())))
+                                       (outlook::pst-node
+                                        writer #x21
+                                        (outlook::pst-property-context writer properties (outlook::pst-local-nids)
+                                                                       subnodes)
+                                        (outlook::pst-subnode-tree writer (car subnodes)))
+                                       (outlook::pst-finish writer))))
+      (let ((pst (pst-test-read (tuatara:file-octets path))))
+        (is equal '() (pst-test-problems pst))
+        (destructuring-bind (data sub parent) (gethash #x21 (pst-test-nodes pst))
+          (declare (ignore parent))
+          (is equalp (sort (copy-list properties) #'< :key #'car)
+              (sort (pst-test-pc pst data sub) #'< :key #'car)))))))
+
+(defun pst-test-message (i)
+  "A message for the tests to write, numbered I: Unicode in its subject, names and text, an HTML
+body, two recipients, an attachment of I times 3,000 octets for an even I, a body of more than 3,580
+octets for each fifth, and a message attached to the first."
+  (outlook::make-pst-message
+   :properties (list (outlook::pst-property #x001A001F "IPM.Note")
+                     (outlook::pst-property #x0037001F (format nil "Kea survey ~d — ūnga ✓ 😀" i))
+                     (outlook::pst-property #x0042001F "Tūī Bird") (outlook::pst-property #x0065001F "tui@example.org")
+                     (outlook::pst-property #x0064001F "SMTP")
+                     (outlook::pst-property #x00390040
+                                            (outlook::pst-filetime (encode-universal-time 0 15 9 30 4 2026 0)))
+                     (outlook::pst-property #x0E070003 (if (evenp i) 1 0))
+                     (outlook::pst-property #x1000001F
+                                            (format nil "Hello ~d~%ūnga~%~a" i
+                                                    (if (zerop (mod i 5)) (make-string 4000 :initial-element #\k) "")))
+                     (outlook::pst-property #x10130102
+                                            (tuatara:string-octets (format nil "<p>Hello <b>~d</b> ūnga</p>" i)))
+                     (outlook::pst-property #x007D001F
+                                            (format nil "From: Tui <tui@example.org>~%~
+                                                         To: Kaka <kaka@example.org>, Second <second@example.org>~%~
+                                                         Subject: Kea survey ~d~%Date: Thu, 30 Apr 2026 09:15:00 +0000~%~
+                                                         Message-ID: <m~d@example.org>~%"
+                                                    i i)))
+   :recipients (loop for (name address kind) in '(("Kākā" "kaka@example.org" 1) ("Second" "second@example.org" 2))
+                     collect (list (outlook::pst-property #x3001001F name) (outlook::pst-property #x3003001F address)
+                                   (outlook::pst-property #x3002001F "SMTP") (outlook::pst-property #x0C150003 kind)))
+   :attachments (append
+                 (when (evenp i)
+                   (list (list (outlook::pst-property #x3707001F (format nil "notes ū ~d.txt" i))
+                               (outlook::pst-property #x370E001F "text/plain")
+                               (outlook::pst-property
+                                #x37010102 (let ((octets (make-array (* 3000 (1+ i)) :element-type '(unsigned-byte 8))))
+                                             (dotimes (k (length octets) octets)
+                                               (setf (aref octets k) (mod (* k 7) 251))))))))
+                 (when (zerop i)
+                   (list (list (outlook::pst-property #x3707001F "inner") (outlook::pst-property #x37050003 5)
+                               (cons #x3701000D (pst-test-message 1))))))))
+
+(defun pst-test-write (directory name count &key (encoding :permute))
+  "Write a mailbox called NAME in DIRECTORY of COUNT messages (PST-TEST-MESSAGE) in Inbox, and the
+first message again in Inbox/Birds; return its path."
+  (tuatara:call-with-free-file directory name
+                               (lambda (fd path)
+                                 (outlook::write-pst fd path "Tests"
+                                                     (list (cons '("Inbox") (loop for i below count collect i))
+                                                           (cons '("Inbox" "Birds") (list 0)))
+                                                     :encoding encoding :each #'pst-test-message)
+                                 path)))
+
+(define-test (outlook pst-written-and-read-back)
+  ;; every layer read back by the tests' reader: the checks, the B-trees of several levels, the
+  ;; nodes every mailbox has, the folders, each message's properties, recipients and attachments
+  (with-test-directory (dir)
+    (dolist (encoding '(:permute :none))
+      (let* ((pst (pst-test-read (tuatara:file-octets
+                                  (pst-test-write (namestring dir) "kea.pst" 240 :encoding encoding))))
+             (nodes (pst-test-nodes pst)))
+        (is equal '() (pst-test-problems pst))
+        (is = (if (eq encoding :permute) 1 0) (aref (pst-test-octets pst) 513))
+        ;; [MS-PST] 2.7.1's nodes
+        (dolist (nid '(#x21 #x61 #x122 #x12D #x12E #x12F #x1E1 #x201 #x60D #x60E #x60F #x610 #x692 #x671 #x2223
+                       #x8022 #x802D #x802E #x802F #x8042 #x804D #x804E #x804F #x8062 #x806D #x806E #x806F))
+          (true (gethash nid nodes) "node ~x" nid))
+        (flet ((pc (nid) (destructuring-bind (data sub parent) (gethash nid nodes)
+                           (declare (ignore parent))
+                           (pst-test-pc pst data sub)))
+               (tc (nid) (destructuring-bind (data sub parent) (gethash nid nodes)
+                           (declare (ignore parent))
+                           (pst-test-tc pst data sub)))
+               (text (properties tag) (tuatara:utf-16-text (cdr (assoc tag properties)))))
+          ;; the root's two rows of [MS-PST] 2.7.1, the search folder of spam in it but not listed
+          (is equal '("Top of Personal Folders" "Search Root")
+              (mapcar (lambda (row) (text row #x3001001F)) (tc #x12D)))
+          (is equal '("Deleted Items" "Inbox") (mapcar (lambda (row) (text row #x3001001F)) (tc #x802D)))
+          (let* ((inbox (pst-test-number (cdr (assoc #x67F20003 (second (tc #x802D)))) 0 4))
+                 (rows (tc (logior (logandc2 inbox #x1F) #xE)))
+                 (messages (loop for nid being the hash-keys of nodes using (hash-value entry)
+                                 when (and (= 4 (logand nid #x1F)) (= (third entry) inbox)) collect nid)))
+            (is string= "Tests" (text (pc #x21) #x3001001F))
+            (is = 240 (length rows))
+            (is = 240 (length messages))
+            (is = 240 (pst-test-number (cdr (assoc #x36020003 (pc inbox))) 0 4))
+            (is equal '("Birds") (mapcar (lambda (row) (text row #x3001001F)) (tc (logior (logandc2 inbox #x1F) #xD))))
+            (loop for nid in (sort messages #'<) for i from 0
+                  do (destructuring-bind (data sub parent) (gethash nid nodes)
+                       (declare (ignore parent))
+                       (let* ((written (pst-test-message i))
+                              (properties (pst-test-pc pst data sub))
+                              (subnodes (pst-test-subnodes pst sub)))
+                         ;; each property as given, but the flags saying it has attachments; those every
+                         ;; message has added
+                         (loop for (tag . value) in (outlook::pst-message-properties written)
+                               unless (or (= tag #x0E070003) (equalp value (cdr (assoc tag properties))))
+                                 do (false tag "message ~d property ~x" i tag))
+                         (dolist (tag '(#x0E080003 #x0E170003 #x30070040 #x30080040 #x300B0102 #x0E060040))
+                           (true (assoc tag properties) "message ~d lacks ~x" i tag))
+                         (is = (if (evenp i) #x11 0) (pst-test-number (cdr (assoc #x0E070003 properties)) 0 4))
+                         (is equal '("Kākā" "Second")
+                             (mapcar (lambda (row) (text row #x3001001F))
+                                     (apply #'pst-test-tc pst (gethash #x692 subnodes))))
+                         (let ((attachments (loop for k being the hash-keys of subnodes using (hash-value entry)
+                                                  when (= 5 (logand k #x1F))
+                                                    collect (pst-test-pc pst (first entry) (second entry)))))
+                           (is = (+ (if (evenp i) 1 0) (if (zerop i) 1 0)) (length attachments))
+                           (when (evenp i)
+                             (let ((file (find #x37010102 attachments :key (lambda (a) (car (assoc #x37010102 a))))))
+                               (is equalp (cdr (assoc #x37010102 (first (outlook::pst-message-attachments written))))
+                                   (cdr (assoc #x37010102 file)))
+                               (is = (* 3000 (1+ i)) (pst-test-number (cdr (assoc #x0E200003 file)) 0 4))
+                               (is string= (format nil "notes ū ~d.txt" i) (text file #x3707001F)))))))))))))
+  ;; past 2 GB nothing is written yet: refused as the place is given out
+  (let ((writer (outlook::make-pst-writer nil "none")))
+    (setf (outlook::pst-writer-end writer) (- (* 2 1024 1024 1024) 4096))
+    (fail (outlook::pst-allocate writer 8192 64))))
+
+(defun pst-test-mailbox (directory pst)
+  "The mailbox at PST read for a list as one opened is (readpst writing into DIRECTORY): its list
+buffer, rendered, and its job."
+  (let* ((list (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "kea.pst (mailbox)")))
+         (job (outlook::make-mailbox-job list pst (namestring (ensure-directories-exist directory)))))
+    (outlook::mailbox-work job)
+    (tuatara.modes:set-major-mode list 'outlook::mailbox-mode)
+    (setf (tuatara.buffer:buffer-local list 'outlook::mailbox-path) pst)
+    (outlook::mailbox-render list job)
+    (values list job)))
+
+(defun pst-test-mail (part)
+  "What the tests compare of saved mail PART (MIME-READ): its headers but the content type readpst
+writes with a boundary of its own, its plain text, its HTML, and its attachments, each its name,
+type and contents, an attached message compared alike."
+  (let* ((leaves (outlook::mime-leaves part))
+         (body (outlook::mime-body-part leaves))
+         (plain (outlook::mime-text-part leaves "text/plain"))
+         (html (outlook::mime-text-part leaves "text/html")))
+    (list (remove "content-type" (outlook::mime-part-headers part) :key #'car :test #'string=)
+          (and plain (outlook::mime-part-text plain))
+          (and html (outlook::mime-part-content html))
+          (loop for leaf in leaves
+                when (outlook::mime-attachment-p leaf body)
+                  collect (list (outlook::mime-part-name leaf) (outlook::mime-part-type leaf)
+                                (if (outlook::mime-part-message leaf)
+                                    (pst-test-mail (outlook::mime-part-message leaf))
+                                    (outlook::mime-part-content leaf)))))))
+
+(defun pst-test-messages (job)
+  "The messages JOB read, each (FOLDER . WHAT-PST-TEST-MAIL-COMPARES), FOLDER below the top folder."
+  (loop for (folder . items) in (outlook::mailbox-job-folders job)
+        append (loop for item in items
+                     when (outlook::mailbox-item-message item)
+                       collect (cons (format nil "~{~a~^/~}" (rest (uiop:split-string folder :separator "/")))
+                                     (pst-test-mail (outlook::mime-read
+                                                     (tuatara:file-octets (outlook::mailbox-item-path item))))))))
+
+(define-test (outlook pst-copied-out-and-read-back-by-readpst)
+  ;; a mailbox read by readpst, its messages written into a new one by C p, and that read by readpst
+  ;; again: every message's headers, plain and HTML text and attachments as they were, an attached
+  ;; message's too, and by libpff where it is installed; a name taken gets (2); nothing is written
+  ;; in an evidence directory
+  (if (not (outlook::mailbox-readpst))
+      (skip "readpst is not installed here" (true nil))
+      (with-test-directory (dir)
+        (let ((source (pst-test-write (namestring dir) "kea.pst" 12))
+              (copies (namestring (ensure-directories-exist (merge-pathnames "copies/" dir)))))
+          (multiple-value-bind (list job) (pst-test-mailbox (merge-pathnames "out/" dir) source)
+            (is = 13 (length (pst-test-messages job)))
+            (dotimes (round 2)
+              (tuatara.tests::run-keys
+               (list (lambda () (tuatara:show-buffer list))
+                     (format nil "C a p C-a C-k ~a C-j"
+                             (tuatara.tests::rimu-typed (concatenate 'string copies "birds")))
+                     #'wait-for-mailbox-export :tick)
+               :width 140 :height 30))
+            (is equal '("birds (2).pst" "birds.pst")
+                (sort (mapcar #'first (tuatara.io:directory-entries copies)) #'string<))
+            (let ((pst (pst-test-read (tuatara:file-octets (concatenate 'string copies "birds.pst")))))
+              (is equal '() (pst-test-problems pst)))
+            (multiple-value-bind (back back-job) (pst-test-mailbox (merge-pathnames "back/" dir)
+                                                                   (concatenate 'string copies "birds.pst"))
+              (let ((before (pst-test-messages job)) (after (pst-test-messages back-job)))
+                (is = (length before) (length after))
+                (loop for a in before for b in after
+                      do (is equalp a b)))
+              (tuatara.buffer:kill-buffer back))
+            ;; and read by libpff: every message's text and attachments as in the first mailbox
+            (let ((before (pst-test-pffexport source (merge-pathnames "pff-source" dir)))
+                  (after (pst-test-pffexport (concatenate 'string copies "birds.pst") (merge-pathnames "pff-birds" dir))))
+              (if (null before)
+                  (skip "libpff's pffexport is not installed here" (true nil))
+                  (progn
+                    ;; thirteen messages and the one attached to the first, in Inbox and in Birds
+                    (is = 15 (count-if (lambda (name) (uiop:string-suffix-p name "Message.txt"))
+                                       (alexandria:hash-table-keys before)))
+                    (is = (hash-table-count before) (hash-table-count after))
+                    (maphash (lambda (name octets) (is equalp octets (gethash name after) "~a" name)) before))))
+            ;; an evidence directory is refused, nothing written there
+            (let ((evidence (namestring (ensure-directories-exist (merge-pathnames "evidence/" dir)))))
+              (with-evidence-directories ((list evidence))
+                (let ((export (outlook::make-mailbox-export-job list (outlook::mailbox-export-items list) evidence "pst"
+                                                                "kea.pst" (outlook::mailbox-export-folders
+                                                                           list (outlook::mailbox-export-items list)))))
+                  (fail (outlook::mailbox-export-pst-work export))
+                  (is equal '() (tuatara.io:directory-entries evidence)))))
+            (tuatara.buffer:kill-buffer list))))))
+
+(defun pst-test-program (name)
+  "The full path of the program NAME on the PATH, or NIL: libpff's pffinfo and pffexport, which
+the tests use when they are installed."
+  (loop for directory in (uiop:split-string (or (uiop:getenv "PATH") "") :separator ":")
+        for path = (and (plusp (length directory)) (probe-file (format nil "~a/~a" directory name)))
+        when path return (namestring path)))
+
+(defun pst-test-pffinfo (path)
+  "What libpff's pffinfo says of the mailbox at PATH, and whether it read it, two values; NIL when
+pffinfo is not installed."
+  (let ((pffinfo (pst-test-program "pffinfo")))
+    (when pffinfo
+      (multiple-value-bind (output error code)
+          (uiop:run-program (list pffinfo path) :output :string :error-output :string :ignore-error-status t)
+        (values (concatenate 'string output error) (zerop code))))))
+
+(defun pst-test-pffexport (path directory)
+  "The messages' texts and attachments libpff's pffexport writes of the mailbox at PATH into
+DIRECTORY: a table from each file's path below DIRECTORY (Message.txt, its carriage returns left
+out, an attached message's too, and Attachments/NAME, an attachment's contents) to its octets; NIL when pffexport is not installed."
+  (let ((pffexport (pst-test-program "pffexport")) (files (make-hash-table :test 'equal)))
+    (when pffexport
+      (uiop:run-program (list pffexport "-q" "-t" (namestring directory) path) :ignore-error-status t)
+      (let ((root (namestring (truename (format nil "~a.export/" (string-right-trim "/" (namestring directory)))))))
+        (dolist (file (let ((all '()))
+                        (uiop:collect-sub*directories root t t
+                                                      (lambda (d) (setf all (append (uiop:directory-files d) all))))
+                        all)
+                      files)
+          (let ((name (subseq (namestring file) (length root))))
+            (cond ((uiop:string-suffix-p name "/Message.txt")
+                   (setf (gethash name files) (remove 13 (tuatara:file-octets (namestring file)))))
+                  ((cl-ppcre:scan "/Attachments/[^/]+$" name)
+                   (setf (gethash name files) (tuatara:file-octets (namestring file)))))))))))
+
+(define-test (outlook pst-name-map-read-by-libpff)
+  ;; the map of named properties holds entries, a GUID and a string, and the hash buckets: libpff
+  ;; refuses a mailbox whose map has an empty stream
+  (with-test-directory (dir)
+    (let* ((path (pst-test-write (namestring dir) "map.pst" 2))
+           (pst (pst-test-read (tuatara:file-octets path))))
+      (is equal '() (pst-test-problems pst))
+      (destructuring-bind (data sub parent) (gethash #x61 (pst-test-nodes pst))
+        (declare (ignore parent))
+        (let* ((map (pst-test-pc pst data sub))
+               (entries (cdr (assoc #x00030102 map))))
+          (is = 251 (pst-test-number (cdr (assoc #x00010003 map)) 0 4))
+          (true (and entries (plusp (length entries)) (zerop (mod (length entries) 8))))
+          ;; each entry named by a number is in its bucket (one named by a string by the string's CRC)
+          (loop for at from 0 below (length entries) by 8
+                for bucket = (mod (logxor (pst-test-number entries at 4) (pst-test-number entries (+ at 4) 2)) 251)
+                unless (logtest 1 (aref entries (+ at 4)))
+                  do (true (assoc (logior (ash (+ #x1000 bucket) 16) #x0102) map) "bucket ~d" bucket))
+          (true (plusp (length (cdr (assoc #x00020102 map)))))
+          (true (plusp (length (cdr (assoc #x00040102 map)))))))
+      (multiple-value-bind (said read) (pst-test-pffinfo path)
+        (if said
+            (true read "pffinfo: ~a" said)
+            (skip "libpff's pffinfo is not installed here" (true nil)))))))
+
+(define-test (outlook pst-heap-of-many-items)
+  ;; a block of a heap holds at most 2,047 items, the most an index of 11 bits numbers: a property
+  ;; context of 2,500 empty values reads back whole
+  (with-test-directory (dir)
+    (let ((properties (loop for id from #x6000 below (+ #x6000 2500)
+                            collect (outlook::pst-property (logior (ash id 16) #x0102) (outlook::pst-octets 0))))
+          (path (namestring (merge-pathnames "many.pst" dir))))
+      (tuatara:call-with-free-file (namestring dir) "many.pst"
+                                   (lambda (fd path)
+                                     (let ((writer (outlook::make-pst-writer fd path)) (subnodes (list '())))
+                                       (outlook::pst-node writer #x21
+                                                          (outlook::pst-property-context
+                                                           writer properties (outlook::pst-local-nids) subnodes)
+                                                          0)
+                                       (outlook::pst-finish writer))))
+      (let ((pst (pst-test-read (tuatara:file-octets path))))
+        (is equal '() (pst-test-problems pst))
+        (destructuring-bind (data sub parent) (gethash #x21 (pst-test-nodes pst))
+          (declare (ignore parent))
+          (is equalp properties (sort (pst-test-pc pst data sub) #'< :key #'car)))))))

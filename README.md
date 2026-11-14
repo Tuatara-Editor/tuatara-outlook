@@ -57,7 +57,7 @@ here.
 | A mailbox | `n`, `p`                        | Go to the next item and the one before, over the folders' lines.                                                                                                                                                                                                       |
 | A mailbox | `TAB`, `S-TAB`                  | Folds or unfolds the folder the line is in; every folder.                                                                                                                                                                                                              |
 | A mailbox | `m`, `u`, `U`, `t`              | Marks the message on the line (`>`) and moves down; takes its mark off; takes every mark off; marks those shown that are not marked and unmarks those marked, as in rimu. A count marks as many.                                                                       |
-| A mailbox | `C`                             | Opens the menu of copying out the messages marked, or the one on the line: `e` as saved mail (`.eml`), `m` as Outlook items (`.msg`), then asks for the directory (made when it is not there); `b` into one mbox file, asked for; `a` first for every message shown. `C-h` there lists the menu. |
+| A mailbox | `C`                             | Opens the menu of copying out the messages marked, or the one on the line: `e` as saved mail (`.eml`), `m` as Outlook items (`.msg`), then asks for the directory (made when it is not there); `b` into one mbox file, `p` into a new Outlook mailbox (`.pst`), asked for; `a` first for every message shown. `C-h` there lists the menu. |
 | A mailbox | `+`, `-`                        | Puts labels of your own on the messages marked, or the one on the line, several apart by commas, those used before offered; takes labels off them, chosen from those they carry (see Labels).                                                                  |
 | A mailbox | `L`                             | Narrows the list to the messages carrying a label, or any of several, chosen from those used in the mailbox; with `C-u`, to those carrying none of them. A filter kept with the others (see Labels).                                                                  |
 | A mailbox | `P`                             | Turns off and on the preview: the message on the line shown in a window beside the list, read as any message is, following the cursor (see Seeing a message beside the list).                                                                                          |
@@ -164,8 +164,35 @@ taken gets `(2)`, `(3)` and so on, and nothing is overwritten. It is written
 in the background; a copy stopped half-way is deleted. Contacts and
 appointments are left out.
 
-Tuatara cannot write a `.pst` mailbox: that is a later item on its roadmap.
-Until then, `.eml`, `.msg` and `.mbox` are the ways out.
+`p` writes the messages into a new Outlook mailbox (`.pst`), in the folders
+they are listed in, below its top folder (`M-x mailbox-export-pst` does the
+same without the menu). It asks for the file; `.pst` is added to a name
+without it, a name taken gets `(2)`, `(3)` and so on, and nothing is
+overwritten. It is written in the background, a file stopped half-way
+deleted, and never in an evidence directory. Contacts and appointments are
+left out.
+
+Each message is written from what readpst gave of it. Its properties
+(sender, dates, flags, conversation, attachments' kinds and contents) come
+from the Outlook item. The rest comes from the saved mail, where the Outlook
+item holds it in eight-bit characters that may have lost some, or holds it
+not at all: the subject, the plain text and the HTML, the attachments'
+names, the recipients (from the To, Cc and Bcc headers, with their names and
+addresses) and a message attached to it. Its internet headers are those readpst gives, without the
+MIME-Version, Content-Type and Content-Transfer-Encoding lines readpst leaves
+out. Named properties (Outlook's categories among them) are not written, as
+readpst gives none.
+
+The mailbox is written as Microsoft's
+[MS-PST](https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/)
+lays out the Unicode format Outlook 2003 and later read: its strings in
+Unicode, its data blocks encoded as Outlook encodes them (the permutation of
+MS-PST section 5.1), every block and page with its check, and the folders
+and tables Outlook needs to open it (the top of the personal folders,
+deleted items and the search folders). A mailbox of more than 2 GB is not
+written yet. Read back by readpst, the 71
+messages of the Enron sample mailbox come out as they went in: their
+headers, text, HTML and attachments alike.
 
 ## Labels
 
@@ -298,7 +325,7 @@ Set them in the package's `:config`:
 ## Credits
 
 - Microsoft's Open Specifications, MS-CFB and MS-OXMSG: how an Outlook item is
-  read.
+  read; MS-PST (revision 11.2): how a mailbox is written.
 - libpst's `readpst`: how a mailbox is read.
 - WeasyPrint: how a message is drawn as it looks.
 

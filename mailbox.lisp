@@ -16,7 +16,8 @@
 ;;;; background. The mailbox itself is never changed; what readpst wrote goes
 ;;;; when its list is closed. readpst writes each message twice, as internet
 ;;;; mail (.eml) and as an Outlook item (.msg), so that those marked can be
-;;;; copied out as either.
+;;;; copied out as either, collected into one mbox file, or written into a new
+;;;; mailbox (pst.lisp) from both.
 
 (in-package #:outlook)
 
@@ -678,13 +679,16 @@ keeps its own name."
       (native-file-name (mailbox-item-path item))))
 
 (defstruct (mailbox-export-job (:include job)
-                               (:constructor make-mailbox-export-job (buffer items directory type &optional name))
+                               (:constructor make-mailbox-export-job
+                                   (buffer items directory type &optional name folders))
                                (:copier nil))
   "ITEMS of the mailbox listed in BUFFER being copied out into DIRECTORY as
-TYPE (\"eml\" or \"msg\", a file each, or \"mbox\", all in one file
-called NAME), a job: COPIED of them so far, and NOT-COPIED, those that could
-not be, each (ITEM . WHY). WRITTEN is the mbox file once made."
-  items directory type name (copied 0) (not-copied '()) (written nil))
+TYPE (\"eml\" or \"msg\", a file each, or \"mbox\" or \"pst\", all in
+one file called NAME), a job: COPIED of them so far, and NOT-COPIED, those
+that could not be, each (ITEM . WHY). WRITTEN is the mbox or pst file once
+made. FOLDERS, for a pst file, is the folders the items go in, each (NAMES
+. ITEMS) as WRITE-PST takes them."
+  items directory type name folders (copied 0) (not-copied '()) (written nil))
 
 (setf (documentation 'mailbox-export-job-p 'function) "True when OBJECT is a MAILBOX-EXPORT-JOB.")
 
@@ -772,13 +776,272 @@ file is deleted when the job is stopped or fails."
            (ignore-errors (remove-file path))
            (setf (mailbox-export-job-written job) nil)))))))
 
+(defun mailbox-header-people (text)
+  "The people an address header's TEXT names (From, To, Cc), encoded words
+decoded: each (NAME . ADDRESS), NAME NIL when none is given."
+  (let ((people '()))
+    (cl-ppcre:do-register-groups (quoted plain address bare)
+        ("(?:\"((?:[^\"\\\\]|\\\\.)*)\"|([^<>\"@]*?))\\s*<([^<>]+)>|([^\\s,<>\"]+@[^\\s,<>\"]+)"
+         (mime-decode-words (or text "")))
+      (let ((name (string-trim " ,;" (or quoted plain ""))))
+        (push (cons (and (plusp (length name)) name) (or address bare)) people)))
+    (nreverse people)))
+
+(defun mailbox-mail-charset (leaves)
+  "The charset of the text of the message whose parts made of no others are
+LEAVES: of its HTML, else of its plain text; NIL when they name none."
+  (some (lambda (leaf) (and leaf (cdr (assoc "charset" (mime-part-parameters leaf) :test #'string=))))
+        (list (mime-text-part leaves "text/html") (mime-text-part leaves "text/plain"))))
+
+(defun mailbox-pst-recipients (recipients part)
+  "The recipients of the message whose saved mail is PART (MIME-READ), each
+the properties of a PST-MESSAGE's recipient: one for each address its To,
+Cc, Bcc and X-libpst-forensic-bcc headers name, of the kind the header
+says, with its name, its address and the properties of the one of
+RECIPIENTS (those of the Outlook item readpst wrote, which holds only some)
+with the same address. When the headers name no address, as readpst writes
+them for a message without internet headers (To: and Cc: the names alone,
+apart by semicolons), RECIPIENTS of each kind take those names in turn, and
+a name left over is a recipient of its own."
+  (let ((people (loop for (header . kind) in '(("to" . 1) ("cc" . 2) ("bcc" . 3) ("x-libpst-forensic-bcc" . 3))
+                      append (loop for (name . address) in (mailbox-header-people (mime-header part header))
+                                   collect (list name address kind))))
+        (named '(#x3001001F #x5FF6001F #x3003001F #x3002001F #x39FE001F #x0C150003)))
+    (labels ((address-of (recipient)
+               (some (lambda (tag) (let ((value (pst-value recipient tag)))
+                                     (and value (plusp (length value)) (utf-16-text value))))
+                     '(#x39FE001F #x3003001F)))
+             (kind-of (recipient)
+               (let ((type (pst-value recipient #x0C150003))) (if type (octets-integer type 0 4) 1)))
+             (with-name (recipient name)
+               (append (list (pst-property #x3001001F name) (pst-property #x5FF6001F name))
+                       (remove-if (lambda (property) (member (car property) '(#x3001001F #x5FF6001F))) recipient))))
+      (if people
+          (loop for (name address kind) in (remove-duplicates people :test #'equalp :from-end t)
+                collect (let ((same (find address recipients :key #'address-of :test #'equalp)))
+                          (append (list (pst-property #x3001001F (or name address))
+                                        (pst-property #x5FF6001F (or name address))
+                                        (pst-property #x3003001F address)
+                                        (pst-property #x3002001F "SMTP")
+                                        (pst-property #x39FE001F address)
+                                        (pst-property #x0C150003 kind))
+                                  (remove-if (lambda (property) (member (car property) named)) same))))
+          (append
+           (loop for (header . kind) in '(("to" . 1) ("cc" . 2))
+                 for names = (remove "" (mapcar (lambda (name) (string-trim " " name))
+                                                (uiop:split-string (mime-decode-words (or (mime-header part header) ""))
+                                                                   :separator ";"))
+                                     :test #'string=)
+                 for own = (remove kind recipients :key #'kind-of :test-not #'eql)
+                 append (loop for name in names
+                              for recipient = (pop own)
+                              collect (if recipient
+                                          (with-name recipient name)
+                                          (list (pst-property #x3001001F name) (pst-property #x5FF6001F name)
+                                                (pst-property #x0C150003 kind))))
+                 append own)
+           (remove-if (lambda (recipient) (member (kind-of recipient) '(1 2))) recipients))))))
+
+(defun mailbox-pst-attachments (attachments leaves body depth)
+  "The attachments of a message whose parts made of no others are LEAVES and
+whose text shown is BODY (MIME-BODY-PART), each the properties of a
+PST-MESSAGE's attachment, in the order of the saved mail: for each part
+that is a file, the one of ATTACHMENTS (those of the Outlook item readpst
+wrote) whose contents are the same, given the part's name, else one made of
+the part; for each message attached, one holding it (MAILBOX-PST-FROM-MAIL)
+while DEPTH is below *OUTLOOK-NESTING-LIMIT*; and after them those of
+ATTACHMENTS no part matched."
+  (let ((left attachments))
+    (append
+     (loop for leaf in leaves
+           for inner = (mime-part-message leaf)
+           for name = (mime-part-name leaf)
+           when (and (mime-attachment-p leaf body) (or (not inner) (< depth *outlook-nesting-limit*)))
+             collect (if inner
+                         (list (pst-property #x37050003 5)
+                               (pst-property #x3707001F
+                                             (or name (mime-decode-words (or (mime-header inner "subject") ""))))
+                               (pst-property #x3701000D (mailbox-pst-from-mail inner (1+ depth))))
+                         (let* ((data (mime-part-content leaf))
+                                (same (find data left :key (lambda (a) (pst-value a #x37010102)) :test #'equalp)))
+                           (setf left (remove same left))
+                           (cond ((and same name)
+                                  (cons (pst-property #x3707001F name) (remove #x3707001F same :key #'car)))
+                                 (same)
+                                 (t (append (and name (list (pst-property #x3707001F name)))
+                                            (list (pst-property #x37010102 data) (pst-property #x37050003 1)
+                                                  (pst-property #x370E001F (mime-part-type leaf)))))))))
+     left)))
+
+(defparameter *mailbox-readpst-headers* '("status" "cc" "x-libpst-forensic-bcc" "mime-version" "content-type")
+  "The headers readpst writes of its own after a message's internet headers
+in saved mail, and leaves out of the internet headers it gives.")
+
+(defun mailbox-internet-headers (part)
+  "The internet headers of the message PART of saved mail, as an Outlook item
+keeps them: as readpst wrote them but for the From line before a message
+attached and the headers it writes of its own (*MAILBOX-READPST-HEADERS*),
+those of them held over several lines too."
+  (let ((kept '()) (keep t))
+    (dolist (line (uiop:split-string (octets-string (mime-part-octets part) :start (mime-part-start part)
+                                                    :end (mime-part-header-end part))
+                                     :separator '(#\Newline)))
+      (let ((line (string-right-trim '(#\Return) line)))
+        (cond ((and (null kept) (cl-ppcre:scan "^>*From " line)))
+              ((and (plusp (length line)) (member (char line 0) '(#\Space #\Tab)))
+               (when keep (push line kept)))
+              ((plusp (length line))
+               (let ((colon (position #\: line)))
+                 (setf keep (not (and colon (member (string-downcase (subseq line 0 colon)) *mailbox-readpst-headers*
+                                                    :test #'string=))))
+                 (when keep (push line kept)))))))
+    (format nil "~{~a~%~}" (nreverse kept))))
+
+(defun mailbox-pst-from-mail (part depth)
+  "The message of internet mail PART (a message attached to another, as
+readpst writes one in its saved mail) as a PST-MESSAGE, DEPTH deep: its
+internet headers, who sent it and when, whether it was read, then all
+MAILBOX-PST-WITH-MAIL takes from saved mail."
+  (let ((from (first (mailbox-header-people (mime-header part "from"))))
+        (date (mail-date-time (mime-header part "date"))))
+    (mailbox-pst-with-mail
+     (make-pst-message
+      :properties (append (list (pst-property #x001A001F "IPM.Note")
+                                ;; read, as readpst says with the header Status: RO
+                                (pst-property #x0E070003 (if (find #\R (or (mime-header part "status") "")) 1 0))
+                                (pst-property #x007D001F (mailbox-internet-headers part)))
+                          ;; readpst writes a message's lines of whom it is copied and blind copied to, when
+                          ;; they are there and empty, as headers of its own
+                          (loop for (header . tag) in '(("cc" . #x0E03001F) ("x-libpst-forensic-bcc" . #x0E02001F))
+                                when (equal "" (mime-header part header)) collect (pst-property tag ""))
+                          (and date (list (pst-property #x00390040 (pst-filetime date))
+                                          (pst-property #x0E060040 (pst-filetime date))))
+                          (and from (list (pst-property #x0042001F (or (car from) (cdr from)))
+                                          (pst-property #x0C1A001F (or (car from) (cdr from)))
+                                          (pst-property #x0064001F "SMTP") (pst-property #x0C1E001F "SMTP")
+                                          (pst-property #x0065001F (cdr from)) (pst-property #x0C1F001F (cdr from))))))
+     part depth)))
+
+(defun mailbox-pst-with-mail (message part depth)
+  "MESSAGE, a PST-MESSAGE read from the Outlook item readpst wrote, DEPTH
+deep, with what its saved mail PART (MIME-READ), the same message as readpst
+wrote it, says without loss where the Outlook item holds it in eight-bit
+characters that may have lost some, or holds it not at all: its subject; its
+plain text and, when it has none of its own, its HTML; the code page of its
+text (MAILBOX-MAIL-CHARSET); its attachments (MAILBOX-PST-ATTACHMENTS), in
+the order the mailbox keeps them; the name of its sender, by its address;
+its recipients (MAILBOX-PST-RECIPIENTS) and the lines of whom it is to,
+copied to and blind copied to, made of their names where the item's lost
+characters. Its internet headers and plain text end their lines as Outlook
+does, with a carriage return and a line feed."
+  (let* ((leaves (mime-leaves part))
+         (plain (mime-text-part leaves "text/plain"))
+         (html (mime-text-part leaves "text/html"))
+         (body (mime-body-part leaves))
+         (charset (mailbox-mail-charset leaves))
+         (properties (pst-message-properties message))
+         (subject (mime-header part "subject"))
+         (people (append (mailbox-header-people (mime-header part "from"))
+                         (mailbox-header-people (mime-header part "to"))
+                         (mailbox-header-people (mime-header part "cc"))
+                         (mailbox-header-people (mime-header part "bcc")))))
+    (labels ((crlf (text)
+               ;; readpst ends lines with a line feed alone, where Outlook keeps a carriage return before it
+               (cl-ppcre:regex-replace-all "(?<!\\r)\\n" text (coerce '(#\Return #\Newline) 'string)))
+             (set-property (properties tag value)
+               (cons (pst-property tag value) (remove tag properties :key #'car)))
+             (named (properties name-tags address-tags)
+               ;; the name the headers give the address the properties hold
+               (let* ((address (some (lambda (tag) (let ((value (pst-value properties tag)))
+                                                     (and value (plusp (length value)) (utf-16-text value))))
+                                     address-tags))
+                      (name (and address (car (find address people :key #'cdr :test #'string-equal)))))
+                 (if name
+                     (reduce (lambda (properties tag)
+                               (if (pst-value properties tag) (set-property properties tag name) properties))
+                             name-tags :initial-value properties)
+                     properties))))
+      (when subject
+        (let ((old (pst-value properties #x0037001F)) (new (mime-decode-words subject)))
+          (dolist (tag '(#x0E1D001F #x0070001F))
+            (when (equalp (pst-value properties tag) old) (setf properties (set-property properties tag new))))
+          (setf properties (set-property properties #x0037001F new))))
+      (when plain (setf properties (set-property properties #x1000001F (crlf (mime-part-text plain)))))
+      (let ((headers (pst-value properties #x007D001F)))
+        (when headers (setf properties (set-property properties #x007D001F (crlf (utf-16-text headers))))))
+      (when (and html (not (pst-value properties #x10130102)))
+        (setf properties (set-property properties #x10130102 (mime-part-content html))))
+      (when (and charset (not (pst-value properties #x3FDE0003)) (mail-charset-codepage charset))
+        (setf properties (set-property properties #x3FDE0003 (mail-charset-codepage charset))))
+      (setf properties (named properties '(#x0042001F) '(#x5D02001F #x0065001F))
+            properties (named properties '(#x0C1A001F) '(#x5D01001F #x0C1F001F)))
+      (let ((recipients (mailbox-pst-recipients (pst-message-recipients message) part)))
+        (loop for (tag . kind) in '((#x0E04001F . 1) (#x0E03001F . 2) (#x0E02001F . 3))
+              for names = (loop for recipient in recipients
+                                for type = (pst-value recipient #x0C150003)
+                                when (and (eql kind (if type (octets-integer type 0 4) 1))
+                                          (pst-value recipient #x3001001F))
+                                  collect (utf-16-text (pst-value recipient #x3001001F)))
+              ;; the line the item gives is kept unless characters of it were lost
+              when (and names (let ((old (pst-value properties tag))) (or (null old) (find #\? (utf-16-text old)))))
+                do (setf properties (set-property properties tag (format nil "~{~a~^; ~}" names))))
+        ;; readpst gives a message's attachments in the order opposite to the mailbox's
+        (make-pst-message :properties properties :recipients recipients
+                          :attachments (reverse (mailbox-pst-attachments (pst-message-attachments message)
+                                                                         leaves body depth)))))))
+
+(defun mailbox-pst-message (item)
+  "ITEM of a mailbox as a PST-MESSAGE to be written in a new mailbox: the
+Outlook item readpst wrote beside it, read (MSG-PST-MESSAGE), its
+eight-bit strings in the charset of its text, with what the saved mail says
+better (MAILBOX-PST-WITH-MAIL); an error when it is no message or readpst
+wrote no Outlook item of it."
+  (cond ((not (mailbox-item-message item)) (error "not a message"))
+        ((null (mailbox-item-msg item)) (error "readpst wrote no Outlook item of it"))
+        (t (let* ((part (mime-read (file-octets (mailbox-item-path item))))
+                  (charset (mailbox-mail-charset (mime-leaves part)))
+                  (cfb (cfb-read (file-octets (mailbox-item-msg item))))
+                  (*msg-items* '()))
+             ;; readpst writes an item's strings in the charset of its text, Latin-1 when it names none
+             (mailbox-pst-with-mail (msg-pst-message cfb (aref (cfb-entries cfb) 0) :charset (or charset "iso-8859-1"))
+                                    part 0)))))
+
+(defun mailbox-export-pst-work (job)
+  "Write JOB's items into one new Outlook mailbox in its directory, named
+NAME, or NAME with (2) and so on where that is taken (CALL-WITH-FREE-FILE),
+in JOB's folders (WRITE-PST): each message read from the Outlook item readpst
+wrote of it (MAILBOX-PST-MESSAGE), noting those that are no message or cannot
+be read. The file is deleted when the job is stopped or fails."
+  (call-with-free-file
+   (mailbox-export-job-directory job) (mailbox-export-job-name job)
+   (lambda (fd path)
+     (setf (mailbox-export-job-written job) path)
+     (let ((done nil))
+       (unwind-protect
+            (progn
+              (write-pst fd path (native-file-stem path) (mailbox-export-job-folders job)
+                         :each (lambda (item)
+                                 (job-check-stop)
+                                 (handler-case (prog1 (mailbox-pst-message item)
+                                                 (incf (mailbox-export-job-copied job)))
+                                   (error (e)
+                                     (push (cons item (princ-to-string e)) (mailbox-export-job-not-copied job))
+                                     nil))))
+              (setf done t))
+         (unless done
+           (handler-case (remove-file path) (file-system-error () nil))
+           (setf (mailbox-export-job-written job) nil)))))))
+
 (defun mailbox-export-work (job)
   "Copy each of JOB's items out into its directory, a new file each
 \(MAILBOX-EXPORT-NAME, COPY-TO-FREE-NAME), as JOB's type: an Outlook item
 from the one readpst wrote beside the message; noting those that cannot be.
-For the type mbox, collect them into one file (MAILBOX-EXPORT-MBOX-WORK)."
+For the type mbox, collect them into one file (MAILBOX-EXPORT-MBOX-WORK); for
+pst, write them into a new mailbox (MAILBOX-EXPORT-PST-WORK)."
   (when (string= (mailbox-export-job-type job) "mbox")
     (return-from mailbox-export-work (mailbox-export-mbox-work job)))
+  (when (string= (mailbox-export-job-type job) "pst")
+    (return-from mailbox-export-work (mailbox-export-pst-work job)))
   (let ((directory (mailbox-export-job-directory job)) (type (mailbox-export-job-type job)))
     (dolist (item (mailbox-export-job-items job))
       (job-check-stop)
@@ -886,15 +1149,57 @@ appointments are left out."
                                      #'mailbox-export-work :name "tuatara mailbox export")
                    (message "Collecting ~a into ~a..." words path)))))))
 
+(defun mailbox-export-folders (list items)
+  "ITEMS of the mailbox listed in LIST in the folders they are listed in, in
+the order of the list, as WRITE-PST takes them: each (NAMES . ITEMS), NAMES
+the path of the folder below the top folder readpst wrote."
+  (let ((chosen (make-hash-table :test 'eq)) (job (buffer-local list 'mailbox-job)))
+    (dolist (item items) (setf (gethash item chosen) t))
+    (loop for (folder . listed) in (and job (mailbox-job-folders job))
+          for those = (remove-if-not (lambda (item) (gethash item chosen)) listed)
+          when those collect (cons (rest (uiop:split-string folder :separator "/")) those))))
+
+(define-command mailbox-export-pst ()
+  "Write the messages marked in the mailbox's list
+\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
+current line, into a new Outlook mailbox (.pst) asked for, in the folders
+they are listed in: each with its headers, bodies, recipients, attachments
+and dates as the Outlook item readpst wrote of it holds them. .pst is added
+to a name without it; a name taken gets (2) and so on, and nothing is
+overwritten, nor written in an evidence directory. It is written in the
+background; the mailbox itself is not touched. Contacts and appointments are
+left out."
+  (let* ((list (current-buffer))
+         (items (mailbox-export-items list)))
+    (if (null items)
+        (unless (member "--shown" (menu-arguments) :test #'string=) (message "No message on this line"))
+        (let* ((words (list-question nil "message" items :name-of #'mailbox-item-name))
+               (path (read-native-path (format nil "Write ~a into the new Outlook mailbox: " words) :writing t))
+               (name (and path (native-file-name path)))
+               (name (if (and name (plusp (length name)) (not (string-equal (native-file-type name) "pst")))
+                         (concatenate 'string name ".pst")
+                         name))
+               (refusal (and path (writing-refusal (parent-path path)))))
+          (cond ((or (null path) (zerop (length name))) (message "No file named: nothing written"))
+                ((not (eq :directory (path-kind (parent-path path))))
+                 (message "~a is not a directory: nothing written" (parent-path path)))
+                (refusal (message "~a: nothing written" refusal))
+                (t (start-job-thread (make-mailbox-export-job list items (parent-path path) "pst" name
+                                                              (mailbox-export-folders list items))
+                                     #'mailbox-export-work :name "tuatara mailbox export")
+                   (message "Writing ~a into ~a..." words (path-join (parent-path path) name))))))))
+
 (define-menu mailbox-export (:title "Copy out")
   "Open the menu of copying the messages marked in the mailbox's list, or with
 none marked the one on the current line, out: \\`e' as saved mail (.eml) and
 \\`m' as Outlook items (.msg) into a directory, \\`b' into one mbox file,
-the directory or the file asked for then. \\`a' switches to every message
-the list's filters leave, marked or not. \\`C-h' there lists every action."
+\\`p' into a new Outlook mailbox (.pst), the directory or the file asked for
+then. \\`a' switches to every message the list's filters leave, marked or
+not. \\`C-h' there lists every action."
   ("Which"
    ("a" "All shown, not only those marked" :switch "--shown"))
   ("Copy out as"
    ("e" "Saved mail (.eml)" mailbox-export-eml)
    ("m" "Outlook items (.msg)" mailbox-export-msg)
-   ("b" "One mailbox file (.mbox)" mailbox-export-mbox)))
+   ("b" "One mailbox file (.mbox)" mailbox-export-mbox)
+   ("p" "Outlook mailbox (.pst)" mailbox-export-pst)))

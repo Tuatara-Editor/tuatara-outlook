@@ -162,6 +162,20 @@ CHARSET-TEXT takes it (1252 windows-1252, 65001 utf-8); NIL for none."
                   ((<= 1250 codepage 1258) (format nil "windows-~d" codepage))
                   ((< 0 codepage 10000) (format nil "cp~d" codepage)))))))
 
+(defun mail-charset-codepage (charset)
+  "The code page number Outlook names CHARSET by (windows-1252 1252, utf-8
+65001), the inverse of MAIL-CODEPAGE-CHARSET; NIL for one it has no number
+for here."
+  (let ((name (string-downcase (or charset ""))))
+    (cond ((string= name "us-ascii") 20127)
+          ((member name '("latin1" "latin-1") :test #'string=) 28591)
+          ((loop for page in '(65001 28591 1200 1201 20866 21866 932 936 51932)
+                 when (equal name (mail-codepage-charset page)) return page))
+          ((cl-ppcre:scan "^iso-8859-([0-9]+)$" name)
+           (+ 28590 (parse-integer name :start 9)))
+          ((cl-ppcre:scan "^windows-125[0-8]$" name) (parse-integer name :start 8))
+          ((cl-ppcre:scan "^cp[0-9]+$" name) (parse-integer name :start 2)))))
+
 ;;; Times
 
 (defun filetime-universal-time (filetime)
