@@ -47,17 +47,17 @@ error saying the file is cut short when they are past its end."
   (or (octets-integer octets at count) (error "The compound file ends too soon")))
 
 (defun cfb-chain (start table limit &key (what "a sector chain"))
-  "The sectors chained from START by TABLE (a file allocation table (FAT) or mini FAT), in order, as a
-vector: each sector below LIMIT (the sectors there are) and seen once; an
-error when the chain loops, leaves the table or goes past LIMIT."
-  (let ((seen (make-array limit :element-type 'bit :initial-element 0))
-        (sectors (make-array 16 :adjustable t :fill-pointer 0)))
+  "The sectors chained from START by TABLE (the file allocation table (FAT)
+or the mini FAT), in order, as a vector: each sector below LIMIT (the
+sectors there are); an error when the chain leaves the table, goes past
+LIMIT or loops, which a chain longer than LIMIT must."
+  (let ((sectors (make-array 16 :adjustable t :fill-pointer 0)))
     (loop for sector = start then (aref table sector)
+          for steps from 0
           until (= sector #xFFFFFFFE)                       ; the end of the chain
           do (cond ((>= sector limit) (error "~a of the compound file leads past its end" what))
                    ((>= sector (length table)) (error "~a of the compound file leaves its table" what))
-                   ((= 1 (sbit seen sector)) (error "~a of the compound file loops" what)))
-             (setf (sbit seen sector) 1)
+                   ((>= steps limit) (error "~a of the compound file loops" what)))
              (vector-push-extend sector sectors))
     sectors))
 
@@ -113,8 +113,8 @@ or is made so that following it would not end or would read past it."
               do (when (>= sector sectors) (error "A FAT sector of the compound file lies past its end"))
                  (let ((base (* (1+ sector) sector-size)))
                    (loop for i below per-sector
-                      do (setf (aref fat (+ (* k per-sector) i))
-                               (or (octets-integer octets (+ base (* 4 i)) 4) #xFFFFFFFF)))))
+                         do (setf (aref fat (+ (* k per-sector) i))
+                                  (or (octets-integer octets (+ base (* 4 i)) 4) #xFFFFFFFF)))))
         (let* ((directory (cfb-sector-octets octets
                                              (cfb-chain (cfb-number octets 48 4) fat sectors :what "The directory")
                                              sector-size))
@@ -162,10 +162,10 @@ not looked at."
                                   :index i))))))))
 
 (defun cfb-children (cfb entry)
-  "The entries in the storage ENTRY of the compound file (CFB), as a list in the directory's
-order: its tree walked with each entry seen once, a loop in it gone round
-never, and an entry another storage holds too left to that one, so that no
-stream is read again for each storage that names it."
+  "The entries in the storage ENTRY of the compound file (CFB), as a list in
+the directory's order: its tree walked with each entry seen once, a loop in
+it gone round never, and an entry another storage holds too left to that
+one, so that no stream is read again for each storage that names it."
   (let ((entries (cfb-entries cfb))
         (seen (make-hash-table))
         (found '())
@@ -221,16 +221,17 @@ come to more than twice the file, as streams sharing their sectors would."
 
 (defparameter *lzfu-dictionary*
   (concatenate 'string
-               "{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss \\fmodern \\fscript \\fdecor MS Sans SerifSymbolArialTimes New RomanCourier{\\colortbl\\red0\\green0\\blue0"
+               "{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss \\fmodern \\fscript "
+               "\\fdecor MS Sans SerifSymbolArialTimes New RomanCourier{\\colortbl\\red0\\green0\\blue0"
                (coerce '(#\Return #\Newline) 'string) "\\par \\pard\\plain\\f0\\fs20\\b\\i\\u\\tab\\tx")
-  "The text the dictionary of compressed Rich Text Format (RTF) starts with, 207 characters, which
-its references may point into from the first.")
+  "The text the dictionary of compressed Rich Text Format (RTF) starts with,
+207 characters, which its references may point into from the first.")
 
 (defun lzfu-decompress (octets &key (limit *outlook-largest-file*))
-  "The Rich Text Format (RTF) compressed in OCTETS, as an Outlook item keeps its body: as it is
-when it is stored uncompressed (MELA), else taken out of its references
-back into the text written so far (LZFu); at most LIMIT octets, and never
-more than it says it holds. An error when it is neither."
+  "The Rich Text Format (RTF) compressed in OCTETS, as an Outlook item keeps
+its body: as it is when it is stored uncompressed (MELA), else taken out of
+its references back into the text written so far (LZFu); at most LIMIT
+octets, and never more than it says it holds. An error when it is neither."
   (when (< (length octets) 16) (error "The compressed RTF is cut short"))
   (let* ((kind (cfb-number octets 8 4))
          (end (min (length octets) (+ 4 (cfb-number octets 0 4))))
@@ -270,14 +271,16 @@ more than it says it holds. An error when it is neither."
 (defparameter *rtf-skipped-groups*
   '("fonttbl" "colortbl" "stylesheet" "info" "pict" "object" "header" "headerl" "headerr" "headerf" "footer"
     "footerl" "footerr" "footerf" "themedata" "colorschememapping" "datastore" "latentstyles" "listtable"
-    "listoverridetable" "rsidtbl" "generator" "xmlnstbl" "mmathPr" "fldinst" "filetbl" "revtbl" "pgdsctbl" "nonshppict")
-  "Groups of Rich Text Format (RTF) that hold no text to read: tables of fonts, colours and
-styles, pictures, objects, headers, a field's instruction.")
+    "listoverridetable" "rsidtbl" "generator" "xmlnstbl" "mmathPr" "fldinst" "filetbl" "revtbl" "pgdsctbl"
+    "nonshppict")
+  "Groups of Rich Text Format (RTF) that hold no text to read: tables of
+fonts, colours and styles, pictures, objects, headers, a field's
+instruction.")
 
 (defun rtf-control-word (octets i)
-  "The Rich Text Format (RTF) control word in OCTETS whose letters begin at I, as three values:
-the word, its number (NIL when it has none) and where what follows it begins,
-past the space that may end it."
+  "The Rich Text Format (RTF) control word in OCTETS whose letters begin at I,
+as three values: the word, its number (NIL when it has none) and where what
+follows it begins, past the space that may end it."
   (let* ((n (length octets))
          (start i)
          (word (progn (loop while (and (< i n) (let ((o (aref octets i))) (or (<= 97 o 122) (<= 65 o 90)))) do (incf i))
@@ -291,8 +294,8 @@ past the space that may end it."
     (values word parameter i)))
 
 (defun rtf-word-text (word)
-  "The text the Rich Text Format (RTF) control word WORD stands for: a line break, a tab, a dash,
-a bullet or a quotation mark; NIL for any other word."
+  "The text the Rich Text Format (RTF) control word WORD stands for: a line
+break, a tab, a dash, a bullet or a quotation mark; NIL for any other word."
   (cond ((member word '("par" "line" "row" "sect" "page") :test #'string=) (string #\Newline))
         ((member word '("tab" "cell") :test #'string=) (string #\Tab))
         ((string= word "emdash") "—") ((string= word "endash") "–")
@@ -301,13 +304,13 @@ a bullet or a quotation mark; NIL for any other word."
         ((string= word "rdblquote") "”")))
 
 (defun rtf-text (octets &key (limit *outlook-largest-file*))
-  "The text of the Rich Text Format (RTF) in OCTETS, roughly, at most LIMIT characters: control
-words left out, but those that break lines and tabs; groups that hold no
-text (*RTF-SKIPPED-GROUPS*, and those marked as ignorable) left out;
-characters given by their number (\\uN, and \\'XX in the document's code
+  "The text of the Rich Text Format (RTF) in OCTETS, roughly, at most LIMIT
+characters: control words left out, but those that break lines and tabs; groups
+that hold no text (*RTF-SKIPPED-GROUPS*, and those marked as ignorable) left
+out; characters given by their number (\\uN, and \\'XX in the document's code
 page) decoded. RTF that keeps HTML (\\fromhtml) gives back that HTML's text,
-read as HTML (HTML-TEXT), its markup taken from where it keeps it, and the
-HTML itself as a second value."
+read as HTML (HTML-TEXT), its markup taken from where it keeps it, and the HTML
+itself as a second value."
   (let ((out (make-string-output-stream)) (written 0)
         (pending (make-array 16 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
         (charset "windows-1252") (html nil)
@@ -374,8 +377,10 @@ HTML itself as a second value."
                                   (let ((said (rtf-word-text word)))
                                     (when said (emit said)))))))
                         ((= next 39)                                       ; \'XX, an octet of the code page
-                      (let ((value (and (<= (+ i 3) n)
-                                        (ignore-errors (parse-integer (octets-latin-1 octets :start (1+ i) :end (+ i 3)) :radix 16)))))
+                         (let ((value (and (<= (+ i 3) n)
+                                           (ignore-errors
+                                            (parse-integer (octets-latin-1 octets :start (1+ i) :end (+ i 3))
+                                                           :radix 16)))))
                            (incf i 3)
                            (when (and value (not (consumed-by-u)) (text-p))
                              (vector-push-extend value pending))))
@@ -384,7 +389,7 @@ HTML itself as a second value."
                         ((= next 126) (flush) (when (text-p) (emit (string (code-char #xA0)))) (incf i))
                         ((= next 95) (flush) (when (text-p) (emit "-")) (incf i))
                         ((= next 45) (incf i))
-                        (t (flush)                                          ; \\ \{ \} and the rest, the character itself
+                        (t (flush)                                    ; \\ \{ \} and the rest, the character itself
                            (when (and (text-p) (not (consumed-by-u))) (emit (string (code-char next))))
                            (incf i)))))
                    ((member c '(10 13)) (incf i))

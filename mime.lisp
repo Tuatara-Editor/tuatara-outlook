@@ -22,17 +22,18 @@ are left out, and the message says so.")
   "How many more parts the message being read may have (*MIME-PART-LIMIT*).")
 
 (defvar *mime-parts-cut* nil
-  "True once a part of the message being read was left out, past *MIME-PART-LIMIT*.")
+  "True once a part of the message being read was left out, past
+*MIME-PART-LIMIT*.")
 
 (defstruct (mime-part (:copier nil))
   "A part of internet mail, or the whole message: HEADERS, each (NAME . VALUE)
 in order, NAME in lower case, VALUE unfolded; TYPE, its content type in lower
 case (text/plain); PARAMETERS of the type, and DISPOSITION and its
-DISPOSITION-PARAMETERS, each (NAME . VALUE); OCTETS the whole message's,
-the part's headers from START below HEADER-END in them, its body from
-BODY-START below BODY-END; PARTS, the parts it is made of; MESSAGE, a MIME-PART, when
-it is a message itself; CUT, for a whole message, true when parts of it were
-left out (*MIME-PART-LIMIT*)."
+DISPOSITION-PARAMETERS, each (NAME . VALUE); OCTETS the whole message's, the
+part's headers from START below HEADER-END in them, its body from BODY-START
+below BODY-END; PARTS, the parts it is made of; MESSAGE, a MIME-PART, when it is
+a message itself; CUT, for a whole message, true when parts of it were left out
+\(*MIME-PART-LIMIT*)."
   headers type parameters disposition disposition-parameters octets start header-end body-start body-end
   (parts '()) message cut)
 
@@ -208,7 +209,8 @@ MIME-PART, for MIME-READ."
   (multiple-value-bind (headers body-start) (mime-headers octets start end)
     (let ((part (make-mime-part :headers headers :octets octets :start start :header-end body-start
                                 :body-start body-start :body-end end)))
-      (multiple-value-bind (type parameters) (mime-parameters (or (cdr (assoc "content-type" headers :test #'string=)) "text/plain"))
+      (multiple-value-bind (type parameters)
+          (mime-parameters (or (cdr (assoc "content-type" headers :test #'string=)) "text/plain"))
         (setf (mime-part-type part) (if (find #\/ type) type "text/plain")
               (mime-part-parameters part) parameters))
       (let ((disposition (cdr (assoc "content-disposition" headers :test #'string=))))
@@ -233,6 +235,17 @@ MIME-PART, for MIME-READ."
   (member (string-downcase (string-trim " " (or (mime-header part "content-transfer-encoding") "7bit")))
           '("7bit" "8bit" "binary") :test #'string=))
 
+(defun mime-delimiter-kind (octets start end)
+  "What the rest of a line that begins with a boundary's delimiter, in OCTETS
+from START below END, makes it: :PART when only blanks follow, :CLOSE when
+-- and only blanks follow, NIL when anything else does, the line then being
+text (a boundary that begins as another's, abc and abc.1, is a different
+one)."
+  (let ((last (or (position-if-not (lambda (o) (member o '(9 13 32))) octets :start start :end end :from-end t)
+                  (1- start))))
+    (cond ((< last start) :part)
+          ((and (= last (1+ start)) (= 45 (aref octets start) (aref octets (1+ start)))) :close))))
+
 (defun mime-split (octets start end boundary depth)
   "The parts of a multipart body in OCTETS from START below END, between the
 lines --BOUNDARY, each read with MIME-READ at DEPTH + 1, as long as the
@@ -245,10 +258,9 @@ closing line --BOUNDARY-- never comes. NIL when the boundary is never found."
           do (let ((line-end (mime-line-end octets i end)))
                (when (and (<= (+ i (length delimiter)) line-end)
                           (not (mismatch delimiter octets :start2 i :end2 (+ i (length delimiter)))))
-                 (let ((after (+ i (length delimiter))))
-                   (if (and (< (1+ after) line-end) (= 45 (aref octets after)) (= 45 (aref octets (1+ after))))
-                       (progn (push (cons i nil) marks) (setf closed t))
-                       (push (cons i (min end (1+ line-end))) marks))))
+                 (case (mime-delimiter-kind octets (+ i (length delimiter)) line-end)
+                   (:close (push (cons i nil) marks) (setf closed t))
+                   (:part (push (cons i (min end (1+ line-end))) marks))))
                (setf i (1+ line-end))))
     (setf marks (nreverse marks))
     (let ((parts '()))
@@ -282,9 +294,53 @@ given."
           ((string= encoding "quoted-printable") (mime-quoted-printable-octets octets :start start :end end))
           (t (subseq octets start end)))))
 
+(defun mime-part-content-size (part &key (most *outlook-largest-file*))
+  "How many octets MIME-PART-CONTENT gives of PART, worked out without
+decoding a base64 or plain body: three for every four letters of base64."
+  (let* ((octets (mime-part-octets part))
+         (start (mime-part-body-start part))
+         (end (min (mime-part-body-end part) (+ start most)))
+         (encoding (string-downcase (string-trim " " (or (mime-header part "content-transfer-encoding") "")))))
+    (cond ((string= encoding "base64")
+           (floor (* 3 (count-if (lambda (o) (or (<= 65 o 90) (<= 97 o 122) (<= 48 o 57) (= o 43) (= o 47)))
+                                 octets :start start :end end))
+                  4))
+          ((string= encoding "quoted-printable") (length (mime-part-content part :most most)))
+          (t (- end start)))))
+
+(defun mail-attachment-contents (attachment)
+  "The octets ATTACHMENT holds, decoded from its part of the message the
+first time they are asked for; NIL for a message or an attachment not read."
+  (or (mail-attachment-octets attachment)
+      (let ((part (mail-attachment-part attachment)))
+        (and part (setf (mail-attachment-octets attachment) (mime-part-content part))))))
+
+(defun mail-attachment-has-contents-p (attachment)
+  "True when ATTACHMENT holds octets, decoded or still in its message."
+  (or (mail-attachment-octets attachment) (mail-attachment-part attachment)))
+
+(defun mail-attachment-size (attachment)
+  "How many octets ATTACHMENT holds (MAIL-ATTACHMENT-CONTENTS), told without
+decoding them where it can be."
+  (let ((octets (mail-attachment-octets attachment)) (part (mail-attachment-part attachment)))
+    (cond (octets (length octets))
+          (part (mime-part-content-size part))
+          (t 0))))
+
+(defun mail-attachment-head (attachment count)
+  "The first COUNT octets of ATTACHMENT's contents, or all when it holds
+fewer, decoding no more of them than that takes."
+  (let ((octets (mail-attachment-octets attachment)) (part (mail-attachment-part attachment)))
+    (cond (octets (subseq octets 0 (min count (length octets))))
+          ;; base64 takes four letters for three octets, and its lines end in two more
+          (part (let ((head (mime-part-content part :most (* 2 count))))
+                  (subseq head 0 (min count (length head)))))
+          (t (make-array 0 :element-type '(unsigned-byte 8))))))
+
 (defun mime-part-text (part &key (most *outlook-largest-file*))
   "PART's body as text, in its charset, from at most MOST octets of it as written."
-  (charset-text (mime-part-content part :most most) (cdr (assoc "charset" (mime-part-parameters part) :test #'string=))))
+  (charset-text (mime-part-content part :most most)
+                (cdr (assoc "charset" (mime-part-parameters part) :test #'string=))))
 
 (defun mime-leaves (part)
   "The parts of PART that are made of no others, in order; a part that is a
@@ -336,7 +392,12 @@ that is not text, nor the text shown, nor a text another way of saying it."
   "The universal time a mail's date TEXT (Tue, 7 Oct 2026 09:15:00 +1300)
 says, or NIL when it cannot be read as one."
   (multiple-value-bind (match groups)
-      (cl-ppcre:scan-to-strings "(?i)(\\d{1,2})\\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?\\s+(\\d{2,4})\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?:\\s*([+-]\\d{4}|[a-z]{1,5}))?"
+      (cl-ppcre:scan-to-strings (load-time-value
+                                 (cl-ppcre:create-scanner
+                                  (concatenate 'string
+                                               "(?i)(\\d{1,2})\\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
+                                               "[a-z]*\\.?\\s+(\\d{2,4})\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?"
+                                               "(?:\\s*([+-]\\d{4}|[a-z]{1,5}))?")))
                                 (or text ""))
     (when match
       (ignore-errors
@@ -419,7 +480,7 @@ whole."
                                (format nil "part ~d (~a)" count (mime-part-type leaf)))
                      :mime (mime-part-type leaf) :content-id (mime-header leaf "content-id")
                      :message (and nested (< depth *outlook-nesting-limit*) (mime-mail nested :depth (1+ depth)))
-                     :octets (and (not nested) (mime-part-content leaf))
+                     :part (and (not nested) leaf)
                      :why (and nested
                                (>= depth *outlook-nesting-limit*)
                                "a message nested too deep to read (*outlook-nesting-limit*)"))
@@ -445,23 +506,37 @@ whole."
   (or (xml-entity name) (cdr (assoc name *html-entities* :test #'string=))))
 
 (defun html-attribute-scanner (name)
-  "A scanner finding the attribute NAME in an HTML tag, its value in one of three groups."
+  "A scanner finding the attribute NAME in an HTML tag, its value in one of
+three groups."
   (cl-ppcre:create-scanner (format nil "(?is)\\s~a\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))" name)))
 
 (defparameter *html-attribute-scanners*
   (mapcar (lambda (name) (cons name (html-attribute-scanner name))) '("href" "alt" "src"))
-  "The scanners of the attributes HTML-TEXT reads, made once, each (NAME . SCANNER).")
+  "The scanners of the attributes HTML-TEXT reads, made once, each (NAME .
+SCANNER).")
 
 (defun html-attribute (tag name)
   "The value of the attribute NAME in TAG, the text of an HTML tag, entities
 decoded; NIL when it has none."
   (multiple-value-bind (match groups)
-      (cl-ppcre:scan-to-strings (or (cdr (assoc name *html-attribute-scanners* :test #'string=)) (html-attribute-scanner name)) tag)
+      (cl-ppcre:scan-to-strings (or (cdr (assoc name *html-attribute-scanners* :test #'string=))
+                                    (html-attribute-scanner name))
+                                tag)
     (and match (xml-text-value (or (aref groups 0) (aref groups 1) (aref groups 2)) #'html-entity-text))))
 
 (defparameter *html-block-tags*
   '("p" "div" "br" "tr" "li" "h1" "h2" "h3" "h4" "h5" "h6" "table" "ul" "ol" "blockquote" "hr" "pre" "dt" "dd" "title")
   "HTML elements that begin a line of their own.")
+
+(defun html-tag-name (html start end)
+  "The name of the HTML tag whose name may begin at START in HTML, after
+blanks, in small letters; \"\" when no letter or digit is there before END."
+  (let* ((from (or (position-if-not (lambda (c) (member c '(#\Space #\Tab #\Return #\Newline))) html
+                                    :start start :end end)
+                   end))
+         (to (or (position-if-not (lambda (c) (and (< (char-code c) 128) (alphanumericp c))) html :start from :end end)
+                 end)))
+    (nstring-downcase (subseq html from to))))
 
 (defun html-text (html)
   "The text of HTML, as a message shows it, with its markup left out, scripts,
@@ -471,10 +546,32 @@ picture is [picture: what it shows], its address said and not fetched.
 Entities are decoded and spaces run together as HTML runs them."
   (let ((out (make-array 1024 :element-type 'character :adjustable t :fill-pointer 0))
         (i 0) (n (length html)) (pre 0) (link nil) (link-start 0))
-    (labels ((put (text) (loop for c across text do (vector-push-extend c out)))
+    (labels ((make-room (count)
+               (let ((size (array-dimension out 0)) (need (+ (fill-pointer out) count)))
+                 (when (> need size)
+                   (setf out (adjust-array out (max need (* 2 size)))))))
+             (put (text)
+               (make-room (length text))
+               (let ((at (fill-pointer out)))
+                 (setf (fill-pointer out) (+ at (length text)))
+                 (replace out text :start1 at)))
              (text-run (start end)
-               (let ((text (xml-text-value (subseq html start end) #'html-entity-text)))
-                 (put (if (plusp pre) text (cl-ppcre:regex-replace-all "[ \\t\\r\\n]+" text " "))))))
+               (when (< start end)
+                 (multiple-value-bind (text start end)
+                     (if (find #\& html :start start :end end)
+                         (let ((text (xml-text-value (subseq html start end) #'html-entity-text)))
+                           (values text 0 (length text)))
+                         (values html start end))
+                   (if (plusp pre)
+                       (put (subseq text start end))
+                       ;; spaces, tabs and line ends run together into one space
+                       (let ((blank nil))
+                         (make-room (- end start))
+                         (loop for k from start below end
+                               for c = (char text k)
+                               do (if (member c '(#\Space #\Tab #\Return #\Newline))
+                                      (unless blank (vector-push #\Space out) (setf blank t))
+                                      (progn (vector-push c out) (setf blank nil))))))))))
       (loop while (< i n)
             do (let ((open (position #\< html :start i)))
                  (when (null open) (text-run i n) (return))
@@ -482,10 +579,9 @@ Entities are decoded and spaces run together as HTML runs them."
                  (if (and (< (+ open 3) n) (string= "<!--" html :start2 open :end2 (+ open 4)))
                      (setf i (let ((close (search "-->" html :start2 (+ open 4)))) (if close (+ close 3) n)))
                      (let* ((close (or (xml-tag-end html open) (1- n)))
-                            (tag (subseq html open (1+ close)))
-                            (ending (and (> (length tag) 1) (char= #\/ (char tag 1))))
-                            (name (multiple-value-bind (match groups) (cl-ppcre:scan-to-strings "^</?\\s*([A-Za-z0-9]+)" tag)
-                                    (if match (string-downcase (aref groups 0)) ""))))
+                            (ending (and (< (1+ open) n) (char= #\/ (char html (1+ open)))))
+                            (name (html-tag-name html (if ending (+ open 2) (1+ open)) close))
+                            (tag (and (member name '("a" "img") :test #'string=) (subseq html open (1+ close)))))
                        (setf i (1+ close))
                        (cond
                          ((and (not ending) (member name '("script" "style" "head" "xml" "object") :test #'string=))
@@ -515,9 +611,22 @@ Entities are decoded and spaces run together as HTML runs them."
                                          (and source (if (cl-ppcre:scan "(?i)^(https?|ftp):" source)
                                                          (format nil "from ~a, not fetched" source)
                                                          source)))))))))))
-      (string-trim '(#\Newline #\Space)
-                   (cl-ppcre:regex-replace-all "\\n{3,}"
-                                               (cl-ppcre:regex-replace-all "(?m)[ \\t]+$"
-                                                                           (coerce out 'simple-string)
-                                                                           "")
-                                               (format nil "~%~%"))))))
+      (html-text-tidied out))))
+
+(defun html-text-tidied (text)
+  "TEXT, what HTML-TEXT made of a page, with the blanks at each line's end
+left out, never more than one empty line together, and no line ends or
+spaces at its start or its end."
+  (with-output-to-string (out)
+    (let ((blanks (make-string-output-stream)) (line-ends 0) (started nil))
+      (loop for c across text
+            do (case c
+                 ((#\Space #\Tab) (write-char c blanks))
+                 (#\Newline (get-output-stream-string blanks) (incf line-ends))
+                 (t (let ((before (get-output-stream-string blanks)))
+                      (if started
+                          (progn (loop repeat (min line-ends 2) do (write-char #\Newline out))
+                                 (write-string before out))
+                          (write-string (string-left-trim " " before) out))
+                      (write-char c out)
+                      (setf line-ends 0 started t))))))))

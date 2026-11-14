@@ -71,7 +71,8 @@ large."
 (setf (documentation 'mailbox-item-p 'function) "True when OBJECT is a MAILBOX-ITEM.")
 
 (defun mailbox-readpst ()
-  "The full path of readpst (*OUTLOOK-READPST-PROGRAM*) where the sandbox finds it, or NIL."
+  "The full path of readpst (*OUTLOOK-READPST-PROGRAM*) where the sandbox finds
+it, or NIL."
   (sandbox-find-program *outlook-readpst-program*))
 
 (defun mailbox-preview-words (name size)
@@ -84,6 +85,24 @@ large."
 
 ;;; What readpst wrote
 
+(defun mailbox-files (root function)
+  "Call FUNCTION on what readpst wrote under ROOT, 64 directories deep: with
+the directory's path from ROOT (\"\" for ROOT) and NIL as each directory is
+entered, and with that path, the name and the size of each regular file in
+it. Links, whatever they lead to, and other entries are passed over."
+  (walk-directory root
+                  (lambda (directory relative entry)
+                    (declare (ignore directory))
+                    (if (null entry)
+                        (funcall function relative nil nil)
+                        (destructuring-bind (name kind size own &rest rest) entry
+                          (declare (ignore rest))
+                          (when (eq own kind)
+                            (case kind
+                              (:directory t)
+                              (:regular (funcall function relative name size) nil))))))
+                  :max-depth 64))
+
 (defun mailbox-folders (root &key (limit 1000000) (in-order t))
   "The folders under ROOT, a directory readpst wrote in, and ROOT itself,
 each (RELATIVE . FILES): RELATIVE its path from ROOT (\"\" for ROOT), FILES
@@ -91,33 +110,25 @@ each (NAME . SIZE), its regular files, in the order of their numbers unless
 IN-ORDER is NIL. Links and other entries are passed over; at most LIMIT
 files, 64 folders deep, and true as a second value when there were more."
   (let ((found '()) (folders (make-hash-table :test 'equal)) (count 0) (more nil))
-    (walk-directory root
-                    (lambda (directory relative entry)
-                      (declare (ignore directory))
-                      (if (null entry)
-                          (push (setf (gethash relative folders) (list relative)) found)
-                          (destructuring-bind (name kind size own &rest rest) entry
-                            (declare (ignore rest))
-                            (cond ((not (eq own kind)) nil)       ; a link, whatever it leads to: passed over
-                                  ((eq kind :directory))
-                                  ((not (eq kind :regular)) nil)
-                                  ((< count limit)
-                                   (incf count)
-                                   (push (cons name size) (cdr (gethash relative folders)))
-                                   nil)
-                                  (t (setf more t) nil)))))
-                    :max-depth 64)
+    (mailbox-files root
+                   (lambda (relative name size)
+                     (cond ((null name) (push (setf (gethash relative folders) (list relative)) found))
+                           ((< count limit)
+                            (incf count)
+                            (push (cons name size) (cdr (gethash relative folders))))
+                           (t (setf more t)))))
     (values
      (loop for folder in (nreverse found)
-          when (cdr folder)
-            collect (cons (car folder)
-                          (if in-order
-                              (sort (cdr folder)
-                                    (lambda (a b)
-                                      (let ((x (parse-integer a :junk-allowed t)) (y (parse-integer b :junk-allowed t)))
-                                        (if (and x y (/= x y)) (< x y) (string< a b))))
-                                    :key #'car)
-                              (cdr folder))))
+           when (cdr folder)
+             collect (cons (car folder)
+                           (if in-order
+                               (sort (cdr folder)
+                                     (lambda (a b)
+                                       (let ((x (parse-integer a :junk-allowed t))
+                                             (y (parse-integer b :junk-allowed t)))
+                                         (if (and x y (/= x y)) (< x y) (string< a b))))
+                                     :key #'car)
+                               (cdr folder))))
      more)))
 
 (defun mailbox-written (root)
@@ -126,28 +137,19 @@ their octets, as two values: counted as its folders are walked, 64 deep,
 links passed over, nothing kept."
   (let ((files 0) (octets 0))
     (ignore-errors
-     (walk-directory root
-                     (lambda (directory relative entry)
-                       (declare (ignore directory relative))
-                       ;; a folder entered, a link whatever it leads to passed over
-                       (when entry
-                         (destructuring-bind (name kind size own &rest rest) entry
-                           (declare (ignore name rest))
-                           (when (eq own kind)
-                             (case kind
-                               (:directory t)
-                               (:regular (incf files) (incf octets size) nil))))))
-                     :max-depth 64))
+     (mailbox-files root (lambda (relative name size)
+                           (declare (ignore relative))
+                           (when name (incf files) (incf octets size)))))
     (values files octets)))
 
 (defun mailbox-search-text (part)
   "What a search of a mailbox's list looks through in the message PART
 \(MIME-READ), as two values: the text, and NIL when it was cut short at
 *OUTLOOK-SEARCH-TEXT-LIMIT* characters, else true. The text is its headers,
-every one on a line of its own, encoded words decoded; the name of each attachment; the text of
-each text part, decoded from its transfer encoding and charset, HTML as its
-text; and so on for each message attached, as far as they were read.
-Nothing else of an attachment is decoded."
+every one on a line of its own, encoded words decoded; the name of each
+attachment; the text of each text part, decoded from its transfer encoding and
+charset, HTML as its text; and so on for each message attached, as far as they
+were read. Nothing else of an attachment is decoded."
   (let ((out (make-string-output-stream)) (left *outlook-search-text-limit*) (whole t))
     (labels ((put (text)
                (let ((taken (min (length text) left)))
@@ -199,7 +201,8 @@ there, a new file for you alone."
                                           (and value (one-line (mime-decode-words value))))))
                            (make-mailbox-item :path path :message t :sent (mail-date-time (mime-header part "date"))
                                               :from (header "from") :subject (header "subject")
-                                              :attachments (count-if (lambda (leaf) (mime-attachment-p leaf body)) leaves)
+                                              :attachments (count-if (lambda (leaf) (mime-attachment-p leaf body))
+                                                                     leaves)
                                               :whole (not large)))))
               (when text-path
                 (multiple-value-bind (text whole) (mailbox-search-text part)
@@ -244,17 +247,19 @@ NOTES, what to say of how it went."
   :left-words "nothing listed")
 
 (defmethod job-percent ((job mailbox-job))
-  "How far copying the mailbox or listing the messages has got; NIL while readpst writes them."
+  "How far copying the mailbox or listing the messages has got; NIL while
+readpst writes them."
   (let ((total (mailbox-job-total job)))
     (cond (total (running-percent (mailbox-job-listed job) total))
           ((mailbox-job-copied job) (running-percent (mailbox-job-copied job) (max 1 (mailbox-job-size job)))))))
 
 (defmethod job-state-words ((job mailbox-job))
-  "How far reading the mailbox has got: the per cent copied, the messages readpst has written,
-then the per cent listed."
+  "How far reading the mailbox has got: the per cent copied, the messages
+readpst has written, then the per cent listed."
   (if (or (mailbox-job-total job) (mailbox-job-copied job))
       (call-next-method)
-      (format nil "Reading the mailbox: ~:d items, ~a" (mailbox-job-files job) (octets-words (mailbox-job-octets job)))))
+      (format nil "Reading the mailbox: ~:d items, ~a"
+              (mailbox-job-files job) (octets-words (mailbox-job-octets job)))))
 
 (defun mailbox-copy-path (job)
   "Where JOB's mailbox is copied for readpst: beside its directory."
@@ -262,8 +267,8 @@ then the per cent listed."
 
 (defun mailbox-copy (job copy)
   "Copy JOB's mailbox to COPY (MAILBOX-COPY-PATH) for readpst, read without
-changing the mailbox's access time: refused when the drive would keep less
-than 1 gigabyte (GB) free, stopped when JOB is asked to stop. The caller deletes COPY
+changing the mailbox's access time: refused when the drive would keep less than
+1 gigabyte (GB) free, stopped when JOB is asked to stop. The caller deletes COPY
 however it ends."
   (let ((size (stamp-size (path-stamp (mailbox-job-path job))))
         (free (ignore-errors (free-octets (parent-path copy)))))
@@ -285,48 +290,48 @@ each count looks at every file."
 (defun mailbox-run-readpst (job copy)
   "Run readpst on COPY, JOB's mailbox copied (MAILBOX-COPY), shut in, writing
 into JOB's directory, and watch it: what it has written counted now and then
-\(MAILBOX-COUNT-SECONDS), the drive's free room each second, and it stopped
-when JOB is asked to stop, when it has written more than
-*OUTLOOK-MAILBOX-SPACE*, or when the drive has less than 1 gigabyte (GB) free. Returns
-how it went (SANDBOX-RUN's second value) and what it said."
+\(MAILBOX-COUNT-SECONDS), the drive's free room each second, and it stopped when
+JOB is asked to stop, when it has written more than *OUTLOOK-MAILBOX-SPACE*, or
+when the drive has less than 1 gigabyte (GB) free. Returns how it went
+\(SANDBOX-RUN's second value) and what it said."
   (let* ((directory (mailbox-job-directory job))
          (stop (list nil)) (full nil) (result nil)
          ;; -j 0: readpst alone, no processes forked, which the sandbox would end, unfinished, as readpst ends
          (arguments (append '("-m" "-j" "0" "-b" "-q")
                             (and *outlook-include-deleted* '("-D"))
                             '("-o" "/tmp/out" "/tmp/mailbox.pst"))))
-    (make-guarded-thread
-     (lambda ()
-       (unwind-protect
-            (setf result (handler-case
-                             (multiple-value-list
-                              (sandbox-run *outlook-readpst-program* arguments
-                                           :directories (list (cons copy "/tmp/mailbox.pst"))
-                                           :writable (list (cons (string-right-trim "/" directory) "/tmp/out"))
-                                           :seconds *outlook-mailbox-seconds* :memory (* 2 1024 1024 1024)
-                                           :output-limit nil :file-limit *outlook-mailbox-space* :cancel stop))
-                           (error (e) (list nil :failed (princ-to-string e)))))
-         (unless result (setf result (list nil :failed "it ended unexpectedly")))))
-     :name "tuatara readpst")
-    (loop with next-count = 1
-          for second from 1
-          until result
-          do (sleep 1)
-             (when (>= second next-count)
-               (multiple-value-bind (files octets) (mailbox-written directory)
-                 (setf (mailbox-job-files job) files (mailbox-job-octets job) octets
-                       next-count (+ second (mailbox-count-seconds files)))
-                 (when (and (not full) (> octets *outlook-mailbox-space*))
-                   (setf full
-                         (format nil
-                                 "readpst was stopped once it had written ~a (*outlook-mailbox-space*)"
-                                 (octets-words octets))
-                         (car stop) t))))
-             (let ((free (ignore-errors (free-octets directory))))
-               (when (and (not full) free (< free (expt 2 30)))
-                 (setf full "readpst was stopped: the drive of the cache directory has less than 1 GB free"
-                       (car stop) t)))
-             (when (car (job-cancel job)) (setf (car stop) t)))
+    (let ((thread (make-guarded-thread
+                   (lambda ()
+                     (handler-case
+                         (multiple-value-list
+                          (sandbox-run *outlook-readpst-program* arguments
+                                       :directories (list (cons copy "/tmp/mailbox.pst"))
+                                       :writable (list (cons (string-right-trim "/" directory) "/tmp/out"))
+                                       :seconds *outlook-mailbox-seconds* :memory (* 2 1024 1024 1024)
+                                       :output-limit nil :file-limit *outlook-mailbox-space* :cancel stop))
+                       (error (e) (list nil :failed (princ-to-string e)))))
+                   :name "tuatara readpst")))
+      (loop with next-count = 1
+            for second from 1
+            do (multiple-value-bind (value ended) (thread-result thread 1)
+                 (when ended
+                   (setf result (or value (list nil :failed "it ended unexpectedly")))
+                   (loop-finish)))
+               (when (>= second next-count)
+                 (multiple-value-bind (files octets) (mailbox-written directory)
+                   (setf (mailbox-job-files job) files (mailbox-job-octets job) octets
+                         next-count (+ second (mailbox-count-seconds files)))
+                   (when (and (not full) (> octets *outlook-mailbox-space*))
+                     (setf full
+                           (format nil
+                                   "readpst was stopped once it had written ~a (*outlook-mailbox-space*)"
+                                   (octets-words octets))
+                           (car stop) t))))
+               (let ((free (ignore-errors (free-octets directory))))
+                 (when (and (not full) free (< free (expt 2 30)))
+                   (setf full "readpst was stopped: the drive of the cache directory has less than 1 GB free"
+                         (car stop) t)))
+               (when (car (job-cancel job)) (setf (car stop) t))))
     (job-check-stop)
     (destructuring-bind (output outcome said) result
       (declare (ignore output))
@@ -335,7 +340,8 @@ how it went (SANDBOX-RUN's second value) and what it said."
 
 (defun mailbox-work (job)
   "What a job reading a mailbox does: readpst writes its items
-\(MAILBOX-RUN-READPST) from a copy of the mailbox (MAILBOX-COPY), then each is read for the list (MAILBOX-LIST)."
+\(MAILBOX-RUN-READPST) from a copy of the mailbox (MAILBOX-COPY), then each is
+read for the list (MAILBOX-LIST)."
   (multiple-value-bind (outcome said) (let ((copy (mailbox-copy-path job)))
                                         (unwind-protect (progn (mailbox-copy job copy)
                                                                (mailbox-run-readpst job copy))
@@ -345,7 +351,8 @@ how it went (SANDBOX-RUN's second value) and what it said."
         (:done)
         (:unavailable (error "~a" said))
         (:timeout (push (format nil
-                                "readpst was stopped after ~:d seconds (*outlook-mailbox-seconds*): what it wrote by then is listed"
+                                "readpst was stopped after ~:d seconds (*outlook-mailbox-seconds*): ~
+                                 what it wrote by then is listed"
                                 *outlook-mailbox-seconds*)
                         (mailbox-job-notes job)))
         (:cancelled)
@@ -389,20 +396,18 @@ JOB's FOLDERS then hold them."
                           when listed collect (cons relative listed))))
          (texts (mailbox-job-text-directory job)))
     (setf (mailbox-job-total job) (reduce #'+ folders :key (lambda (f) (length (cdr f)))))
-    (setf (mailbox-job-folders job)
-          (loop for (relative . files) in folders
-                collect (cons (string-right-trim "/" relative)
-                              (loop for (name . msg) in files
-                                    collect (progn (job-check-stop)
-                                                   (incf (mailbox-job-listed job))
-                                                   (let ((item (mailbox-item-of (path-join directory (concatenate 'string relative name)) name
-                                                                                (and texts
-                                                                                     (path-join texts
-                                                                                                (princ-to-string (mailbox-job-listed job)))))))
-                                                     (when msg
-                                                       (setf (mailbox-item-msg item)
-                                                             (path-join directory (concatenate 'string relative msg))))
-                                                     item))))))))
+    (flet ((item-of (relative name msg)
+             (job-check-stop)
+             (incf (mailbox-job-listed job))
+             (let ((item (mailbox-item-of (path-join directory (concatenate 'string relative name)) name
+                                          (and texts (path-join texts (princ-to-string (mailbox-job-listed job)))))))
+               (when msg
+                 (setf (mailbox-item-msg item) (path-join directory (concatenate 'string relative msg))))
+               item)))
+      (setf (mailbox-job-folders job)
+            (loop for (relative . files) in folders
+                  collect (cons (string-right-trim "/" relative)
+                                (loop for (name . msg) in files collect (item-of relative name msg))))))))
 
 (defparameter *mailbox-columns*
   '((" " :width 1) ("Sent" :width 16) ("From" :width 30) ("Att" :width 3 :right t) ("Subject"))
@@ -431,19 +436,31 @@ was. Its searches narrow it, matching each message's headers and contents
   (let* ((folders (mailbox-job-folders job))
          (count (reduce #'+ folders :key (lambda (f) (length (cdr f)))))
          (intro (list (cons (format nil
-                                    "Outlook mailbox ~a, ~a: ~:d item~:p in ~:d folder~:p, read by readpst~:[~;, deleted items included~]~%"
+                                    "Outlook mailbox ~a, ~a: ~:d item~:p in ~:d folder~:p, read by readpst~
+                                     ~:[~;, deleted items included~]~%"
                                     (native-file-name (mailbox-job-path job))
-                                    (octets-words (or (ignore-errors (stamp-size (path-stamp (mailbox-job-path job)))) 0))
+                                    (octets-words (or (ignore-errors (stamp-size (path-stamp (mailbox-job-path job))))
+                                                      0))
                                     count (length folders) *outlook-include-deleted*)
                             :heading)
                       (format nil
                               "~a~%"
-                              (substitute-command-keys "\\<mailbox-mode>\\`RET' or \\`l' opens the item on the line, a folder's line folds; \\<mail-view-mode>\\[mail-view-pages] in a message shows it as it looks, \\[quit-window] comes back; \\<mailbox-mode>\\[regex-search-forward] narrows the list to the items whose headers or contents match; \\[list-mark-entry] marks, \\[mailbox-export] copies out."))))
+                              (substitute-command-keys
+                               (format nil
+                                       "\\<mailbox-mode>\\`RET' or \\`l' opens the item on the line, a folder's ~
+                                        line folds; \\<mail-view-mode>\\[mail-view-pages] in a message shows it as ~
+                                        it looks, \\[quit-window] comes back; ~
+                                        \\<mailbox-mode>\\[regex-search-forward] narrows the list to the items ~
+                                        whose headers or contents match; \\[list-mark-entry] marks, ~
+                                        \\[mailbox-export] copies out.")))))
          (partial (loop for (nil . items) in folders sum (count-if-not #'mailbox-item-whole items)))
          (notes (loop for note in (append (reverse (mailbox-job-notes job))
                                           (and (plusp partial)
                                                (list (format nil
-                                                             "~:d message~:p too large to be searched whole: only the first ~:d characters, or the headers of one larger than ~a, are searched (*outlook-search-text-limit*, *outlook-largest-file*)"
+                                                             "~:d message~:p too large to be searched whole: ~
+                                                              only the first ~:d characters, or the headers of one ~
+                                                              larger than ~a, are searched ~
+                                                              (*outlook-search-text-limit*, *outlook-largest-file*)"
                                                              partial
                                                              *outlook-search-text-limit*
                                                              (octets-words *outlook-largest-file*)))))
@@ -498,7 +515,8 @@ saying how to get them. Returns the buffer, or NIL for a file of another kind."
     (when (and native (eq :pst (nth-value 1 (file-kind native)))
                (file-view-can-draw-p native (mailbox-readpst)
                                      (format nil
-                                             "readpst reads Outlook mailboxes, and is not installed (Fedora: sudo dnf install libpst; ~a)"
+                                             "readpst reads Outlook mailboxes, and is not installed ~
+                                              (Fedora: sudo dnf install libpst; ~a)"
                                              *outlook-readpst-program*)))
       (file-view-show native (remove-if-not #'live-buffer-p *mailboxes*) (lambda (b) (buffer-local b 'mailbox-path))
                       (lambda () (mailbox-buffer native)) show))))
@@ -539,7 +557,8 @@ list's filters lit in it; a contact or an appointment said to be one."
         (light-search-filters list view)
         (values view t))
       (values (side-preview-note (native-file-name (mailbox-item-path item))
-                                 (substitute-command-keys "A contact or an appointment: \\<mailbox-mode>\\[list-visit] opens it as its text."))
+                                 (substitute-command-keys
+                                  "A contact or an appointment: \\<mailbox-mode>\\[list-visit] opens it as its text."))
               t)))
 
 (defmethod entry-preview-width ((mode mailbox-mode) list)
@@ -553,17 +572,17 @@ list's filters lit in it; a contact or an appointment said to be one."
   "The name a copy of ITEM, a message, takes copied out as TYPE (\"eml\" or
 \"msg\"): when it was sent and its subject, a / or \\ in it made -, as a
 file's name may hold them (ATTACHMENT-FILE-NAME), else the number readpst
-gave it; any other item keeps its own name."
+gave it, cut to the 255 octets a name may take (FIT-NAME); any other item
+keeps its own name."
   (if (mailbox-item-message item)
       (let ((subject (mailbox-item-subject item)) (sent (mailbox-item-sent item)))
-        (format nil "~a.~a"
-                (attachment-file-name (substitute-if #\- (lambda (c) (find c "/\\"))
-                                                     (format nil
-                                                             "~@[~a ~]~@[~a~]"
-                                                             (and sent (format-time "%F %H%M" sent))
-                                                             (and subject (subseq subject 0 (min 120 (length subject))))))
-                                      (native-file-stem (mailbox-item-path item)))
-                type))
+        (fit-name (format nil "~a.~a"
+                          (attachment-file-name (substitute-if #\- (lambda (c) (find c "/\\"))
+                                                               (format nil "~@[~a ~]~@[~a~]"
+                                                                       (and sent (format-time "%F %H%M" sent))
+                                                                       subject))
+                                                (native-file-stem (mailbox-item-path item)))
+                          type)))
       (native-file-name (mailbox-item-path item))))
 
 (defstruct (mailbox-export-job (:include job)
@@ -641,19 +660,20 @@ one on the current line, out into a directory asked for, as TYPE, \"eml\" or
                    (message "Copying ~a out into ~a as .~a..." words directory type)))))))
 
 (define-command mailbox-export-eml ()
-  "Copy the messages marked in the mailbox's list (\\<mailbox-mode>\\[list-mark-entry]), or with
-none marked the one on the current line, out into a directory asked for, as
-saved mail (.eml). A directory not there yet is made. Each is a new file named
-by when it was sent and its subject, (2) and so on added where that name is
-taken; nothing there is overwritten. They are copied in the background, as
-readpst wrote them; the mailbox itself is not touched. A contact or an
-appointment is copied as it is."
+  "Copy the messages marked in the mailbox's list
+\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
+current line, out into a directory asked for, as saved mail (.eml). A directory
+not there yet is made. Each is a new file named by when it was sent and its
+subject, (2) and so on added where that name is taken; nothing there is
+overwritten. They are copied in the background, as readpst wrote them; the
+mailbox itself is not touched. A contact or an appointment is copied as it is."
   (mailbox-export-as "eml"))
 
 (define-command mailbox-export-msg ()
-  "Copy the messages marked in the mailbox's list (\\<mailbox-mode>\\[list-mark-entry]), or with
-none marked the one on the current line, out into a directory asked for, as
-Outlook items (.msg), as \\[mailbox-export-eml] copies them as saved mail."
+  "Copy the messages marked in the mailbox's list
+\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
+current line, out into a directory asked for, as Outlook items (.msg), as
+\\[mailbox-export-eml] copies them as saved mail."
   (mailbox-export-as "msg"))
 
 (define-menu mailbox-export (:title "Copy out")

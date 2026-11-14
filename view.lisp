@@ -59,7 +59,7 @@ working in the background."
 kind by its contents, said when its name says another; hidden from its
 reader, or shown in the text, when it is. True as a second value when its
 contents are not what its name says."
-  (let ((octets (mail-attachment-octets attachment))
+  (let ((name (or (mail-attachment-name attachment) ""))
         (message (mail-attachment-message attachment))
         (disagrees nil))
     (values
@@ -67,16 +67,16 @@ contents are not what its name says."
              (cond (message (let ((subject (one-line (mail-subject message))))
                               (format nil
                                       "a message~@[: ~a~]"
-                                      (and (not (equal subject (one-line (mail-attachment-name attachment)))) subject))))
-                   (octets (let ((sample (subseq octets 0 (min (length octets) +binary-sample+))))
-                             (multiple-value-bind (words kind) (octets-kind sample)
-                               (setf disagrees
-                                     (and kind (kind-name-disagrees-p kind (or (mail-attachment-name attachment) "")) t))
-                               (format nil "~a, ~a~@[, said to be ~a~]~:[~;, NOT what its name says~]"
-                                       (octets-words (length octets))
-                                       (or words (if (binary-head-p sample) "binary" "text"))
-                                       (and (null words) (mail-attachment-mime attachment))
-                                       disagrees))))
+                                      (and (not (equal subject (one-line name))) subject))))
+                   ((mail-attachment-has-contents-p attachment)
+                    (let ((sample (mail-attachment-head attachment +binary-sample+)))
+                      (multiple-value-bind (words kind) (octets-kind sample)
+                        (setf disagrees (and kind (kind-name-disagrees-p kind name) t))
+                        (format nil "~a, ~a~@[, said to be ~a~]~:[~;, NOT what its name says~]"
+                                (octets-words (mail-attachment-size attachment))
+                                (or words (if (binary-head-p sample) "binary" "text"))
+                                (and (null words) (mail-attachment-mime attachment))
+                                disagrees))))
                    (t (or (mail-attachment-why attachment) "nothing read")))
              (mail-attachment-hidden attachment)
              (mail-attachment-content-id attachment))
@@ -180,7 +180,8 @@ of its own called NAME (made unique)."
 ;;; Read in the background
 
 (defstruct (mail-read-job (:include job) (:constructor make-mail-read-job (buffer path)) (:copier nil))
-  "The message in the file at PATH being read for BUFFER, a job; MAIL, what was read."
+  "The message in the file at PATH being read for BUFFER, a job; MAIL, what was
+read."
   path mail)
 
 (setf (documentation 'mail-read-job-p 'function) "True when OBJECT is a MAIL-READ-JOB.")
@@ -226,7 +227,7 @@ for you alone and read only: made the first time, and again when it has gone."
         copy
         (setf (mail-attachment-copy-path attachment)
               (write-private-copy (attachment-file-name (mail-attachment-name attachment))
-                                  (mail-attachment-octets attachment))))))
+                                  (mail-attachment-contents attachment))))))
 
 (defparameter *mail-attachment-views* '(pdf-view-visit office-view-visit image-view-visit)
   "The views an attachment is shown by, as a file of its kind is in rimu: a
@@ -245,13 +246,15 @@ where you keep your files."
   (let ((name (or (one-line (mail-attachment-name attachment)) "The attachment")))
     (cond ((mail-attachment-message attachment)
            (mail-show-message (mail-attachment-message attachment) name))
-          ((mail-attachment-octets attachment)
+          ((mail-attachment-has-contents-p attachment)
            (let ((copy (mail-attachment-copy attachment)))
              (cond ((outlook-message-kind copy) (show-buffer (mail-view-buffer copy :safe t)))
                    ((some (lambda (view) (funcall view copy (lambda (buffer) (show-buffer buffer))))
                           *mail-attachment-views*))
                    (t (visit-path copy :safe t)))
-             (message "~a opened from a copy only you can read; \\<mail-view-mode>\\[mail-open-attachment-outside] in the message opens it outside" name)))
+             (message "~a opened from a copy only you can read; ~
+                       \\<mail-view-mode>\\[mail-open-attachment-outside] in the message opens it outside"
+                      name)))
           (t (message "~a: ~a" name (or (mail-attachment-why attachment) "nothing to open"))))))
 
 (defun mail-attachment-at-point ()
@@ -271,7 +274,7 @@ agrees; see *open-externally-kinds*). That program is not shut in the sandbox."
           ((mail-attachment-message attachment)
            (message "~a is a message: \\<mail-view-mode>\\[push-button] opens it here"
                     (one-line (mail-attachment-name attachment))))
-          ((null (mail-attachment-octets attachment))
+          ((null (mail-attachment-has-contents-p attachment))
            (message "~a: ~a"
                     (one-line (mail-attachment-name attachment))
                     (or (mail-attachment-why attachment) "nothing to open")))
@@ -295,7 +298,9 @@ program's window, about 1,000 pixels across, so that a message written wide
 is not cut off; as long for their width as A4.")
 
 (defparameter *mail-fetching-pattern*
-  "(?i)(?:\\b(?:src|background|poster)\\s*=\\s*[\"']?|url\\(\\s*[\"']?|@import\\s+[\"']|<link\\b[^>]*\\bhref\\s*=\\s*[\"']?)\\s*(?:https?:)?//"
+  (concatenate 'string
+               "(?i)(?:\\b(?:src|background|poster)\\s*=\\s*[\"']?|url\\(\\s*[\"']?|@import\\s+[\"']"
+               "|<link\\b[^>]*\\bhref\\s*=\\s*[\"']?)\\s*(?:https?:)?//")
   "What in a message's HTML would fetch a picture, a style or the like from
 the internet when it is shown: never fetched here, only counted.")
 
@@ -316,7 +321,8 @@ how many pictures, styles and the like it would fetch from the internet
              "(?i)\\bcid:([^\"'\\s)>]+)" html
              (lambda (match id)
                (let* ((id (mail-content-id id))
-                      (attachment (find-if (lambda (a) (and (mail-attachment-content-id a) (mail-attachment-octets a)
+                      (attachment (find-if (lambda (a) (and (mail-attachment-content-id a)
+                                                            (mail-attachment-has-contents-p a)
                                                             (string= id
                                                                      (mail-content-id (mail-attachment-content-id a)))))
                                            attachments)))
@@ -325,7 +331,7 @@ how many pictures, styles and the like it would fetch from the internet
                        (t (let* ((type (native-file-type (or (mail-attachment-name attachment) "")))
                                  (name (format nil "part-~d~@[.~a~]" (incf count)
                                                (and type (cl-ppcre:scan "^[A-Za-z0-9]{1,5}$" type) type))))
-                            (write-new-file (path-join directory name) (mail-attachment-octets attachment))
+                            (write-new-file (path-join directory name) (mail-attachment-contents attachment))
                             (setf (gethash attachment written) name))))))
              :simple-calls t)
             (/ (length (cl-ppcre:all-matches *mail-fetching-pattern* html)) 2))))
@@ -343,8 +349,10 @@ own colours."
       (loop for (label value face) in (append (mail-header-lines mail)
                                               (and names (list (list "Attachments" (format nil "~{~a~^; ~}" names)))))
             do (format out
-                       "<tr><th style=\"text-align:left;vertical-align:top;padding:0 3mm 1mm 0;white-space:nowrap\">~a</th>~
-                            <td style=\"padding:0 0 1mm;overflow-wrap:anywhere;font-weight:~:[normal~;bold~]\">~a</td></tr>"
+                       "<tr><th style=\"text-align:left;vertical-align:top;padding:0 3mm 1mm 0;~
+                                         white-space:nowrap\">~a</th>~
+                            <td style=\"padding:0 0 1mm;overflow-wrap:anywhere;~
+                                        font-weight:~:[normal~;bold~]\">~a</td></tr>"
                        (xml-escape label) (eq face :strong) (xml-escape value)))
       (format out "</table>"))))
 
@@ -353,8 +361,10 @@ own colours."
 after the message, or NIL when it has none."
   (when (mail-headers mail)
     (format nil
-            "<div style=\"break-before:page;font:10pt sans-serif\"><p style=\"margin:0 0 3mm;font-weight:bold\">Internet headers</p>~
-                 <pre style=\"margin:0;font:8pt monospace;white-space:pre-wrap;overflow-wrap:anywhere\">~a</pre></div>"
+            "<div style=\"break-before:page;font:10pt sans-serif\">~
+                 <p style=\"margin:0 0 3mm;font-weight:bold\">Internet headers</p>~
+                 <pre style=\"margin:0;font:8pt monospace;white-space:pre-wrap;~
+                             overflow-wrap:anywhere\">~a</pre></div>"
             (xml-escape (string-right-trim '(#\Newline) (remove #\Return (mail-headers mail)))))))
 
 (defun mail-page-with-headers (html mail)
@@ -373,10 +383,10 @@ tag, else at its end."
 
 (defun mail-pages-pdf (fd directory)
   "The PDF *OUTLOOK-PAGE-PROGRAM* (WeasyPrint) draws, shut in, of the message's
-HTML open at the file descriptor (FD) (MAIL-PAGE-HTML), as a sealed file in memory (SANDBOX-PDF):
-laid out as on a screen, as its markup says, the pictures in DIRECTORY shown,
-your fonts used; nothing fetched, no script run. An error saying why when it
-draws none."
+HTML open at the file descriptor (FD) (MAIL-PAGE-HTML), as a sealed file in
+memory (SANDBOX-PDF): laid out as on a screen, as its markup says, the pictures
+in DIRECTORY shown, your fonts used; nothing fetched, no script run. An error
+saying why when it draws none."
   (sandbox-pdf *outlook-page-program*
                '("-q" "-p" "-m" "screen" "-e" "utf-8" "-u" "/tmp/parts/" "-s" "/tmp/page.css" "-" "-")
                fd
@@ -425,7 +435,8 @@ directory for you alone in the cache directory, with the pictures it shows."
                                                               (show-buffer shown)
                                                               (message "The message is closed")))
                                                :words (format nil
-                                                              "A message as it looks, drawn by ~a~[~:;, ~:*~:d thing~:p from the internet not fetched~]"
+                                                              "A message as it looks, drawn by ~a~
+                                                               ~[~:;, ~:*~:d thing~:p from the internet not fetched~]"
                                                               *outlook-page-program* fetching)
                                                :zoom :width)))
                (setf (buffer-name pages) (unique-buffer-name (format nil "~a (as it looks)" (buffer-name shown)))
@@ -465,7 +476,7 @@ Returns the buffer, or NIL for a file of another kind."
             (progn
               (file-view-refuses "~a opens as text: it has more than *outlook-largest-file* octets"
                                  (native-file-name native))
-                   nil)
+              nil)
             (file-view-show native
                             (remove-if-not #'live-buffer-p *mail-views*)
                             (lambda (b) (car (buffer-local b 'mail-source)))
@@ -473,9 +484,9 @@ Returns the buffer, or NIL for a file of another kind."
 
 (defun outlook-preview-text (fd path size kind octets)
   "The preview of an Outlook item, a saved mail or a mailbox (a function of
-*PREVIEW-TEXT-FUNCTIONS*, the file descriptor (FD), PATH, SIZE, KIND and OCTETS as it gives them):
-a message's headers, attachments and the start of its text; a mailbox's
-size and how to read it; NIL for any other file."
+*PREVIEW-TEXT-FUNCTIONS*, the file descriptor (FD), PATH, SIZE, KIND and OCTETS
+as it gives them): a message's headers, attachments and the start of its text; a
+mailbox's size and how to read it; NIL for any other file."
   (let* ((name (native-file-name path))
          (type (native-file-type name)))
     (cond ((eq kind :pst) (mailbox-preview-words name size))

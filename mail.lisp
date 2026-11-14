@@ -113,13 +113,15 @@ be read of it, in words."
 
 (defstruct (mail-attachment (:copier nil))
   "An attachment of a MAIL. NAME is as the item gives it. OCTETS is its
-contents, or MESSAGE, a MAIL, when it is a message itself. MIME is the
-Multipurpose Internet Mail Extensions (MIME) type the item says it is. HIDDEN
-is true when the item hides it from its reader. CONTENT-ID is set when the
-body shows it in place. WHY is what it is in words when it holds neither
-octets nor a message read (one too deep, an embedded object). COPY-PATH is the
-path of the private copy of its octets once one is made."
-  name octets message mime hidden content-id why copy-path)
+contents, or PART, the part of internet mail they are decoded from when
+asked (MAIL-ATTACHMENT-CONTENTS), or MESSAGE, a MAIL, when it is a message
+itself. MIME is the Multipurpose Internet Mail Extensions (MIME) type the
+item says it is. HIDDEN is true when the item hides it from its reader.
+CONTENT-ID is set when the body shows it in place. WHY is what it is in words
+when it holds neither octets nor a message read (one too deep, an embedded
+object). COPY-PATH is the path of the private copy of its octets once one is
+made."
+  name octets part message mime hidden content-id why copy-path)
 
 (setf (documentation 'mail-attachment-p 'function) "True when OBJECT is a MAIL-ATTACHMENT.")
 
@@ -133,9 +135,10 @@ path of the private copy of its octets once one is made."
     (setf (mail-details mail) (append (mail-details mail) (list (cons label (princ-to-string text)))))))
 
 (defun mail-person (name address &optional type)
-  "A sender or a recipient as written to be read, as NAME <ADDRESS>, the
-address with its TYPE when that is not Simple Mail Transfer Protocol (SMTP) (Exchange (EX): /O=...); either alone when
-the other is missing or the same; NIL for neither."
+  "A sender or a recipient as written to be read, as NAME <ADDRESS>, the address
+with its TYPE when that is not Simple Mail Transfer Protocol (SMTP) (Exchange
+\(EX): /O=...); either alone when the other is missing or the same; NIL for
+neither."
   (let ((name (and name (plusp (length (string-trim " " name))) (string-trim " " name)))
         (address (and address (plusp (length (string-trim " " address)))
                       (if (and type (plusp (length type)) (string-not-equal type "SMTP"))
@@ -160,8 +163,8 @@ CHARSET-TEXT takes it (1252 windows-1252, 65001 utf-8); NIL for none."
 ;;; Times
 
 (defun filetime-universal-time (filetime)
-  "The universal time of the file time (FILETIME), a count of 100-nanosecond steps since
-1601 as Windows keeps times, to the second; NIL for none (0) or one past the
-year 9999."
+  "The universal time of the file time (FILETIME), a count of 100-nanosecond
+steps since 1601 as Windows keeps times, to the second; NIL for none (0) or one
+past the year 9999."
   (and (integerp filetime) (< 0 filetime #x24C85A5ED1C04000)
        (- (floor filetime 10000000) 9435484800)))

@@ -12,10 +12,11 @@
 (in-package #:outlook)
 
 (defun msg-properties (cfb entry header)
-  "The properties of the storage ENTRY of the compound file (CFB), an item, a recipient or an
-attachment, whose fixed-size properties' stream has HEADER octets before
-them: a hash table from each property's number to (TYPE . VALUE), VALUE a
-number, a universal time, T or NIL, octets, a string, or (:storage . ENTRY)."
+  "The properties of the storage ENTRY of the compound file (CFB), an item, a
+recipient or an attachment, whose fixed-size properties' stream has HEADER
+octets before them: a hash table from each property's number to (TYPE . VALUE),
+VALUE a number, a universal time, T or NIL, octets, a string, or (:storage .
+ENTRY)."
   (let ((table (make-hash-table)) (children (cfb-children cfb entry)))
     (dolist (child children)
       (let ((name (cfb-entry-name child)))
@@ -52,13 +53,14 @@ number, a universal time, T or NIL, octets, a string, or (:storage . ENTRY)."
     table))
 
 (defun msg-value (properties id)
-  "The value of the property numbered identifier (ID) in PROPERTIES (MSG-PROPERTIES), or NIL."
+  "The value of the property numbered identifier (ID) in PROPERTIES
+\(MSG-PROPERTIES), or NIL."
   (cdr (gethash id properties)))
 
 (defun msg-string (properties id codepage)
-  "The property numbered identifier (ID) in PROPERTIES as text: a string as it is, one in
-the item's code page (CODEPAGE, a number) decoded, a number written; NIL for
-none or an empty one."
+  "The property numbered identifier (ID) in PROPERTIES as text: a string as it
+is, one in the item's code page (CODEPAGE, a number) decoded, a number written;
+NIL for none or an empty one."
   (let* ((entry (gethash id properties))
          (value (cond ((null entry) nil)
                       ((stringp (cdr entry)) (cdr entry))
@@ -69,8 +71,8 @@ none or an empty one."
     (and value (plusp (length value)) value)))
 
 (defun msg-children-named (cfb entry prefix)
-  "The storages in ENTRY of the compound file (CFB) whose names begin with PREFIX, in the order
-of their names."
+  "The storages in ENTRY of the compound file (CFB) whose names begin with
+PREFIX, in the order of their names."
   (sort (remove-if-not (lambda (child) (and (eq (cfb-entry-type child) :storage)
                                             (uiop:string-prefix-p prefix (cfb-entry-name child))))
                        (cfb-children cfb entry))
@@ -116,8 +118,9 @@ and the sender as the item gives it."
 
 (defun msg-recipients (mail cfb entry properties codepage)
   "Set whom MAIL is to, copied to and blind copied to, by the recipients'
-storages in the item ENTRY of the compound file (CFB), text in code page CODEPAGE; the item's
-own lists in PROPERTIES where it has no recipients of a kind."
+storages in the item ENTRY of the compound file (CFB), text in code page
+CODEPAGE; the item's own lists in PROPERTIES where it has no recipients of a
+kind."
   (let ((to '()) (cc '()) (bcc '()))
     (dolist (recipient (msg-children-named cfb entry "__recip_version1.0_#"))
       (let* ((p (msg-properties cfb recipient 8))
@@ -134,9 +137,9 @@ own lists in PROPERTIES where it has no recipients of a kind."
 
 (defun msg-body (mail properties codepage)
   "Set MAIL's body by the item's PROPERTIES, text in code page CODEPAGE: the
-plain text, else the HTML, else the compressed Rich Text Format (RTF), each read as text; its
-HTML, the item's own or the HTML its RTF keeps; and note which of them the
-item holds."
+plain text, else the HTML, else the compressed Rich Text Format (RTF), each read
+as text; its HTML, the item's own or the HTML its RTF keeps; and note which of
+them the item holds."
   (let* ((plain (msg-string properties #x1000 codepage))
          (html (gethash #x1013 properties))
          (rtf (msg-value properties #x1009))
@@ -146,7 +149,8 @@ item holds."
                  (cdr html)
                  (let* ((octets (cdr html))
                         (head (octets-latin-1 octets :end (min 2048 (length octets))))
-                        (charset (multiple-value-bind (m g) (cl-ppcre:scan-to-strings "(?i)charset\\s*=\\s*[\"']?([-\\w:.]+)" head)
+                        (charset (multiple-value-bind (m g)
+                                     (cl-ppcre:scan-to-strings "(?i)charset\\s*=\\s*[\"']?([-\\w:.]+)" head)
                                    (and m (aref g 0)))))
                    (charset-text octets (or charset (mail-codepage-charset (msg-value properties #x3FDE)) "utf-8"))))))
       (handler-case
@@ -160,8 +164,8 @@ item holds."
 
 (defun msg-attachments (mail cfb entry codepage depth)
   "Set MAIL's attachments by the attachments' storages in the item ENTRY of
-compound file (CFB), text in code page CODEPAGE, the item being DEPTH deep: each one's name,
-type and contents, an attached item read as one while DEPTH is below
+compound file (CFB), text in code page CODEPAGE, the item being DEPTH deep: each
+one's name, type and contents, an attached item read as one while DEPTH is below
 *OUTLOOK-NESTING-LIMIT*; one that cannot be read is noted."
   (dolist (storage (msg-children-named cfb entry "__attach_version1.0_#"))
     (handler-case

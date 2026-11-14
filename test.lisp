@@ -425,28 +425,33 @@ Epilogue.~%"
   "A saved mail for the tests: encoded words, quoted-printable, base64, parts within parts, an attached picture and message.")
 
 (define-test (outlook internet-mail)
-    (let* ((mail (outlook::eml-read (sb-ext:string-to-octets *eml-test-text* :external-format :utf-8)))
+  (let* ((mail (outlook::eml-read (sb-ext:string-to-octets *eml-test-text* :external-format :utf-8)))
          (text (mail-test-text mail)))
-      (is string= "Kārea Bird <karearea@example.org>" (outlook::mail-from mail))
-      (is string= "Café survey" (outlook::mail-subject mail))
-      (is = (encode-universal-time 0 15 7 6 10 2026 0) (outlook::mail-sent mail))
-      (is = (encode-universal-time 0 16 7 6 10 2026 0) (outlook::mail-received mail))
-      (is eq :plain (outlook::mail-body-kind mail))
-      (is string= (format nil "Café count: twelve kea.") (string-right-trim '(#\Newline) (outlook::mail-body mail)))
-      ;; its HTML kept beside the plain text shown, for drawing it as it looks
-      (is string= "<p>Café</p>" (funcall (outlook::mail-html mail)))
+    (is string= "Kārea Bird <karearea@example.org>" (outlook::mail-from mail))
+    (is string= "Café survey" (outlook::mail-subject mail))
+    (is = (encode-universal-time 0 15 7 6 10 2026 0) (outlook::mail-sent mail))
+    (is = (encode-universal-time 0 16 7 6 10 2026 0) (outlook::mail-received mail))
+    (is eq :plain (outlook::mail-body-kind mail))
+    (is string= (format nil "Café count: twelve kea.") (string-right-trim '(#\Newline) (outlook::mail-body mail)))
+    ;; its HTML kept beside the plain text shown, for drawing it as it looks
+    (is string= "<p>Café</p>" (funcall (outlook::mail-html mail)))
     (has text "X-Mailer: Feather 1.0")
     (has text "Content-Type: multipart/mixed")
-      (false (search "Preamble" (outlook::mail-body mail)))
-      (let ((attachments (outlook::mail-attachments mail)))
+    (false (search "Preamble" (outlook::mail-body mail)))
+    (let ((attachments (outlook::mail-attachments mail)))
       (is = 2 (length attachments))
-        (is string= "résumé.png" (outlook::mail-attachment-name (first attachments)))
-        (is equalp *png-test-octets* (outlook::mail-attachment-octets (first attachments)))
-        (is string= "Forwarded count" (outlook::mail-attachment-name (second attachments)))
-        (is string=
-            "Inner text."
-            (string-right-trim '(#\Newline)
-                               (outlook::mail-body (outlook::mail-attachment-message (second attachments)))))))
+      (is string= "résumé.png" (outlook::mail-attachment-name (first attachments)))
+      ;; an attachment is decoded only when its contents are asked for; its size is told before
+      (false (outlook::mail-attachment-octets (first attachments)))
+      (is = (length *png-test-octets*) (outlook::mail-attachment-size (first attachments)))
+      (false (nth-value 1 (outlook::mail-attachment-words (first attachments))))
+      (false (outlook::mail-attachment-octets (first attachments)))
+      (is equalp *png-test-octets* (outlook::mail-attachment-contents (first attachments)))
+      (is string= "Forwarded count" (outlook::mail-attachment-name (second attachments)))
+      (is string=
+          "Inner text."
+          (string-right-trim '(#\Newline)
+                             (outlook::mail-body (outlook::mail-attachment-message (second attachments)))))))
   ;; quoted-printable and base64 on their own
   (is string=
       "a=b é"
@@ -535,7 +540,8 @@ CELL-PIXELS has the frontend show pictures. Returns the frontend and the editor.
                                             :buffer (tuatara.buffer:find-buffer "*scratch*")))))
 
 (defun to-attachment (n)
-  "A step for OUTLOOK-SESSION: point to the Nth attachment's button of the message shown."
+  "A step for OUTLOOK-SESSION: point to the Nth attachment's button of the
+message shown."
   (lambda ()
     (let ((place (nth n (tuatara.buffer:buffer-local (tuatara.command:current-buffer) 'outlook::mail-attachment-places))))
       (when place (setf (tuatara.buffer:buffer-point (tuatara.command:current-buffer)) (first place))))))
@@ -1275,3 +1281,51 @@ and the subjects kept."
                (tuatara.command:lookup-key (tuatara:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys))
                "~a"
                keys)))
+
+(define-test (outlook nested-boundary-that-begins-as-the-outer)
+  ;; an inner boundary abc.1 is not the outer abc: the outer has two parts, the inner two of its own
+  (let* ((text (format nil "Content-Type: multipart/mixed; boundary=abc~%~%--abc~%~
+                            Content-Type: multipart/alternative; boundary=abc.1~%~%--abc.1~%~
+                            Content-Type: text/plain~%~%plain~%--abc.1~%Content-Type: text/html~%~%<p>html</p>~%~
+                            --abc.1--~%--abc  ~%Content-Type: text/plain; name=a.txt~%~%one~%--abc-- ~%"))
+         (top (outlook::mime-read (tuatara.text:string-octets text))))
+    (is = 2 (length (outlook::mime-part-parts top)))
+    (is equal '("multipart/alternative" "text/plain")
+        (mapcar #'outlook::mime-part-type (outlook::mime-part-parts top)))
+    (is = 2 (length (outlook::mime-part-parts (first (outlook::mime-part-parts top)))))))
+
+(define-test (outlook short-chain-costs-nothing-per-sector)
+  ;; a chain of one sector costs the same in a file of a million sectors as in one of ten million
+  (let ((table (make-array 1 :initial-element #xFFFFFFFE)))
+    (flet ((consed (limit)
+             (let ((before (sb-ext:get-bytes-consed)))
+               (outlook::cfb-chain 0 table limit)
+               (- (sb-ext:get-bytes-consed) before))))
+      (consed 10)
+      (true (< (consed 1000000) 4096))
+      (true (< (consed 10000000) 4096)))))
+
+(define-test (outlook export-name-fits-in-octets)
+  ;; a long Cyrillic or Chinese subject is cut to the 255 octets a name may take, its ending kept
+  (dolist (letter (list (code-char #x416) (code-char #x4E2D)))
+    (let ((name (outlook::mailbox-export-name
+                 (outlook::make-mailbox-item :path "/m/Inbox/7" :message t
+                                             :sent (encode-universal-time 0 30 10 3 11 2026 0)
+                                             :subject (make-string 150 :initial-element letter))
+                 "eml")))
+      (true (<= (length (tuatara.text:string-octets name)) 255))
+      (true (uiop:string-suffix-p name (format nil "~c.eml" letter))))))
+
+(define-test (outlook html-text-costs-little-per-character)
+  ;; the text of a page costs about the same per character for a page ten times longer, and little
+  (flet ((per-character (count)
+           (let* ((html (with-output-to-string (out)
+                          (loop repeat count do (write-string "<b>Kea</b>   and <i>tui</i>&amp; ruru<br>" out))))
+                  (before (sb-ext:get-bytes-consed)))
+             (outlook::html-text html)
+             (/ (- (sb-ext:get-bytes-consed) before) (length html)))))
+    (per-character 100)
+    (let ((small (per-character 2000)) (large (per-character 20000)))
+      (format t "~&html-text: ~,1f and ~,1f octets per character~%" small large)
+      (true (< small 40))
+      (true (< large 40)))))
