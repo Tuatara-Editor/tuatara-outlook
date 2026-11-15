@@ -12,19 +12,19 @@
 
 (in-package #:outlook)
 
-(define-major-mode mail-view-mode special-mode
+(define-major-mode outlook-view-mode special-mode
   "A message read, read only: an Outlook item (.msg), a saved mail (.eml) or a
 message of a mailbox. It shows who it is from and to, its dates and subject,
 its attachments, its text (its plain text, else its HTML or Rich Text Format
 (RTF) read as text), what else it says of itself, and its internet headers
 whole. Nothing in it is run, and nothing it points to fetched.
-\\<mail-view-mode>\\[push-button] on an attachment opens it here, from a copy
+\\<outlook-view-mode>\\[push-button] on an attachment opens it here, from a copy
 only you can read: a message as a message, a PDF, an Office document or a
 picture as rimu shows it, drawn shut in the sandbox, anything else safely.
-\\[mail-open-attachment-outside] opens that copy in the desktop's program,
+\\[outlook-open-attachment-outside] opens that copy in the desktop's program,
 after asking. \\[forward-button] and \\[backward-button] go from one
-attachment to the next. \\[mail-view-pages] shows it as it looks, its HTML
-drawn as pages, nothing fetched. \\[mail-view-file-text] shows the file of the
+attachment to the next. \\[outlook-view-pages] shows it as it looks, its HTML
+drawn as pages, nothing fetched. \\[outlook-view-file-text] shows the file of the
 message itself, as text. \\[quit-window] closes it, back to the list it was
 opened from."
   :lighter "Mail" :interactive nil)
@@ -182,7 +182,7 @@ point at its start."
   "Show MAIL, a message read already (one attached to another), in a buffer
 of its own called NAME (made unique)."
   (let ((buffer (make-buffer (unique-buffer-name (or (one-line name) "(no subject)")))))
-    (set-major-mode buffer 'mail-view-mode)
+    (set-major-mode buffer 'outlook-view-mode)
     (setf (buffer-read-only-p buffer) t)
     (mail-render buffer mail)
     (show-buffer buffer)
@@ -228,13 +228,13 @@ left out."
   "The buffer showing the message in the file at NATIVE (an Outlook item or a
 saved mail), read in the background when there is none yet; called NAME, or
 by the file's name; SAFE when the file is to be shown as text safely
-\(\\[mail-view-file-text]). With PREVIEW, one of its own for the preview beside
+\(\\[outlook-view-file-text]). With PREVIEW, one of its own for the preview beside
 a mailbox's list (*MAIL-PREVIEWS*), its name saying so. EARLIER, the earlier
 messages of its conversation, each (PATH . WORDS), are read with it for
 their attachments (MAIL-READ-EARLIER)."
   (let ((name (format nil "~a~:[~; (preview)~]" (or (one-line name) (native-file-name native)) preview)))
     (reading-buffer (if preview '*mail-previews* '*mail-views*) (lambda (b) (car (buffer-local b 'mail-source))) native
-                    name (format nil "Reading ~a...~%" name) 'mail-view-mode
+                    name (format nil "Reading ~a...~%" name) 'outlook-view-mode
                     (lambda (buffer)
                       (setf (buffer-local buffer 'mail-source) (cons native safe))
                       (start-job-thread (make-mail-read-job buffer native earlier)
@@ -281,7 +281,7 @@ where you keep your files."
                           *mail-attachment-views*))
                    (t (visit-path copy :safe t)))
              (message "~a opened from a copy only you can read; ~
-                       \\<mail-view-mode>\\[mail-open-attachment-outside] in the message opens it outside"
+                       \\<outlook-view-mode>\\[outlook-open-attachment-outside] in the message opens it outside"
                       name)))
           (t (message "~a: ~a" name (or (mail-attachment-why attachment) "nothing to open"))))))
 
@@ -291,16 +291,17 @@ where you keep your files."
     (third (find-if (lambda (place) (and (<= (first place) point) (< point (second place))))
                     (buffer-local (current-buffer) 'mail-attachment-places)))))
 
-(define-command mail-open-attachment-outside ()
+(define-command outlook-open-attachment-outside ()
   "Open the attachment at point in the desktop's own program for its kind,
 after asking: a copy of it only you can read, never the message, and only an
 attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a
 sound, a video, an Office document, by its contents, with a name that
 agrees; see *open-externally-kinds*). That program is not shut in the sandbox."
   (let ((attachment (mail-attachment-at-point)))
-    (cond ((null attachment) (message "No attachment at point: \\<mail-view-mode>\\[forward-button] goes to the next"))
+    (cond ((null attachment) (message (concatenate 'string "No attachment at point: "
+                                                      "\\<outlook-view-mode>\\[forward-button] goes to the next")))
           ((mail-attachment-message attachment)
-           (message "~a is a message: \\<mail-view-mode>\\[push-button] opens it here"
+           (message "~a is a message: \\<outlook-view-mode>\\[push-button] opens it here"
                     (one-line (mail-attachment-name attachment))))
           ((null (mail-attachment-has-contents-p attachment))
            (message "~a: ~a"
@@ -308,7 +309,7 @@ agrees; see *open-externally-kinds*). That program is not shut in the sandbox."
                     (or (mail-attachment-why attachment) "nothing to open")))
           (t (open-externally-file (mail-attachment-copy attachment))))))
 
-(define-command mail-view-file-text ()
+(define-command outlook-view-file-text ()
   "Show the file of the message shown as its text, the file itself: opened
 safely when the message was (one of a mailbox, an attachment), else as any
 file is opened, as text. A message attached to another has no file of its
@@ -471,7 +472,7 @@ directory for you alone in the cache directory, with the pictures it shows."
                      (buffer-local shown 'mail-pages) pages)
                (show-buffer pages))))))
 
-(define-command mail-view-pages ()
+(define-command outlook-view-pages ()
   "Show the message shown as it looks, as pages: its HTML laid out as a
 screen shows it, drawn by *outlook-page-program* (WeasyPrint) shut in the
 sandbox, the pictures it holds in their places. Nothing is fetched from the

@@ -566,7 +566,7 @@ message shown."
         (declare (ignore f))
         (let ((buffer (session-buffer editor)))
           (is string= "survey.msg" (tuatara.buffer:buffer-name buffer))
-            (true (tuatara.command::buffer-mode-named-p buffer 'outlook::mail-view-mode))
+            (true (tuatara.command::buffer-mode-named-p buffer 'outlook::outlook-view-mode))
           (true (tuatara.buffer:buffer-local buffer :read-only))
           (has (session-text editor) "Kea survey results")
           (tuatara.buffer:kill-buffer buffer)))
@@ -596,13 +596,13 @@ message shown."
       (multiple-value-bind (f editor) (outlook-session path (list (to-attachment 1) "RET"))
         (declare (ignore f))
         (has (session-text editor) "Inner body 1")
-          (true (tuatara.command::buffer-mode-named-p (session-buffer editor) 'outlook::mail-view-mode)))
+          (true (tuatara.command::buffer-mode-named-p (session-buffer editor) 'outlook::outlook-view-mode)))
       ;; T: the file itself, as text
       (multiple-value-bind (f editor) (outlook-session path (list "T"))
         (declare (ignore f))
         (is equal (tuatara.io:native path) (tuatara.io:native (tuatara.buffer:buffer-file (session-buffer editor)))))
       (dolist (b (copy-list tuatara.buffer:*buffers*))
-          (when (tuatara.command::buffer-mode-named-p b 'outlook::mail-view-mode) (tuatara.buffer:kill-buffer b)))
+          (when (tuatara.command::buffer-mode-named-p b 'outlook::outlook-view-mode) (tuatara.buffer:kill-buffer b)))
       ;; the item itself never touched
       (is equalp before (tuatara.io:file-octets path))
       (is = (tuatara.io:stamp-mtime stamp) (tuatara.io:stamp-mtime (tuatara.io:path-stamp path)))))
@@ -626,7 +626,7 @@ message shown."
         (declare (ignore f))
         (has (session-text editor) "Content-Transfer-Encoding: quoted-printable")
         (dolist (b (copy-list tuatara.buffer:*buffers*))
-            (when (or (tuatara.command::buffer-mode-named-p b 'outlook::mail-view-mode) (eq b (session-buffer editor)))
+            (when (or (tuatara.command::buffer-mode-named-p b 'outlook::outlook-view-mode) (eq b (session-buffer editor)))
             (tuatara.buffer:kill-buffer b)))))))
 
 ;;; As it looks
@@ -725,7 +725,7 @@ WeasyPrint installed in it and a program drawing PDFs."
                 ;; fitted to the window's width, to be read
                 (is eq :width (tuatara.defaults::pdf-view-zoom view))
                 (has (tuatara.defaults::pdf-view-words view) "1 thing from the internet not fetched"))
-              (true (tuatara.command::buffer-mode-named-p back 'outlook::mail-view-mode))
+              (true (tuatara.command::buffer-mode-named-p back 'outlook::outlook-view-mode))
               ;; its HTML written for you alone, beside nothing of yours
               (let ((written (tuatara.defaults::pdf-view-path (tuatara.defaults::pdf-view-of pages))))
                 (true (search "/mail-pages/" written))
@@ -744,7 +744,7 @@ WeasyPrint installed in it and a program drawing PDFs."
 
 (define-test (outlook mailbox-keys-as-every-list)
   ;; a mailbox opens, steps and marks with the keys of every list, by Tuatara's own commands
-  (let ((map (tuatara.modes:mode-keymap 'outlook::mailbox-mode)))
+  (let ((map (tuatara.modes:mode-keymap 'outlook::outlook-mailbox-mode)))
     (flet ((bound (keys) (tuatara.command:lookup-key map (tuatara.frontend:parse-key-sequence keys))))
       (is eq 'tuatara.defaults::list-visit (bound "RET"))
       (is eq 'tuatara.defaults::list-visit (bound "l"))
@@ -777,7 +777,7 @@ WeasyPrint installed in it and a program drawing PDFs."
           (is equal '("First" "Café survey" "Tenth") (mapcar #'outlook::mailbox-item-subject (cdr (second folders))))
           (is equal '(0 2 0) (mapcar #'outlook::mailbox-item-attachments (cdr (second folders))))
           (is string= "1.vcf" (outlook::mailbox-item-subject (first (cdr (first folders))))))
-        (tuatara.modes:set-major-mode buffer 'outlook::mailbox-mode)
+        (tuatara.modes:set-major-mode buffer 'outlook::outlook-mailbox-mode)
         (outlook::mailbox-render buffer job)
       (let ((text (tuatara.buffer:buffer-string buffer)))
         (has text "Outlook mailbox archive.pst")
@@ -838,7 +838,7 @@ and the job."
     (setf (outlook::mailbox-job-sum job) sum)
     (let ((tuatara-user:*outlook-search-text-limit* search-limit))
       (outlook::mailbox-list job))
-    (tuatara.modes:set-major-mode buffer 'outlook::mailbox-mode)
+    (tuatara.modes:set-major-mode buffer 'outlook::outlook-mailbox-mode)
     (setf (tuatara.buffer:buffer-local buffer 'outlook::mailbox-path) pst)
     (outlook::mailbox-render buffer job)
     (values buffer job)))
@@ -1458,7 +1458,7 @@ picture; and a message of neither."
           (true (search "Inbox/1.msg" (outlook::mailbox-item-msg first)))
           (false (outlook::mailbox-item-msg second))
           (is = 3 (reduce #'+ (outlook::mailbox-job-folders job) :key (lambda (f) (length (cdr f)))))
-          (tuatara.modes:set-major-mode list 'outlook::mailbox-mode)
+          (tuatara.modes:set-major-mode list 'outlook::outlook-mailbox-mode)
           (setf (tuatara.buffer:buffer-local list 'outlook::mailbox-path) pst)
           (outlook::mailbox-render list job)
           (let ((shown '()) (opened nil) (moved nil) (back nil) (marked nil) (stayed nil)
@@ -1485,9 +1485,9 @@ picture; and a message of neither."
             ;; the line over the list says the keys, those of a message opened from it too
             ;; moves by word and selections but V's do nothing in the list
             (dolist (keys '("w" "b" "W" "B" "v" "%"))
-              (is eq :undefined (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::mailbox-mode)
+              (is eq :undefined (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::outlook-mailbox-mode)
                                                             (tuatara.frontend:parse-key-sequence keys))))
-            (false (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::mailbox-mode)
+            (false (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::outlook-mailbox-mode)
                                                (tuatara.frontend:parse-key-sequence "V")))
             (is eq list stayed)
             (has (tuatara.buffer:buffer-string list)
@@ -1537,7 +1537,7 @@ picture; and a message of neither."
           (destructuring-bind (second first) shown
             (is string= "Re: a/b? (preview)" (first first))
             (has (second first) "one")
-            (is eq 'outlook::mail-view-mode (third first))
+            (is eq 'outlook::outlook-view-mode (third first))
             (is string= "Second (preview)" (first second))
             (has (second second) "two"))
           (false after)
@@ -1748,11 +1748,11 @@ picture; and a message of neither."
 
 (define-test (outlook outlook-keys-under-c-c-o)
   ;; its commands under a prefix of its own, C-c o, as every package's are, beside its lists' own letters
-  (loop for (mode keys command) in '((outlook::mail-view-mode "C-c o o" outlook::mail-open-attachment-outside)
-                                     (outlook::mail-view-mode "C-c o t" outlook::mail-view-file-text)
-                                     (outlook::mail-view-mode "C-c o p" outlook::mail-view-pages)
-                                     (outlook::mailbox-mode "C-c o h" outlook::mailbox-back-to-directory)
-                                     (outlook::mailbox-mode "C-c o c" outlook::mailbox-export))
+  (loop for (mode keys command) in '((outlook::outlook-view-mode "C-c o o" outlook::outlook-open-attachment-outside)
+                                     (outlook::outlook-view-mode "C-c o t" outlook::outlook-view-file-text)
+                                     (outlook::outlook-view-mode "C-c o p" outlook::outlook-view-pages)
+                                     (outlook::outlook-mailbox-mode "C-c o h" outlook::outlook-back-to-directory)
+                                     (outlook::outlook-mailbox-mode "C-c o c" outlook::outlook-export))
         do (is eq
                command
                (tuatara.command:lookup-key (tuatara:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys))
@@ -2220,7 +2220,7 @@ buffer, rendered, and its job."
   (let* ((list (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "kea.pst (mailbox)")))
          (job (outlook::make-mailbox-job list pst (namestring (ensure-directories-exist directory)))))
     (outlook::mailbox-work job)
-    (tuatara.modes:set-major-mode list 'outlook::mailbox-mode)
+    (tuatara.modes:set-major-mode list 'outlook::outlook-mailbox-mode)
     (setf (tuatara.buffer:buffer-local list 'outlook::mailbox-path) pst)
     (outlook::mailbox-render list job)
     (values list job)))
@@ -2822,3 +2822,19 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
         (manager-test-keys manager)
         (false (member journal outlook::*mailbox-labels-forgetting* :test #'string=))
         (tuatara.buffer:kill-buffer manager)))))
+
+(define-test (outlook commands-and-modes-carry-the-package-name)
+  (flet ((bound (mode keys)
+           (tuatara.command:lookup-key (tuatara.modes:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys))))
+    (is eq 'outlook::outlook-label (bound 'outlook::outlook-mailbox-mode "+"))
+    (is eq 'outlook::outlook-view-pages (bound 'outlook::outlook-view-mode "P")))
+  (dolist (name '("OUTLOOK-BACK-TO-DIRECTORY" "OUTLOOK-EXPORT"
+                  "OUTLOOK-EXPORT-EML" "OUTLOOK-EXPORT-MSG" "OUTLOOK-EXPORT-MBOX" "OUTLOOK-EXPORT-PST"
+                  "OUTLOOK-LABEL" "OUTLOOK-UNLABEL" "OUTLOOK-FILTER-LABELS" "OUTLOOK-OPEN-ATTACHMENT-OUTSIDE"
+                  "OUTLOOK-VIEW-FILE-TEXT" "OUTLOOK-VIEW-PAGES"))
+    (true (fboundp (find-symbol name :outlook))))
+  (dolist (name '("MAILBOX-BACK-TO-DIRECTORY" "MAILBOX-EXPORT" "MAILBOX-EXPORT-EML"
+                  "MAILBOX-EXPORT-MSG" "MAILBOX-EXPORT-MBOX" "MAILBOX-EXPORT-PST" "MAILBOX-LABEL" "MAILBOX-UNLABEL"
+                  "MAILBOX-FILTER-LABELS" "MAIL-OPEN-ATTACHMENT-OUTSIDE" "MAIL-VIEW-FILE-TEXT" "MAIL-VIEW-PAGES"))
+    (let ((symbol (find-symbol name :outlook)))
+      (false (and symbol (fboundp symbol))))))

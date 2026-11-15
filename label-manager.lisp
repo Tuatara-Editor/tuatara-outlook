@@ -272,7 +272,7 @@ each label, their marks kept. A job under way is said in the heading."
      :refill (lambda (list) (mailbox-labels-render list :keep)))))
 
 (define-command outlook-label-manager ()
-  "List the labels kept for mailboxes (\\[mailbox-label]), a section for each
+  "List the labels kept for mailboxes (\\[outlook-label]), a section for each
 mailbox with the labels on its messages, to rename, delete, forget, copy out
 and read back; the heading says where they are kept and how much room they
 take. \\<outlook-label-manager-mode>\\[outlook-label-open] opens the mailbox

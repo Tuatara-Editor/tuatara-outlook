@@ -140,7 +140,7 @@ buffers with it, when the cursor leaves the list and the preview.
 marked, the one on the line) into a directory you choose, each a file of its
 own: `e` as saved mail (`.eml`, internet mail as readpst wrote it), `m` as
 Outlook items (`.msg`, written by readpst from the mailbox itself, beside
-each `.eml`); `M-x mailbox-export-eml` and `M-x mailbox-export-msg` do the
+each `.eml`); `M-x outlook-export-eml` and `M-x outlook-export-msg` do the
 same without the menu. A
 copy is named by when the message was sent and its subject,
 `2026-04-30 0915 kea survey.msg`; a name already taken gets `(2)`, `(3)`
@@ -156,7 +156,7 @@ not: `C a e` copies out as saved mail all that a search, a label or a field
 filter left.
 
 `b` collects the messages into one mbox file, the format most mail programs
-import (`M-x mailbox-export-mbox` does the same without the menu): each
+import (`M-x outlook-export-mbox` does the same without the menu): each
 message as readpst wrote it, after a `From ` line with its sender's address
 and when it was sent, a line of a message beginning with `From ` (after any
 number of `>`) written with one `>` more, as the mboxrd form does, so that
@@ -166,7 +166,7 @@ in the background; a copy stopped half-way is deleted. Contacts and
 appointments are left out.
 
 `p` writes the messages into a new Outlook mailbox (`.pst`), in the folders
-they are listed in, below its top folder (`M-x mailbox-export-pst` does the
+they are listed in, below its top folder (`M-x outlook-export-pst` does the
 same without the menu). It asks for the file; `.pst` is added to a name
 without it, a name taken gets `(2)`, `(3)` and so on, and nothing is
 overwritten. It is written in the background, a file stopped half-way

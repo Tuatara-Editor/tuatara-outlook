@@ -13,27 +13,30 @@
   "Have messages and mailboxes visited shown as such (MAIL-VISIT,
 MAILBOX-VISIT) and previewed in rimu, their keys bound, and check-health told
 what reads them."
-  (buttons-in-mode 'mail-view-mode "a message (an Outlook item, a saved mail, a message of a mailbox)")
-  (define-key (mode-keymap 'mail-view-mode) "O" 'mail-open-attachment-outside)
-  (define-key (mode-keymap 'mail-view-mode) "T" 'mail-view-file-text)
-  (define-key (mode-keymap 'mail-view-mode) "P" 'mail-view-pages)
+  (buttons-in-mode 'outlook-view-mode "a message (an Outlook item, a saved mail, a message of a mailbox)")
+  (define-key (mode-keymap 'outlook-view-mode) "O" 'outlook-open-attachment-outside)
+  (define-key (mode-keymap 'outlook-view-mode) "T" 'outlook-view-file-text)
+  (define-key (mode-keymap 'outlook-view-mode) "P" 'outlook-view-pages)
   ;; under C-c o too, as every package's commands are under a prefix of its own
-  (define-keys (mode-keymap 'mail-view-mode) '(("C-c o o" mail-open-attachment-outside) ("C-c o t" mail-view-file-text)
-                                               ("C-c o p" mail-view-pages)))
-  (label-keys (mode-keymap 'mail-view-mode) '(("C-c o" "outlook")))
-  (commands-for-mode 'mail-view-mode "a message (an Outlook item, a saved mail, a message of a mailbox)"
-                     'mail-open-attachment-outside 'mail-view-file-text 'mail-view-pages)
-  (entry-list-keys 'mailbox-mode "the list of a mailbox")
-  (define-keys (mode-keymap 'mailbox-mode) '(("h" mailbox-back-to-directory) ("C" mailbox-export) ("d" :undefined)
-                                             ("+" mailbox-label) ("-" mailbox-unlabel)
-                                             ("L" mailbox-filter-labels) ("M" outlook-label-manager)))
-  (define-keys (mode-keymap 'mailbox-mode) '(("C-c o h" mailbox-back-to-directory) ("C-c o c" mailbox-export)
-                                             ("C-c o +" mailbox-label) ("C-c o -" mailbox-unlabel)
-                                             ("C-c o l" mailbox-filter-labels) ("C-c o m" outlook-label-manager)))
-  (label-keys (mode-keymap 'mailbox-mode) '(("C-c o" "outlook")))
-  (commands-for-mode 'mailbox-mode "the list of a mailbox" 'mailbox-export 'mailbox-export-eml 'mailbox-export-msg
-                     'mailbox-export-mbox 'mailbox-export-pst
-                     'mailbox-back-to-directory 'mailbox-label 'mailbox-unlabel 'mailbox-filter-labels
+  (define-keys (mode-keymap 'outlook-view-mode) '(("C-c o o" outlook-open-attachment-outside)
+                                                  ("C-c o t" outlook-view-file-text)
+                                                  ("C-c o p" outlook-view-pages)))
+  (label-keys (mode-keymap 'outlook-view-mode) '(("C-c o" "outlook")))
+  (commands-for-mode 'outlook-view-mode "a message (an Outlook item, a saved mail, a message of a mailbox)"
+                     'outlook-open-attachment-outside 'outlook-view-file-text 'outlook-view-pages)
+  (entry-list-keys 'outlook-mailbox-mode "the list of a mailbox")
+  (define-keys (mode-keymap 'outlook-mailbox-mode)
+               '(("h" outlook-back-to-directory) ("C" outlook-export) ("d" :undefined)
+                 ("+" outlook-label) ("-" outlook-unlabel)
+                 ("L" outlook-filter-labels) ("M" outlook-label-manager)))
+  (define-keys (mode-keymap 'outlook-mailbox-mode)
+               '(("C-c o h" outlook-back-to-directory) ("C-c o c" outlook-export)
+                 ("C-c o +" outlook-label) ("C-c o -" outlook-unlabel)
+                 ("C-c o l" outlook-filter-labels) ("C-c o m" outlook-label-manager)))
+  (label-keys (mode-keymap 'outlook-mailbox-mode) '(("C-c o" "outlook")))
+  (commands-for-mode 'outlook-mailbox-mode "the list of a mailbox" 'outlook-export 'outlook-export-eml
+                     'outlook-export-msg 'outlook-export-mbox 'outlook-export-pst
+                     'outlook-back-to-directory 'outlook-label 'outlook-unlabel 'outlook-filter-labels
                      'outlook-label-manager)
   (define-keys (mode-keymap 'outlook-label-manager-mode)
                '(("RET" outlook-label-open) ("l" outlook-label-open) ("C-f" outlook-label-open) ("h" quit-window)
@@ -46,7 +49,7 @@ what reads them."
   (commands-for-mode 'outlook-label-manager-mode "the label manager (\\[outlook-label-manager])"
                      'outlook-label-open 'outlook-label-rename 'outlook-labels-forget 'outlook-labels-export
                      'outlook-labels-import 'list-next-entry 'list-previous-entry)
-  (entry-preview-keys 'mailbox-mode "the list of a mailbox")
+  (entry-preview-keys 'outlook-mailbox-mode "the list of a mailbox")
   (pushnew 'mail-visit *file-views*)
   (pushnew 'mailbox-visit *file-views*)
   (pushnew 'outlook-preview-text *preview-text-functions*)

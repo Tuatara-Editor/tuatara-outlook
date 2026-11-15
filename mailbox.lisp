@@ -21,12 +21,12 @@
 
 (in-package #:outlook)
 
-(define-major-mode mailbox-mode sectioned-list-mode
+(define-major-mode outlook-mailbox-mode sectioned-list-mode
   "An Outlook mailbox (personal storage table, .pst, or offline storage table,
 .ost) read by readpst, shut in the sandbox, with its folders, and under each
 its messages, a line each: when it was sent, whom from, how many attachments
 it has and its subject.
-\\<mailbox-mode>\\[list-visit] or \\`l' opens the message on the line, read
+\\<outlook-mailbox-mode>\\[list-visit] or \\`l' opens the message on the line, read
 only, the matches of the list's filters lit in it. \\`P' there shows it as it
 looks and \\`q' comes back. \\[list-visit-other] opens it in another window,
 the list staying. \\[list-next-entry] and \\[list-previous-entry] go to the
@@ -36,15 +36,15 @@ unfolds them all.
 \\[list-mark-entry] marks the message on the line (>), \\[list-unmark-entry]
 takes its mark off, \\[list-unmark-all] takes every mark off, and
 \\[list-toggle-marks] marks those not marked and unmarks those marked.
-\\[mailbox-export] copies those marked, or the one on the line, out into a
+\\[outlook-export] copies those marked, or the one on the line, out into a
 directory, as saved mail (.eml) or as Outlook items (.msg), from a menu.
-\[mailbox-label] puts labels of your own on them, shown on their lines and
-kept for the mailbox between sessions, and \[mailbox-unlabel] takes them off;
-\[mailbox-filter-labels] narrows the list to the messages carrying a label.
+\[outlook-label] puts labels of your own on them, shown on their lines and
+kept for the mailbox between sessions, and \[outlook-unlabel] takes them off;
+\[outlook-filter-labels] narrows the list to the messages carrying a label.
 The message on the line is shown beside the list as the cursor moves, read as
 any message is (*OUTLOOK-PREVIEW*); \\[list-toggle-preview] turns that off and
 on.
-\\[quit-window] closes the list, \\[mailbox-back-to-directory] too, after asking,
+\\[quit-window] closes the list, \\[outlook-back-to-directory] too, after asking,
 going back to its directory in rimu; the messages readpst wrote for it are
 deleted with it.
 \\[regex-search-forward] and \\[regex-search-backward] narrow the list as a regular
@@ -52,7 +52,7 @@ expression is typed to the messages whose headers, any of them, or contents
 match: the text of each text part, decoded, and the names of the
 attachments; \\<search>\\[search-exit] keeps the pattern as a filter, the next search
 narrowing what it left, and \\[search-abort] lets the one typed go.
-\\<mailbox-mode>\\[search-filter-show-records] narrows the list by one field of
+\\<outlook-mailbox-mode>\\[search-filter-show-records] narrows the list by one field of
 its messages, asked for first: a header (to, received, x-mailer, any the
 mailbox has), an attachment's name, a label, or what the Outlook item says of
 itself (outlook importance); \\[search-filter-hide-records] hides those
@@ -522,12 +522,13 @@ was. Its searches narrow it, matching each message's headers and contents
                               (filled-words
                                (substitute-command-keys
                                 (format nil
-                                        "\\<mailbox-mode>\\`RET' or \\`l' opens the item on the line, a folder's ~
-                                         line folds; \\<mail-view-mode>\\[mail-view-pages] in a message shows it as ~
+                                        "\\<outlook-mailbox-mode>\\`RET' or \\`l' opens the item on the line, ~
+                                         a folder's line folds; ~
+                                         \\<outlook-view-mode>\\[outlook-view-pages] in a message shows it as ~
                                          it looks, \\[quit-window] comes back; ~
-                                         \\<mailbox-mode>\\[regex-search-forward] narrows the list to the items ~
-                                         whose headers or contents match; \\[list-mark-entry] marks, ~
-                                         \\[mailbox-export] copies out."))))
+                                         \\<outlook-mailbox-mode>\\[regex-search-forward] narrows the list to ~
+                                         the items whose headers or contents match; \\[list-mark-entry] marks, ~
+                                         \\[outlook-export] copies out."))))
                       (format nil "~a~%" (filled-words (format nil "~a." (mailbox-labels-place-words))))))
          (partial (loop for (nil . items) in folders sum (count-if-not #'mailbox-item-whole items)))
          (notes (loop for note in (append (reverse (mailbox-job-notes job))
@@ -587,7 +588,7 @@ closed. Its searches narrow it once it is listed (MAILBOX-RENDER)."
     (reading-buffer '*mailboxes* (lambda (b) (buffer-local b 'mailbox-path)) native
                     (format nil "~a (mailbox)" name)
                     (format nil "Reading ~a with readpst, shut in the sandbox...~%" name)
-                    'mailbox-mode
+                    'outlook-mailbox-mode
                     (lambda (buffer)
                       (setf (buffer-local buffer 'mailbox-path) native
                             (list-preview-p buffer) *outlook-preview*)
@@ -616,7 +617,7 @@ saying how to get them. Returns the buffer, or NIL for a file of another kind."
       (file-view-show native (remove-if-not #'live-buffer-p *mailboxes*) (lambda (b) (buffer-local b 'mailbox-path))
                       (lambda () (mailbox-buffer native)) show))))
 
-(define-command mailbox-back-to-directory ()
+(define-command outlook-back-to-directory ()
   "Close the list of the mailbox, after asking, and list its directory with rimu,
 point on the mailbox: the messages readpst wrote for it are deleted, as
 when it is closed any other way."
@@ -626,12 +627,12 @@ when it is closed any other way."
       (rimu-show-file path)
       (kill-buffer buffer))))
 
-(defmethod list-entry-noun ((mode mailbox-mode))
+(defmethod list-entry-noun ((mode outlook-mailbox-mode))
   "A message of a mailbox, as the list's words for what is marked and acted
 on call it: 3 messages marked."
   "message")
 
-(defmethod visit-entry ((mode mailbox-mode) list item other)
+(defmethod visit-entry ((mode outlook-mailbox-mode) list item other)
   "Open ITEM of the mailbox listed in LIST: a message as one, read only, the
 matches of the filters narrowing the list lit in it, and at its end the
 attachments of the earlier messages of its conversation the mailbox holds
@@ -651,7 +652,7 @@ with OTHER in another window, the list staying where it is."
           (light-search-filters list view))
         (visit-path (mailbox-item-path item) :safe t :show show))))
 
-(defmethod preview-entry ((mode mailbox-mode) list item)
+(defmethod preview-entry ((mode outlook-mailbox-mode) list item)
   "ITEM of the mailbox listed in LIST, beside the list: a message read in the
 background into a buffer of its own for the preview, as a message is shown,
 nothing in it run and nothing it points to fetched, the matches of the
@@ -662,10 +663,11 @@ list's filters lit in it; a contact or an appointment said to be one."
         (values view t))
       (values (side-preview-note (native-file-name (mailbox-item-path item))
                                  (substitute-command-keys
-                                  "A contact or an appointment: \\<mailbox-mode>\\[list-visit] opens it as its text."))
+                                  (concatenate 'string "A contact or an appointment: "
+                                               "\\<outlook-mailbox-mode>\\[list-visit] opens it as its text.")))
               t)))
 
-(defmethod entry-preview-width ((mode mailbox-mode) list)
+(defmethod entry-preview-width ((mode outlook-mailbox-mode) list)
   "The columns of a mailbox's list, a subject's first words among them."
   (declare (ignore list))
   80)
@@ -1120,9 +1122,9 @@ TYPE, \"eml\" or \"msg\" (MAILBOX-EXPORT-WORK, in the background)."
                               :name "tuatara mailbox export")
             (message "Copying ~a out into ~a as .~a..." words directory type))))))
 
-(define-command mailbox-export-eml ()
+(define-command outlook-export-eml ()
   "Copy the messages marked in the mailbox's list
-\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
+\(\\<outlook-mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
 current line, out into a directory asked for, as saved mail (.eml). A directory
 not there yet is made. Each is a new file named by when it was sent and its
 subject, (2) and so on added where that name is taken; nothing there is
@@ -1130,16 +1132,16 @@ overwritten. They are copied in the background, as readpst wrote them; the
 mailbox itself is not touched. A contact or an appointment is copied as it is."
   (mailbox-export-as "eml"))
 
-(define-command mailbox-export-msg ()
+(define-command outlook-export-msg ()
   "Copy the messages marked in the mailbox's list
-\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
+\(\\<outlook-mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
 current line, out into a directory asked for, as Outlook items (.msg), as
-\\[mailbox-export-eml] copies them as saved mail."
+\\[outlook-export-eml] copies them as saved mail."
   (mailbox-export-as "msg"))
 
-(define-command mailbox-export-mbox ()
+(define-command outlook-export-mbox ()
   "Collect the messages marked in the mailbox's list
-\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
+\(\\<outlook-mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
 current line, into one mbox file asked for, the format most mail programs
 read: each message as readpst wrote it, after a From line, a line of it
 beginning with From (after any number of >) written with one > more, as
@@ -1170,9 +1172,9 @@ the path of the folder below the top folder readpst wrote."
           for those = (remove-if-not (lambda (item) (gethash item chosen)) listed)
           when those collect (cons (rest (uiop:split-string folder :separator "/")) those))))
 
-(define-command mailbox-export-pst ()
+(define-command outlook-export-pst ()
   "Write the messages marked in the mailbox's list
-\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
+\(\\<outlook-mailbox-mode>\\[list-mark-entry]), or with none marked the one on the
 current line, into a new Outlook mailbox (.pst) asked for, in the folders
 they are listed in: each with its headers, bodies, recipients, attachments
 and dates as the Outlook item readpst wrote of it holds them. .pst is added
@@ -1200,7 +1202,7 @@ left out."
                                      #'mailbox-export-work :name "tuatara mailbox export")
                    (message "Writing ~a into ~a..." words (path-join (parent-path path) name))))))))
 
-(define-menu mailbox-export (:title "Copy out")
+(define-menu outlook-export (:title "Copy out")
   "Open the menu of copying the messages marked in the mailbox's list, or with
 none marked the one on the current line, out: \\`e' as saved mail (.eml) and
 \\`m' as Outlook items (.msg) into a directory, \\`b' into one mbox file,
@@ -1210,7 +1212,7 @@ not. \\`C-h' there lists every action."
   ("Which"
    ("a" "All shown, not only those marked" :switch "--shown"))
   ("Copy out as"
-   ("e" "Saved mail (.eml)" mailbox-export-eml)
-   ("m" "Outlook items (.msg)" mailbox-export-msg)
-   ("b" "One mailbox file (.mbox)" mailbox-export-mbox)
-   ("p" "Outlook mailbox (.pst)" mailbox-export-pst)))
+   ("e" "Saved mail (.eml)" outlook-export-eml)
+   ("m" "Outlook items (.msg)" outlook-export-msg)
+   ("b" "One mailbox file (.mbox)" outlook-export-mbox)
+   ("p" "Outlook mailbox (.pst)" outlook-export-pst)))

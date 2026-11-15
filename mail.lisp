@@ -88,7 +88,7 @@ is listed.
 line in a window beside it.
 The message is read as any message is, nothing in it run and nothing it points
 to fetched, and follows the cursor from line to line.
-\\<mailbox-mode>\\[list-toggle-preview] turns it on or off in one list.
+\\<outlook-mailbox-mode>\\[list-toggle-preview] turns it on or off in one list.
 - t: the preview is on.
 - nil: the preview is off until turned on."
   :values boolean)

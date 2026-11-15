@@ -294,14 +294,14 @@ filters out again, so that a filter on labels leaves what it now matches."
       (mailbox-render list job :keep)
       (refilter-search-filters list))))
 
-(define-command mailbox-label ()
+(define-command outlook-label ()
   "Put labels on the messages marked in the mailbox's list
-\(\\<mailbox-mode>\\[list-mark-entry]), or with none marked on the one on the
+\(\\<outlook-mailbox-mode>\\[list-mark-entry]), or with none marked on the one on the
 current line: several, apart by commas, the labels used before offered and
 new ones typed. Each message's labels show on its line. They are kept for you
 alone in Tuatara's state directory, by the mailbox's SHA-256 sum, never in
 the mailbox nor beside it, and come back whenever that mailbox is opened again.
-\\[mailbox-unlabel] takes them off and \\[mailbox-filter-labels] shows only
+\\[outlook-unlabel] takes them off and \\[outlook-filter-labels] shows only
 the messages carrying them."
   (multiple-value-bind (job items) (mailbox-labelled-items)
     (when job
@@ -317,10 +317,10 @@ the messages carrying them."
                    (message "~{~a~^, ~} put on ~a" labels (list-question nil "message" items
                                                                         :name-of #'mailbox-item-name))))))))
 
-(define-command mailbox-unlabel ()
+(define-command outlook-unlabel ()
   "Take labels off the messages marked in the mailbox's list, or with none
 marked off the one on the current line: several, apart by commas, chosen from
-those they carry (\\<mailbox-mode>\\[mailbox-label])."
+those they carry (\\<outlook-mailbox-mode>\\[outlook-label])."
   (multiple-value-bind (job items) (mailbox-labelled-items)
     (when job
       (let ((carried (sort (remove-duplicates (loop for item in items append (mailbox-item-labels job item))
@@ -343,10 +343,10 @@ filter on the labels of a message tries it, each label's special characters
 escaped (PATTERN-REGEX)."
   (format nil "^(?:~{~a~^|~})$" (mapcar (lambda (label) (pattern-regex label nil)) labels)))
 
-(define-command mailbox-filter-labels ()
+(define-command outlook-filter-labels ()
   "Narrow the mailbox's list to the messages carrying a label, or any of
 several, chosen apart by commas from those its messages carry
-\(\\<mailbox-mode>\\[mailbox-label]); with \\[universal-argument], to those
+\(\\<outlook-mailbox-mode>\\[outlook-label]); with \\[universal-argument], to those
 carrying none of them. It is one of the list's filters, kept with the others
 and narrowing what they leave: \\[search-filter-list] lists them and
 \\[search-filter-remove-all] takes them all away. \\[search-filter-show-records]
@@ -358,7 +358,7 @@ unlabelled after is shown or hidden as the filters now say."
          (used (and job (mailbox-job-labels job) (mailbox-labels-used job)))
          (hide (and (prefix-argument) t)))
     (if (null used)
-        (message "No message of this mailbox carries a label: \\<mailbox-mode>\\[mailbox-label] puts them on")
+        (message "No message of this mailbox carries a label: \\<outlook-mailbox-mode>\\[outlook-label] puts them on")
         (let ((labels (read-several (format nil "Show the messages carrying ~:[~;none of ~]the labels: " hide)
                                     (lambda () used) :none "no label" :more "no more labels")))
           (if (null labels)
