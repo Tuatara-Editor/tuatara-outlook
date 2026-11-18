@@ -27,8 +27,9 @@ labels marked, in its mailbox. \\[outlook-labels-forget] forgets every label of
 the mailbox on the line, after asking. \\[outlook-labels-export] writes the
 labels of the mailbox on the line into a file you choose and
 \\[outlook-labels-import] reads such a file back, into the mailbox whose
-SHA-256 sum it holds, adding to the labels there. \\[quit-window] or \\`h'
-comes back; \\[revert-buffer] lists them again."
+SHA-256 sum it holds, adding to the labels there. \\`h' folds the section of
+a mailbox's heading, \\[quit-window] comes back; \\[revert-buffer] lists them
+again."
   :lighter "Mailbox labels" :interactive nil)
 
 (defstruct (mailbox-label-set (:copier nil))

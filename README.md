@@ -272,6 +272,7 @@ and how much room they take.
 | Key | What it does |
 | --- | --- |
 | `RET`, `l` | On a mailbox's line, opens the mailbox when its file is there. |
+| `h` | On a mailbox's line, folds its section; `q` closes the label manager. |
 | `R` (`C-c o r`) | Renames the label on the line, or each one marked, in its mailbox only; a message that has the new name already only loses the old. |
 | `d`, `x` | Mark labels for deletion and take them off every message of their mailbox, after asking. |
 | `D` (`C-c o f`) | Forgets every label of the mailbox on the line, after saying how many labels and messages that is. |

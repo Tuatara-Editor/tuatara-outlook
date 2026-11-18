@@ -38,10 +38,11 @@ what reads them."
                      'outlook-export-msg 'outlook-export-mbox 'outlook-export-pst
                      'outlook-back-to-directory 'outlook-label 'outlook-unlabel 'outlook-filter-labels
                      'outlook-label-manager)
+  (entry-list-keys 'outlook-label-manager-mode "the label manager (\\[outlook-label-manager])" :kind :manager)
   (define-keys (mode-keymap 'outlook-label-manager-mode)
-               '(("RET" outlook-label-open) ("l" outlook-label-open) ("C-f" outlook-label-open) ("h" quit-window)
-                 ("C-b" quit-window) ("n" list-next-entry) ("p" list-previous-entry) ("R" outlook-label-rename)
-                 ("D" outlook-labels-forget) ("E" outlook-labels-export) ("I" outlook-labels-import)))
+               '(("RET" outlook-label-open) ("l" outlook-label-open) ("C-f" outlook-label-open)
+                 ("R" outlook-label-rename) ("D" outlook-labels-forget) ("E" outlook-labels-export)
+                 ("I" outlook-labels-import)))
   (define-keys (mode-keymap 'outlook-label-manager-mode)
                '(("C-c o o" outlook-label-open) ("C-c o r" outlook-label-rename) ("C-c o f" outlook-labels-forget)
                  ("C-c o e" outlook-labels-export) ("C-c o i" outlook-labels-import)))

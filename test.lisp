@@ -2723,6 +2723,19 @@ then wait for the labels job they start and take it in."
           (tuatara.buffer:kill-buffer manager)
           (tuatara.buffer:kill-buffer list))))))
 
+(define-test (outlook label-manager-is-a-manager)
+  ;; the label manager is a list of things kept and acted on: h and C-b fold the heading of a mailbox's
+  ;; section, as in the buffer list, and never close it; RET, l and C-f open the mailbox
+  (flet ((key (text) (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::outlook-label-manager-mode)
+                                                 (tuatara.frontend:parse-key-sequence text))))
+    (is eq :manager (tuatara.defaults::list-kind 'outlook::outlook-label-manager-mode))
+    (dolist (text '("h" "C-b"))
+      (is eq 'tuatara.defaults::list-fold-heading (key text)))
+    (dolist (text '("RET" "l" "C-f"))
+      (is eq 'outlook::outlook-label-open (key text)))
+    (is eq 'tuatara.defaults::list-next-entry (key "n"))
+    (is eq 'outlook::outlook-label-rename (key "R"))))
+
 (define-test (outlook label-manager-forgets-and-opens)
   (with-test-directory (dir)
     (let ((sum (manager-test-sum)) (other (manager-test-sum)))
