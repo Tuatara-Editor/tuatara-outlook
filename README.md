@@ -67,7 +67,7 @@ here.
 | A mailbox | `C-x / l`                       | Lists the filters narrowing the list, each with how many items it leaves; there `d` takes away the filter on the line and `D` all of them.                                                                                                                             |
 | A mailbox | `C-x / r`                       | Takes every filter away: the whole list again.                                                                                                                                                                                                                         |
 | A message | `q`                             | Closes it, back to the mailbox (or wherever it was opened from); `h` moves the cursor left, as everywhere.                                                                                                                                                             |
-| A mailbox | `q`                             | Closes it.                                                                                                                                                                                                                                                             |
+| A mailbox | `q`                             | Closes it. What readpst wrote stays in the cache, so the mailbox opens again at once (see Mailboxes).                                                                                                                                                                  |
 | A mailbox | `h`                             | Asks, then closes it and goes back to its directory in rimu, on the mailbox. The moves by word (`w`, `b`, `W`, `B`) do nothing in the list; `V` is the one selection, of whole lines.                                                                                  |
 | A mailbox | `C-c o h`, `C-c o c`            | The same as `h` and `C`, under outlook's own prefix.                                                                                                                                                                                                                   |
 | A mailbox | `C-c o +`, `C-c o -`, `C-c o l` | The same as `+`, `-` and `L`.                                                                                                                                                                                                                                          |
@@ -77,9 +77,28 @@ here.
 A mailbox is read by `readpst`, of the libpst package, shut in Tuatara's
 sandbox: no network, and none of your files but the mailbox. Its messages are
 written to your cache directory, each twice, as saved mail and as an Outlook
-item, so that they can be copied out as either; they are deleted when the
-list is closed. Install libpst from your system's packages
-(`readpst` on the `PATH` of the system's own program directories).
+item, so that they can be copied out as either. Install libpst from your
+system's packages (`readpst` on the `PATH` of the system's own program
+directories).
+
+A mailbox from outside (in your downloads, on a removable drive, or in
+another of Tuatara's untrusted directories) is listed as well when it is
+opened safely, since only readpst, shut in, reads it. The copy made for
+readpst is refused when another file was put in the mailbox's place after
+it was opened. A message or an Outlook item from outside opens as its text,
+as Tuatara itself reads those.
+
+What readpst wrote is kept in Tuatara's cache after the list is closed, found
+again by the mailbox's SHA-256 sum and the options it was read with
+(`*outlook-include-deleted*`). Opening the same mailbox again, from this
+computer or from a server, sums it and lists it from what was kept, without
+running readpst. It is cleared as Tuatara clears every entry of its cache:
+`*cache-keep*` after it was last used, one day as standard, never while the
+list is open, never when pinned. `M-x list-cache` shows it under "Mailboxes
+read by readpst", where `RET` lists it again, `p` pins it and `d`, `x` delete
+it. A mailbox on a server is read by readpst from the copy Tuatara fetched,
+checked before and after to be as it was fetched; no second copy is made.
+This needs Tuatara 0.90.35 or later.
 
 ## Attachments earlier in a conversation
 
@@ -190,8 +209,11 @@ lays out the Unicode format Outlook 2003 and later read: its strings in
 Unicode, its data blocks encoded as Outlook encodes them (the permutation of
 MS-PST section 5.1), every block and page with its check, and the folders
 and tables Outlook needs to open it (the top of the personal folders,
-deleted items and the search folders). A mailbox of more than 2 GB is not
-written yet. Read back by readpst, the 71
+deleted items and the search folders). A mailbox may be as large as 50 GB,
+the most Outlook takes as it is installed: the maps of which parts of the
+file are taken are written where MS-PST puts them, however far the file
+goes (each allocation map, page map, free map and free page map), the file
+streamed to the drive as it is made. Read back by readpst, the 71
 messages of the Enron sample mailbox come out as they went in: their
 headers, text, HTML and attachments alike.
 
@@ -340,12 +362,12 @@ remembered as either) and given later as `[[:name:]]` in any pattern.
 | `*outlook-readpst-program*` | `"readpst"` | text | The program that reads mailboxes. |
 | `*outlook-page-program*` | `"weasyprint"` | text | The program that draws a message as it looks. |
 | `*outlook-include-deleted*` | `t` | `t` or `nil` | Lists the items a mailbox still holds that were deleted, in the folders they were deleted from; `nil` for only those not deleted. |
-| `*outlook-largest-file*` | 256 MB | a whole number, 1 or more | The most an item or saved mail, or an attachment in one, may hold to be read as a message; a larger one opens as any file. |
+| `*outlook-largest-file*` | 256 MB | a size, 1 or more, or words such as `"512M"` | The most an item or saved mail, or an attachment in one, may hold to be read as a message; a larger one opens as any file. |
 | `*outlook-nesting-limit*` | `8` | a whole number, 0 or more | How many levels of messages attached to messages are shown as messages; deeper ones are listed as not read. |
-| `*outlook-mailbox-seconds*` | `3600` | a whole number, 1 or more | The most seconds readpst may take; it is stopped then, and what it wrote is listed. |
+| `*outlook-mailbox-seconds*` | `3600` | a time, 1 second or more, or words such as `"2h"` | The most seconds readpst may take; it is stopped then, and what it wrote is listed. |
 | `*outlook-mailbox-most-files*` | 1 million | a whole number, 1 or more | The most files readpst wrote that a mailbox's list takes in; the rest are left out, and the list says so. |
 | `*outlook-search-text-limit*` | 16 million | a whole number, 1 or more | The most characters of a mailbox's message its list's search looks through; a larger one is searched that far, and the list counts them. |
-| `*outlook-mailbox-space*` | 32 GB | a whole number, 1 or more | The most readpst may write; it is stopped there, or when the drive has less than 1 GB free. |
+| `*outlook-mailbox-space*` | 32 GB | a size, 1 or more, or words such as `"64G"` | The most readpst may write; it is stopped there, or when the drive has less than 1 GB free. |
 | `*outlook-preview*` | `t` | `t` or `nil` | Shows the message on the line beside a mailbox's list; `nil` leaves it off until `P` turns it on in one list. |
 
 Set them in the package's `:config`:

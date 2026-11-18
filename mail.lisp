@@ -42,8 +42,9 @@ They are listed in the folders they were deleted from, beside the others.
 read as a message.
 An attachment or a part of one may hold as many. A larger one is opened as any
 file.
-- a whole number, 1 or more: the octets, 256 megabytes (MB) by default."
-  :values (integer 1 *))
+- a size, 1 octet or more: a whole number of octets, or words such as
+  \"512M\"; 256 megabytes (MB) by default."
+  :values (octets 1 *))
 
 (define-package-setting *outlook-nesting-limit* 8
   "How deep messages attached to messages are read.
@@ -56,8 +57,9 @@ deep as twice this.
 (define-package-setting *outlook-mailbox-seconds* 3600
   "The most seconds readpst may take reading a mailbox (.pst, .ost).
 After them it is stopped and what it wrote by then is listed.
-- a whole number, 1 or more: the seconds, 3600 (an hour) by default."
-  :values (integer 1 *))
+- a time, 1 second or more: seconds, or words such as \"90m\" or \"2h\"; 3600
+  (an hour) by default."
+  :values (seconds 1 * :whole))
 
 (define-package-setting *outlook-mailbox-most-files* 1000000
   "The most files readpst writes that a mailbox's (.pst, .ost) list takes in.
@@ -80,8 +82,9 @@ says how many were.
 Its messages go in your cache directory. It is stopped at the limit, as it is
 when the drive has less than 1 gigabyte (GB) free, and what it wrote by then
 is listed.
-- a whole number, 1 or more: the octets, 32 GB by default."
-  :values (integer 1 *))
+- a size, 1 octet or more: a whole number of octets, or words such as \"64G\";
+  32 GB by default."
+  :values (octets 1 *))
 
 (define-package-setting *outlook-preview* t
   "Whether the list of a mailbox (.pst, .ost) shows the message on the current

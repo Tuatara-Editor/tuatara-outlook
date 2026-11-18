@@ -16,7 +16,7 @@
 ;;;; time, only the B-trees' entries and the folders' rows kept meanwhile; the
 ;;;; B-trees, the allocation maps and the header last. Strings are written in
 ;;;; UTF-16; the data blocks permuted (NDB_CRYPT_PERMUTE, as Outlook writes
-;;;; them) or as they are. A file is at most 2 GB.
+;;;; them) or as they are. A file is at most 50 GB, the most Outlook takes.
 
 (in-package #:outlook)
 
@@ -138,22 +138,37 @@ together, exclusive-ored."
   "The octets each AMap maps, its own page among them: 496 octets of bits, each
 for 64 octets ([MS-PST] 2.2.2.7.2).")
 
-(defconstant +pst-largest-file+ (* 2 1024 1024 1024)
-  "The largest mailbox written: past 2 GB a free page map (FPMap) page would be
-due, which is not written yet.")
+(defconstant +pst-largest-file+ (* 50 1024 1024 1024)
+  "The largest mailbox written, 50 GB: the most Outlook lets a Unicode mailbox
+grow to as it is installed (its MaxLargeFileSize). The format itself goes
+further, to about 266 GB, where the density list can no longer number the
+AMaps ([MS-PST] 2.2.2.7.4.1).")
 
 (defun pst-section-start (section)
   "Where the part of the file the AMap numbered SECTION (from 0) maps begins:
 at that AMap."
   (+ +pst-first-amap+ (* section +pst-amap-span+)))
 
+(defun pst-fmap-section-p (section)
+  "True when the part of the file SECTION's AMap maps holds a free map (FMap,
+[MS-PST] 2.2.2.7.5), its third page: each 496th from the 128th, the first
+128 being mapped by the header's own (1.3.2.7)."
+  (and (>= section 128) (zerop (mod (- section 128) 496))))
+
+(defun pst-fpmap-section-p (section)
+  "True when the part of the file SECTION's AMap maps holds a free page map
+\(FPMap, [MS-PST] 2.2.2.7.6), its third page: each 31,744th (an FPMap's 3,968
+bits, one for each PMap of eight AMaps) from the 8,192nd, the first 1,024
+PMaps, about 2 GB, being mapped by the header's own (1.3.2.8). An FMap and an
+FPMap never fall in the same part."
+  (and (>= section 8192) (zerop (mod (- section 8192) 31744))))
+
 (defun pst-section-maps (section)
   "How many map pages begin the part of the file SECTION's AMap maps: the AMap;
-a page map (PMap) in every eighth ([MS-PST] 2.2.2.7.3); a free map (FMap)
-in each 496th from the 128th, the first 128 being mapped by the header's
-own (1.3.2.7)."
+a page map (PMap) in every eighth ([MS-PST] 2.2.2.7.3); then a free map
+\(FMap) or a free page map (FPMap) where one is due."
   (+ 1 (if (zerop (mod section 8)) 1 0)
-     (if (and (>= section 128) (zerop (mod (- section 128) 496))) 1 0)))
+     (if (or (pst-fmap-section-p section) (pst-fpmap-section-p section)) 1 0)))
 
 (defun pst-section-data (section)
   "Where data may begin in the part of the file SECTION's AMap maps, past its
@@ -170,10 +185,11 @@ map pages."
 its data blocks ENCODING (:permute or :none). END is the first octet not yet
 given out; FREE the stretches before it given to nothing, each (START . END),
 latest first. NEXT-BLOCK is the next block's identifier counter, NEXT-PAGE
-the next page's identifier, even. BLOCKS holds three numbers for each block written (its
-identifier, where it is, how many octets of data), NODES each node's entry of
-the node B-tree, (NID DATA SUB PARENT). LAST-NIDS is the last index given to
-each type of node number (the header's rgnid)."
+the next page's identifier, even. BLOCKS holds three numbers for each block
+written, in the order of their identifiers: its identifier, where it is, how
+many octets of data. NODES holds each node's entry of the node B-tree, (NID
+DATA SUB PARENT). LAST-NIDS is the last index given to each type of node
+number (the header's rgnid)."
   fd path encoding (end (pst-section-data 0)) (free '()) (next-block 1) (next-page 2)
   (blocks (make-array 1024 :adjustable t :fill-pointer 0))
   (nodes (make-array 256 :adjustable t :fill-pointer 0))
@@ -195,7 +211,8 @@ the map pages among them excepted."
 (defun pst-allocate (writer size align)
   "Give out SIZE octets of the file, aligned on ALIGN, after all given before
 and never across a part of the file another AMap maps nor over its map pages
-([MS-PST] 2.6.1.1.1); return where they begin. An error past 2 GB."
+([MS-PST] 2.6.1.1.1); return where they begin. An error past
++PST-LARGEST-FILE+."
   (let* ((end (pst-writer-end writer))
          (at (* align (ceiling end align))))
     (loop for section = (pst-section-of at)
@@ -203,7 +220,7 @@ and never across a part of the file another AMap maps nor over its map pages
                    ((> (+ at size) (pst-section-start (1+ section))) (setf at (pst-section-data (1+ section))))
                    (t (return))))
     (when (> (+ at size) +pst-largest-file+)
-      (error "The mailbox would grow past 2 GB, more than is written yet"))
+      (error "The mailbox would grow past ~d GB, the most Outlook takes" (floor +pst-largest-file+ (expt 1024 3))))
     (when (> at end) (pst-note-free writer end at))
     (setf (pst-writer-end writer) (+ at size))
     at))
@@ -330,73 +347,99 @@ next page's, signed. Returns (BID . IB)."
     (pst-write-at writer page ib)
     (cons bid ib)))
 
-(defun pst-btree (writer ptype entries size)
+(defun pst-btree (writer ptype count size entry)
   "Write the B-tree of pages of PTYPE (#x80 the block B-tree, #x81 the node
-B-tree, [MS-PST] 2.2.2.7.7) over ENTRIES, each (KEY . OCTETS) sorted by KEY,
-OCTETS a leaf entry of SIZE octets. Returns the root's (BID . IB)."
-  (flet ((page (level width items)
+B-tree, [MS-PST] 2.2.2.7.7) over COUNT leaf entries of SIZE octets each, in
+order of their keys: ENTRY, a function of an entry's index, a page's
+contents and an offset in them, puts that entry there and returns its key.
+The leaves are filled and written one at a time, so that no more than a
+page of entries is made at once. Returns the root's (BID . IB)."
+  (flet ((page (level width count fill)
            (let ((contents (pst-octets 496)))
-             (loop for (nil . octets) in items for at from 0 by width do (replace contents octets :start1 at))
-             (setf (aref contents 488) (length items) (aref contents 489) (floor 488 width)
+             (dotimes (i count) (funcall fill i contents (* i width)))
+             (setf (aref contents 488) count (aref contents 489) (floor 488 width)
                    (aref contents 490) width (aref contents 491) level)
              (pst-page writer ptype contents))))
-    (let ((pages (loop for group in (or (pst-groups entries (floor 488 size)) '(()))
-                       collect (cons (car (first group)) (page 0 size group))))
+    (let ((pages (loop with per = (floor 488 size)
+                       for first from 0 below (max count 1) by per
+                       collect (let* ((key nil)
+                                      (place (page 0 size (min per (- count first))
+                                                   (lambda (i contents at)
+                                                     (let ((k (funcall entry (+ first i) contents at)))
+                                                       (when (zerop i) (setf key k)))))))
+                                 (cons key place))))
           (level 0))
       (loop while (rest pages)
             do (incf level)
                (setf pages (loop for group in (pst-groups pages 20)
                                  collect (cons (car (first group))
-                                               (page level 24
-                                                     (loop for (key bid . ib) in group
-                                                           collect (cons key (pst-join (list (pst-number key 8)
-                                                                                             (pst-number bid 8)
-                                                                                             (pst-number ib 8))))))))))
+                                               (page level 24 (length group)
+                                                     (lambda (i contents at)
+                                                       (destructuring-bind (key bid . ib) (nth i group)
+                                                         (pst-put contents at key 8)
+                                                         (pst-put contents (+ at 8) bid 8)
+                                                         (pst-put contents (+ at 16) ib 8))))))))
       (cdr (first pages)))))
 
-(defun pst-free-slot-p (free at)
-  "True when the 64 octets at AT lie in one of FREE, stretches (START . END)
-in order, of which those ending by AT are dropped first; returns the rest
-as a second value."
-  (loop while (and free (<= (cdr (first free)) at)) do (pop free))
-  (values (and free (<= (car (first free)) at)) free))
+(defun pst-set-slots (amap from below value)
+  "Set the bits of AMAP, an AMap's 496 octets, for its slots from FROM below
+BELOW to VALUE, 1 or 0, the most significant bit of an octet its first slot
+\([MS-PST] 2.2.2.7.2)."
+  (declare (type pst-octets amap) (type fixnum from below) (type bit value))
+  (loop with slot of-type fixnum = from
+        while (< slot below)
+        do (if (and (zerop (mod slot 8)) (<= (+ slot 8) below))
+               (progn (setf (aref amap (floor slot 8)) (if (= value 1) #xFF 0)) (incf slot 8))
+               (progn (setf (ldb (byte 1 (- 7 (mod slot 8))) (aref amap (floor slot 8))) value) (incf slot)))))
+
+(defun pst-section-amap (amap section end free)
+  "Fill AMAP, 496 octets, with the bits of the part of the file SECTION's AMap
+maps: a slot taken below END, the first octet not given out, but where it
+lies in one of FREE, stretches (START . END) in order, of which those ending
+by the part's start are dropped first. Returns the rest of FREE, the free
+slots counted and the longest run of them, three values."
+  (let ((start (pst-section-start section)) (next (pst-section-start (1+ section))))
+    (fill amap 0)
+    (pst-set-slots amap 0 (max 0 (min 3968 (ceiling (- end start) 64))) 1)
+    (loop while (and free (<= (cdr (first free)) start)) do (pop free))
+    (loop for (from . to) in free
+          while (< from next)
+          do (pst-set-slots amap (max 0 (floor (- from start) 64)) (min 3968 (ceiling (- to start) 64)) 0))
+    (let ((count 0) (run 0) (most 0))
+      (loop for octet across amap
+            do (case octet
+                 (#xFF (setf run 0))
+                 (0 (incf count 8) (incf run 8) (setf most (max most run)))
+                 (t (loop for bit from 7 downto 0
+                          do (if (logbitp bit octet)
+                                 (setf run 0)
+                                 (progn (incf count) (incf run) (setf most (max most run))))))))
+      (values free count most))))
 
 (defun pst-write-maps (writer sections)
-  "Write the map pages of the SECTIONS parts of the file: each AMap with a bit
-for each of its 64-octet slots, set when it is taken, most significant bit
-first ([MS-PST] 2.2.2.7.2); each PMap with every bit set, as Outlook writes
-them, the density list taking their place (2.2.2.7.3); each FMap with the longest run of
-free slots of each AMap it follows (2.2.2.7.5). Returns the free octets
-counted and each AMap's free slots, a vector."
+  "Write the map pages of the SECTIONS parts of the file, one part at a time:
+each AMap with a bit for each of its 64-octet slots, set when it is taken
+\([MS-PST] 2.2.2.7.2); each page map (PMap) with every bit set, as Outlook
+writes them, the density list taking their place (2.2.2.7.3); each free page
+map (FPMap) with every bit set, as every PMap says it has no free page
+\(2.2.2.7.6); each free map (FMap) with the longest run of free slots of each
+AMap from its own part on (2.2.2.7.5). Returns the free octets counted and
+each AMap's free slots, a vector."
   (let ((free (reverse (pst-writer-free writer))) (end (pst-writer-end writer))
-        (bits (make-array (* sections 3968) :element-type 'bit :initial-element 0))
-        (slots (make-array sections)) (longest (make-array sections)) (total 0))
+        (slots (make-array sections)) (longest (pst-octets sections)) (amap (pst-octets 496))
+        (full (make-array 496 :element-type '(unsigned-byte 8) :initial-element #xFF))
+        (total 0))
     (dotimes (section sections)
-      (let ((start (pst-section-start section)) (count 0) (run 0) (most 0))
-        (dotimes (slot 3968)
-          (let ((at (+ start (* 64 slot))) (taken nil))
-            (multiple-value-bind (in rest) (pst-free-slot-p free at)
-              (setf free rest
-                    taken (or (< at (pst-section-data section)) (and (< at end) (not in)))))
-            (if taken
-                (setf (sbit bits (+ (* section 3968) slot)) 1 run 0)
-                (progn (incf count) (incf run) (setf most (max most run))))))
-        (setf (svref slots section) count (svref longest section) (min 255 most))
-        (incf total (* 64 count))))
-    (dotimes (section sections)
-      (let ((amap (pst-octets 496)) (base (* section 3968)))
-        (dotimes (slot 3968)
-          (when (= 1 (sbit bits (+ base slot)))
-            (setf (ldb (byte 1 (- 7 (mod slot 8))) (aref amap (floor slot 8))) 1)))
-        (pst-page writer #x84 amap :at (pst-section-start section))
-        (when (zerop (mod section 8))
-          (pst-page writer #x83 (make-array 496 :element-type '(unsigned-byte 8) :initial-element #xFF)
-                    :at (+ 512 (pst-section-start section))))
-        (when (= 3 (pst-section-maps section))
-          (let ((fmap (pst-octets 496)))
-            (loop for k from 0 below 496 for mapped = (+ section k) while (< mapped sections)
-                  do (setf (aref fmap k) (svref longest mapped)))
-            (pst-page writer #x82 fmap :at (+ 1024 (pst-section-start section)))))))
+      (let ((start (pst-section-start section)))
+        (multiple-value-bind (rest count most) (pst-section-amap amap section end free)
+          (setf free rest (svref slots section) count (aref longest section) (min 255 most))
+          (incf total (* 64 count)))
+        (pst-page writer #x84 amap :at start)
+        (when (zerop (mod section 8)) (pst-page writer #x83 full :at (+ 512 start)))
+        (when (pst-fpmap-section-p section) (pst-page writer #x85 full :at (+ 1024 start)))))
+    (loop for section from 128 below sections by 496
+          do (pst-page writer #x82 (subseq longest section (min sections (+ section 496)))
+                       :at (+ 1024 (pst-section-start section))))
     (values total slots)))
 
 (defun pst-write-density-list (writer slots)
@@ -416,29 +459,25 @@ counted and each AMap's free slots, a vector."
 density list, and last the header ([MS-PST] 2.2.2.6) pointing at them, with
 its checks; the file padded to the end of the last part an AMap maps."
   (let* ((blocks (pst-writer-blocks writer))
-         (bbt (pst-btree writer #x80
-                         (sort (loop for i from 0 below (length blocks) by 3
-                                     collect (let ((entry (pst-octets 24)))
-                                               (pst-put entry 0 (aref blocks i) 8)
-                                               (pst-put entry 8 (aref blocks (+ i 1)) 8)
-                                               (pst-put entry 16 (aref blocks (+ i 2)) 2)
-                                               ;; held by the B-tree and by what refers to it (2.2.2.7.7.3.1)
-                                               (pst-put entry 18 2 2)
-                                               (cons (aref blocks i) entry)))
-                               #'< :key #'car)
-                         24))
-         (nbt (pst-btree writer #x81
-                         (sort (map 'list (lambda (node)
-                                            (destructuring-bind (nid data sub parent) node
-                                              (let ((entry (pst-octets 32)))
-                                                (pst-put entry 0 nid 8)
-                                                (pst-put entry 8 data 8)
-                                                (pst-put entry 16 sub 8)
-                                                (pst-put entry 24 parent 4)
-                                                (cons nid entry))))
-                                    (pst-writer-nodes writer))
-                               #'< :key #'car)
-                         32))
+         (nodes (sort (pst-writer-nodes writer) #'< :key #'first))
+         ;; the blocks are listed in the order of their identifiers, given in turn
+         (bbt (pst-btree writer #x80 (floor (length blocks) 3) 24
+                         (lambda (i page at)
+                           (let ((bid (aref blocks (* 3 i))))
+                             (pst-put page at bid 8)
+                             (pst-put page (+ at 8) (aref blocks (+ (* 3 i) 1)) 8)
+                             (pst-put page (+ at 16) (aref blocks (+ (* 3 i) 2)) 2)
+                             ;; held by the B-tree and by what refers to it (2.2.2.7.7.3.1)
+                             (pst-put page (+ at 18) 2 2)
+                             bid))))
+         (nbt (pst-btree writer #x81 (length nodes) 32
+                         (lambda (i page at)
+                           (destructuring-bind (nid data sub parent) (aref nodes i)
+                             (pst-put page at nid 8)
+                             (pst-put page (+ at 8) data 8)
+                             (pst-put page (+ at 16) sub 8)
+                             (pst-put page (+ at 24) parent 4)
+                             nid))))
          (sections (1+ (pst-section-of (1- (pst-writer-end writer)))))
          (eof (pst-section-start sections)))
     (pst-note-free writer (pst-writer-end writer) eof)

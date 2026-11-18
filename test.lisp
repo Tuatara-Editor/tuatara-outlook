@@ -791,6 +791,160 @@ WeasyPrint installed in it and a program drawing PDFs."
           (true (outlook::mailbox-item-p item)))
       (tuatara.buffer:kill-buffer buffer))))
 
+(defun kept-mailbox-entry (pst &key (key (outlook::mailbox-cache-key (tuatara.defaults::file-sha256 pst))))
+  "An entry of the cache holding what readpst would have written of the
+mailbox PST, noted as whole, found by KEY: one message in its Inbox."
+  (let ((entry (tuatara:make-cache-entry "mailbox" key "archive.pst")))
+    (put-test-file (merge-pathnames "mail/Outlook Data File/Inbox/1.eml" entry)
+                   (format nil "From: Kea <kea@example.org>~%Subject: Kept~%~%one~%"))
+    (tuatara:note-cache-entry entry :facts (format nil "listed ~a" (namestring pst)))
+    entry))
+
+(defmacro with-readpst-watched ((calls) &body body)
+  "Run BODY with CALLS counting what readpst would have been run on: the paths
+MAILBOX-RUN-READPST is given, the most recent first, readpst itself never run."
+  `(let ((,calls '()))
+     (sb-int:encapsulate 'outlook::mailbox-run-readpst 'watched
+                         (lambda (function job copy)
+                           (declare (ignore function))
+                           (push copy ,calls)
+                           (put-test-file (merge-pathnames "Outlook Data File/Inbox/1.eml"
+                                                           (outlook::mailbox-job-directory job))
+                                          (format nil "Subject: Fresh~%~%two~%"))
+                           (values :done "")))
+     (unwind-protect (progn ,@body)
+       (sb-int:unencapsulate 'outlook::mailbox-run-readpst 'watched))))
+
+(define-test (outlook mailbox-listed-again-without-readpst)
+  ;; opened again, a mailbox is listed from what readpst wrote of it before, kept in the cache by its sum
+  ;; and the options it was read with; read with other options, readpst writes it anew; closing the list
+  ;; leaves what readpst wrote in the cache
+  (with-test-directory (dir)
+    (let* ((pst (write-test-octets (merge-pathnames "archive.pst" dir)
+                                   (sb-ext:string-to-octets "!BDN    SM kept" :external-format :latin-1)))
+           (entry (kept-mailbox-entry pst)))
+      (with-readpst-watched (calls)
+        (let* ((buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
+               (job (outlook::make-mailbox-job buffer (namestring pst) nil)))
+          (outlook::mailbox-work job)
+          (false calls "readpst not run")
+          (is equal '("Kept") (mapcar #'outlook::mailbox-item-subject (cdr (first (outlook::mailbox-job-folders job)))))
+          (true (uiop:string-prefix-p entry (outlook::mailbox-job-directory job)) "listed from the kept entry")
+          (tuatara.buffer:kill-buffer buffer)
+          (is eq :directory (tuatara.io:path-kind entry :follow nil) "kept once the list is closed"))
+        ;; listed again: the text searched in each message, written once, is read as it is, never written again
+        (let* ((text (merge-pathnames "text/1" entry))
+               (inode (sb-posix:stat-ino (sb-posix:stat text)))
+               (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
+               (job (outlook::make-mailbox-job buffer (namestring pst) nil)))
+          (outlook::mailbox-work job)
+          (is = inode (sb-posix:stat-ino (sb-posix:stat text)) "the text not written again")
+          (tuatara.buffer:kill-buffer buffer))
+        (let* ((buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
+               (job (outlook::make-mailbox-job buffer (namestring pst) nil))
+               (tuatara-user:*outlook-include-deleted* (not tuatara-user:*outlook-include-deleted*)))
+          (outlook::mailbox-work job)
+          (is = 1 (length calls) "read with other options: readpst run")
+          (is equal '("Fresh") (mapcar #'outlook::mailbox-item-subject (cdr (first (outlook::mailbox-job-folders job)))))
+          (true (tuatara:find-cache-entry "mailbox" (outlook::mailbox-cache-key (outlook::mailbox-job-sum job)))
+                "what it wrote kept too")
+          (tuatara.buffer:kill-buffer buffer))))))
+
+(define-test (outlook remote-mailbox-read-in-place)
+  ;; a mailbox read from another machine: readpst reads Tuatara's copy of it, no second copy made, the copy
+  ;; checked to be as read after; one changed meanwhile is refused
+  (let* ((name "/ssh:box:/cases/archive.pst")
+         (entry (tuatara:make-cache-entry "remote" name name))
+         (copy (namestring (merge-pathnames "archive.pst" entry))))
+    (write-test-octets copy (sb-ext:string-to-octets "!BDN    SM remote" :external-format :latin-1))
+    (tuatara:note-cache-entry entry
+                              :facts (tuatara.defaults::remote-copy-facts '(:size 17 :mtime 1795000000) copy :all))
+    (is string= name (tuatara:remote-copy-origin copy))
+    (sb-int:encapsulate 'outlook::mailbox-copy 'refused
+                        (lambda (function job to) (declare (ignore function job to)) (error "a second copy made")))
+    (unwind-protect
+         (with-readpst-watched (calls)
+           (let* ((buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
+                  (job (outlook::make-mailbox-job buffer copy nil)))
+             (outlook::mailbox-work job)
+             (is equal (list copy) calls "readpst given the copy itself")
+             (true (tuatara.defaults::cache-directory-in-use-p entry) "the copy held while the list is open")
+             (is string= (format nil "listed ~a" name)
+                 (nth-value 1 (tuatara:find-cache-entry "mailbox"
+                                                        (outlook::mailbox-cache-key (outlook::mailbox-job-sum job))))
+                 "noted as read from the machine")
+             (tuatara.buffer:kill-buffer buffer))
+           ;; changed while readpst reads it: refused
+           (sb-int:encapsulate 'outlook::mailbox-run-readpst 'changing
+                               (lambda (function job path)
+                                 (with-open-file (out path :direction :output :if-exists :append) (write-string "x" out))
+                                 (funcall function job path)))
+           (let* ((tuatara-user:*outlook-include-deleted* (not tuatara-user:*outlook-include-deleted*))
+                  (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)")))
+                  (job (outlook::make-mailbox-job buffer copy nil)))
+             (fail (outlook::mailbox-work job))
+             (tuatara.buffer:kill-buffer buffer)))
+      (sb-int:unencapsulate 'outlook::mailbox-run-readpst 'changing)
+      (sb-int:unencapsulate 'outlook::mailbox-copy 'refused))))
+
+;; a mailbox from outside is shown by its view in the sandbox, and the copy made for readpst is of the file judged
+(define-test (outlook mailbox-copy-of-file-judged)
+  (true (member 'outlook::mailbox-visit tuatara.defaults::*sandboxed-file-views*))
+  (false (member 'outlook::mail-visit tuatara.defaults::*sandboxed-file-views*) "saved mail is parsed in Lisp")
+  (with-test-directory (dir)
+    (let* ((path (write-test-octets (merge-pathnames "archive.pst" dir)
+                                    (sb-ext:string-to-octets "!BDN    SM judged" :external-format :latin-1)))
+           (other (write-test-octets (merge-pathnames "other.pst" dir)
+                                     (sb-ext:string-to-octets "!BDN    SM put in" :external-format :latin-1)))
+           (copy (namestring (merge-pathnames "copy.pst" dir)))
+           (stamp (tuatara.io:path-stamp path))
+           (buffer (tuatara.buffer:make-buffer (tuatara.buffer:unique-buffer-name "archive.pst (mailbox)"))))
+      (unwind-protect
+           (progn
+             ;; the stamp the visit judged kept on the job reading it
+             (let ((started '()))
+               (sb-int:encapsulate 'tuatara.runtime:start-job-thread 'held
+                                   (lambda (function job &rest rest)
+                                     (declare (ignore function rest))
+                                     (push job started)))
+               (unwind-protect
+                    (let* ((tuatara.defaults::*file-view-stamp* stamp)
+                           (list (outlook::mailbox-buffer path)))
+                      (true (outlook::mailbox-job-p (first started)))
+                      (is equalp stamp (outlook::mailbox-job-seen (first started)))
+                      (tuatara.buffer:kill-buffer list))
+                 (sb-int:unencapsulate 'tuatara.runtime:start-job-thread 'held)))
+             ;; the same file: copied
+             (let ((job (outlook::make-mailbox-job buffer path nil)))
+               (setf (outlook::mailbox-job-seen job) stamp)
+               (outlook::mailbox-copy job copy)
+               (is equalp (tuatara.io:file-octets path) (tuatara.io:file-octets copy))
+               (tuatara.io:remove-file copy))
+             ;; another file put in its place since: refused, nothing of it copied
+             (rename-file other path)
+             (let ((job (outlook::make-mailbox-job buffer path nil)))
+               (setf (outlook::mailbox-job-seen job) stamp)
+               (fail (outlook::mailbox-copy job copy) 'tuatara.io:file-system-error)
+               (false (probe-file copy) "refused before the copy is made"))
+             ;; a trusted file, judged by no visit: copied as it is
+             (let ((job (outlook::make-mailbox-job buffer path nil)))
+               (outlook::mailbox-copy job copy)
+               (is equalp (tuatara.io:file-octets path) (tuatara.io:file-octets copy))))
+        (tuatara.buffer:kill-buffer buffer)))))
+
+(define-test (outlook mailbox-text-written-meanwhile)
+  ;; two listings of the same messages writing a missing text at once: the one that finds it written takes it
+  (with-test-directory (dir)
+    (let ((path (namestring (merge-pathnames "text-1" dir))))
+      (sb-int:encapsulate 'tuatara.io:write-new-file 'other-listing-first
+                          (lambda (function path text)
+                            (alexandria:write-string-into-file "the other listing's" path)
+                            (funcall function path text)))
+      (unwind-protect
+           (is string= path (outlook::mailbox-text-file path "this listing's"))
+        (sb-int:unencapsulate 'tuatara.io:write-new-file 'other-listing-first))
+      (is string= "the other listing's" (alexandria:read-file-into-string path)))))
+
 ;;; A mailbox's list narrowed by its messages' headers and contents
 
 (defun mailbox-search-test-messages ()
@@ -1584,7 +1738,7 @@ picture; and a message of neither."
               (declare (ignore f))
               (tuatara.buffer:kill-buffer (session-buffer editor)))
             (is = 946681200 (sb-posix:stat-atime (sb-posix:stat (namestring pst))))
-            (false (directory (merge-pathnames "*.pst" (tuatara.defaults::private-cache-directory "mailboxes/")))))))))
+            (false (directory (merge-pathnames "*/*.pst" (tuatara.defaults::private-cache-directory "mailboxes/")))))))))
 
 ;;; Previews, loading
 
@@ -1818,10 +1972,20 @@ picture; and a message of neither."
   "The unsigned integer in COUNT octets of OCTETS from AT, least significant first."
   (tuatara:octets-integer octets at count))
 
-(defstruct (pst-test (:constructor %make-pst-test (octets)))
-  "A mailbox's OCTETS read by the tests: its NODES (NID to (DATA SUB PARENT)), its BLOCKS (BID to
-\(IB . CB)), the 64-octet SLOTS its pages and blocks take, and the PROBLEMS found, in words."
-  octets (nodes (make-hash-table)) (blocks (make-hash-table)) (slots (make-hash-table)) (problems '()))
+(defstruct (pst-test (:constructor %make-pst-test (path size header)))
+  "The mailbox at PATH, of SIZE octets, read by the tests a piece at a time: its HEADER's first 564
+octets, its NODES (NID to (DATA SUB PARENT)), its BLOCKS (BID to (IB . CB)), the 64-octet slots
+its pages and blocks take (SLOTS, from the number of each AMap to a bit for each of its slots), and
+the PROBLEMS found, in words."
+  path size header (nodes (make-hash-table)) (blocks (make-hash-table)) (slots (make-hash-table)) (problems '()))
+
+(defun pst-test-range (pst ib size)
+  "The SIZE octets of the mailbox PST from the offset IB, read from its file."
+  (let ((octets (make-array size :element-type '(unsigned-byte 8))))
+    (with-open-file (in (pst-test-path pst) :element-type '(unsigned-byte 8))
+      (file-position in ib)
+      (read-sequence octets in))
+    octets))
 
 (defun pst-test-problem (pst format &rest arguments)
   "Note a problem of PST, FORMAT with ARGUMENTS."
@@ -1830,12 +1994,15 @@ picture; and a message of neither."
 (defun pst-test-take (pst ib size what)
   "Note that SIZE octets at IB of PST are taken by WHAT, a problem when some already were."
   (loop for slot from (floor (- ib #x4400) 64) below (floor (- (+ ib size) #x4400) 64)
-        do (when (gethash slot (pst-test-slots pst)) (pst-test-problem pst "~a at ~x overlaps" what ib))
-           (setf (gethash slot (pst-test-slots pst)) t)))
+        do (multiple-value-bind (section bit) (floor slot 3968)
+             (let ((bits (or (gethash section (pst-test-slots pst))
+                             (setf (gethash section (pst-test-slots pst)) (make-array 3968 :element-type 'bit)))))
+               (when (= 1 (sbit bits bit)) (pst-test-problem pst "~a at ~x overlaps" what ib))
+               (setf (sbit bits bit) 1)))))
 
 (defun pst-test-page (pst ib bid ptype)
   "The page of PST at IB, checked: its type PTYPE, its CRC, its signature and BID."
-  (let* ((octets (pst-test-octets pst)) (page (subseq octets ib (+ ib 512))))
+  (let ((page (pst-test-range pst ib 512)))
     (unless (and (= ptype (aref page 496)) (= ptype (aref page 497))) (pst-test-problem pst "page ~x type" ib))
     (unless (= (pst-test-number page 500 4) (outlook::pst-crc page :end 496)) (pst-test-problem pst "page ~x CRC" ib))
     (unless (= (pst-test-number page 498 2)
@@ -1863,7 +2030,7 @@ block checked (its trailer, CRC and signature), the keys in order."
                            (pst-test-number page (+ at 24) 4))))
               (t (let* ((bid (pst-test-number page at 8)) (block-ib (pst-test-number page (+ at 8) 8))
                         (cb (pst-test-number page (+ at 16) 2)) (size (* 64 (ceiling (+ cb 16) 64)))
-                        (block (subseq (pst-test-octets pst) block-ib (+ block-ib size))))
+                        (block (pst-test-range pst block-ib size)))
                    (setf (gethash bid (pst-test-blocks pst)) (cons block-ib cb))
                    (unless (and (= cb (pst-test-number block (- size 16) 2))
                                 (= bid (pst-test-number block (- size 8) 8))
@@ -1873,11 +2040,13 @@ block checked (its trailer, CRC and signature), the keys in order."
                    (pst-test-take pst block-ib size "block"))))))
     (unless (equal keys (sort (copy-list keys) #'>)) (pst-test-problem pst "page ~x keys out of order" ib))))
 
-(defun pst-test-read (octets)
-  "OCTETS, a Unicode mailbox, read and checked as [MS-PST] says (a PST-TEST): the header's magic,
+(defun pst-test-read (path)
+  "The Unicode mailbox at PATH read and checked as [MS-PST] says (a PST-TEST): the header's magic,
 version and CRCs, both B-trees and every block, each allocation map (AMap) and page map, a free map
-where one is due, and the size the header gives."
-  (let ((pst (%make-pst-test octets)))
+and a free page map where one is due, and the size the header gives."
+  (let* ((size (with-open-file (in path :element-type '(unsigned-byte 8)) (file-length in)))
+         (pst (%make-pst-test path size nil))
+         (octets (setf (pst-test-header pst) (pst-test-range pst 0 564))))
     (unless (tuatara:octets-at-p octets "!BDN" 0) (pst-test-problem pst "no magic"))
     (unless (and (= 23 (pst-test-number octets 10 2)) (= #x80 (aref octets 512)))
       (pst-test-problem pst "not Unicode"))
@@ -1885,38 +2054,44 @@ where one is due, and the size the header gives."
       (pst-test-problem pst "partial CRC"))
     (unless (= (pst-test-number octets 524 4) (outlook::pst-crc octets :start 8 :end 524))
       (pst-test-problem pst "full CRC"))
-    (unless (= (length octets) (pst-test-number octets 184 8)) (pst-test-problem pst "size"))
+    (unless (= size (pst-test-number octets 184 8)) (pst-test-problem pst "size"))
     (when (logbitp 0 (pst-test-number octets 32 8)) (pst-test-problem pst "next page's BID odd"))
     (pst-test-walk pst (pst-test-number octets 224 8) (pst-test-number octets 216 8) #x81)
     (pst-test-walk pst (pst-test-number octets 240 8) (pst-test-number octets 232 8) #x80)
     (let ((free 0))
-      (loop for start from #x4400 below (length octets) by 253952
-            for section from 0
-            do (let ((amap (pst-test-page pst start start #x84)))
-                 (when (zerop (mod section 8))
+      (flet ((all-set-p (ib ptype)
+               (every (lambda (o) (= o #xFF)) (subseq (pst-test-page pst ib ib ptype) 0 496))))
+        (loop for start from #x4400 below size by 253952
+              for section from 0
+              do (let ((amap (pst-test-page pst start start #x84)))
                    ;; every page map's bits set, as Outlook writes them
-                   (unless (every (lambda (o) (= o #xFF)) (subseq (pst-test-page pst (+ start 512) (+ start 512) #x83) 0 496))
-                     (pst-test-problem pst "page map ~d" section)))
-                 (when (and (>= section 128) (zerop (mod (- section 128) 496)))
-                   (pst-test-page pst (+ start 1024) (+ start 1024) #x82))
-                 (dotimes (slot 3968)
-                   (let ((bit (ldb (byte 1 (- 7 (mod slot 8))) (aref amap (floor slot 8))))
-                         (taken (gethash (+ (* section 3968) slot) (pst-test-slots pst))))
-                     (when (zerop bit) (incf free))
-                     (unless (eq (= bit 1) (and taken t))
-                       (pst-test-problem pst "AMap ~d slot ~d" section slot)
-                       (return))))))
+                   (when (and (zerop (mod section 8)) (not (all-set-p (+ start 512) #x83)))
+                     (pst-test-problem pst "page map ~d" section))
+                   (when (and (>= section 128) (zerop (mod (- section 128) 496)))
+                     (pst-test-page pst (+ start 1024) (+ start 1024) #x82))
+                   ;; a free page map past the first 1,024 page maps and each 3,968 after, its bits set
+                   (when (and (>= section 8192) (zerop (mod (- section 8192) 31744))
+                              (not (all-set-p (+ start 1024) #x85)))
+                     (pst-test-problem pst "free page map ~d" section))
+                   ;; the AMap's own page among the slots taken
+                   (let ((taken (gethash section (pst-test-slots pst))))
+                     (dotimes (slot 3968)
+                       (let ((bit (ldb (byte 1 (- 7 (mod slot 8))) (aref amap (floor slot 8)))))
+                         (when (zerop bit) (incf free))
+                         (unless (= bit (sbit taken slot))
+                           (pst-test-problem pst "AMap ~d slot ~d" section slot)
+                           (return))))))))
       (unless (= (* 64 free) (pst-test-number octets 200 8)) (pst-test-problem pst "free octets")))
     pst))
 
 (defun pst-test-data (pst bid)
   "The data blocks of the data tree BID of PST, a list, each decoded when the mailbox is permuted."
   (destructuring-bind (ib . cb) (gethash (logandc2 bid 1) (pst-test-blocks pst))
-    (let ((data (subseq (pst-test-octets pst) ib (+ ib cb))))
+    (let ((data (pst-test-range pst ib cb)))
       (if (logtest bid 2)
           (loop for i below (pst-test-number data 2 2)
                 append (pst-test-data pst (pst-test-number data (+ 8 (* 8 i)) 8)))
-          (list (if (= 1 (aref (pst-test-octets pst) 513))
+          (list (if (= 1 (aref (pst-test-header pst) 513))
                     (map 'vector (lambda (o) (aref *pst-test-unpermutation* o)) data)
                     data))))))
 
@@ -1925,7 +2100,7 @@ where one is due, and the size the header gives."
   (let ((table (make-hash-table)))
     (unless (zerop bid)
       (destructuring-bind (ib . cb) (gethash bid (pst-test-blocks pst))
-        (let ((block (subseq (pst-test-octets pst) ib (+ ib cb))))
+        (let ((block (pst-test-range pst ib cb)))
           (dotimes (i (pst-test-number block 2 2))
             (if (zerop (aref block 1))
                 (let ((at (+ 8 (* 24 i))))
@@ -2092,7 +2267,7 @@ identifiers, each the properties it holds, (TAG . OCTETS)."
                                                                        subnodes)
                                         (outlook::pst-subnode-tree writer (car subnodes)))
                                        (outlook::pst-finish writer))))
-      (let ((pst (pst-test-read (tuatara:file-octets path))))
+      (let ((pst (pst-test-read path)))
         (is equal '() (pst-test-problems pst))
         (destructuring-bind (data sub parent) (gethash #x21 (pst-test-nodes pst))
           (declare (ignore parent))
@@ -2148,71 +2323,104 @@ first message again in Inbox/Birds; return its path."
                                                      :encoding encoding :each #'pst-test-message)
                                  path)))
 
+(defun pst-test-check-written (pst count)
+  "Check PST, read by the tests, as PST-TEST-WRITE writes a mailbox of COUNT messages: no problems
+found, [MS-PST] 2.7.1's nodes, the folders, and each message's properties, recipients and
+attachments as written."
+  (let ((nodes (pst-test-nodes pst)))
+    (is equal '() (pst-test-problems pst))
+    ;; [MS-PST] 2.7.1's nodes
+    (dolist (nid '(#x21 #x61 #x122 #x12D #x12E #x12F #x1E1 #x201 #x60D #x60E #x60F #x610 #x692 #x671 #x2223
+                   #x8022 #x802D #x802E #x802F #x8042 #x804D #x804E #x804F #x8062 #x806D #x806E #x806F))
+      (true (gethash nid nodes) "node ~x" nid))
+    (flet ((pc (nid) (destructuring-bind (data sub parent) (gethash nid nodes)
+                       (declare (ignore parent))
+                       (pst-test-pc pst data sub)))
+           (tc (nid) (destructuring-bind (data sub parent) (gethash nid nodes)
+                       (declare (ignore parent))
+                       (pst-test-tc pst data sub)))
+           (text (properties tag) (tuatara:utf-16-text (cdr (assoc tag properties)))))
+      ;; the root's two rows of [MS-PST] 2.7.1, the search folder of spam in it but not listed
+      (is equal '("Top of Personal Folders" "Search Root")
+          (mapcar (lambda (row) (text row #x3001001F)) (tc #x12D)))
+      (is equal '("Deleted Items" "Inbox") (mapcar (lambda (row) (text row #x3001001F)) (tc #x802D)))
+      (let* ((inbox (pst-test-number (cdr (assoc #x67F20003 (second (tc #x802D)))) 0 4))
+             (rows (tc (logior (logandc2 inbox #x1F) #xE)))
+             (messages (loop for nid being the hash-keys of nodes using (hash-value entry)
+                             when (and (= 4 (logand nid #x1F)) (= (third entry) inbox)) collect nid)))
+        (is string= "Tests" (text (pc #x21) #x3001001F))
+        (is = count (length rows))
+        (is = count (length messages))
+        (is = count (pst-test-number (cdr (assoc #x36020003 (pc inbox))) 0 4))
+        (is equal '("Birds") (mapcar (lambda (row) (text row #x3001001F)) (tc (logior (logandc2 inbox #x1F) #xD))))
+        (loop for nid in (sort messages #'<) for i from 0
+              do (destructuring-bind (data sub parent) (gethash nid nodes)
+                   (declare (ignore parent))
+                   (let* ((written (pst-test-message i))
+                          (properties (pst-test-pc pst data sub))
+                          (subnodes (pst-test-subnodes pst sub)))
+                     ;; each property as given, but the flags saying it has attachments; those every
+                     ;; message has added
+                     (loop for (tag . value) in (outlook::pst-message-properties written)
+                           unless (or (= tag #x0E070003) (equalp value (cdr (assoc tag properties))))
+                             do (false tag "message ~d property ~x" i tag))
+                     (dolist (tag '(#x0E080003 #x0E170003 #x30070040 #x30080040 #x300B0102 #x0E060040))
+                       (true (assoc tag properties) "message ~d lacks ~x" i tag))
+                     (is = (if (evenp i) #x11 0) (pst-test-number (cdr (assoc #x0E070003 properties)) 0 4))
+                     (is equal '("Kākā" "Second")
+                         (mapcar (lambda (row) (text row #x3001001F))
+                                 (apply #'pst-test-tc pst (gethash #x692 subnodes))))
+                     (let ((attachments (loop for k being the hash-keys of subnodes using (hash-value entry)
+                                              when (= 5 (logand k #x1F))
+                                                collect (pst-test-pc pst (first entry) (second entry)))))
+                       (is = (+ (if (evenp i) 1 0) (if (zerop i) 1 0)) (length attachments))
+                       (when (evenp i)
+                         (let ((file (find #x37010102 attachments :key (lambda (a) (car (assoc #x37010102 a))))))
+                           (is equalp (cdr (assoc #x37010102 (first (outlook::pst-message-attachments written))))
+                               (cdr (assoc #x37010102 file)))
+                           (is = (* 3000 (1+ i)) (pst-test-number (cdr (assoc #x0E200003 file)) 0 4))
+                           (is string= (format nil "notes ū ~d.txt" i) (text file #x3707001F))))))))))))
+
 (define-test (outlook pst-written-and-read-back)
   ;; every layer read back by the tests' reader: the checks, the B-trees of several levels, the
   ;; nodes every mailbox has, the folders, each message's properties, recipients and attachments
   (with-test-directory (dir)
     (dolist (encoding '(:permute :none))
-      (let* ((pst (pst-test-read (tuatara:file-octets
-                                  (pst-test-write (namestring dir) "kea.pst" 240 :encoding encoding))))
-             (nodes (pst-test-nodes pst)))
-        (is equal '() (pst-test-problems pst))
-        (is = (if (eq encoding :permute) 1 0) (aref (pst-test-octets pst) 513))
-        ;; [MS-PST] 2.7.1's nodes
-        (dolist (nid '(#x21 #x61 #x122 #x12D #x12E #x12F #x1E1 #x201 #x60D #x60E #x60F #x610 #x692 #x671 #x2223
-                       #x8022 #x802D #x802E #x802F #x8042 #x804D #x804E #x804F #x8062 #x806D #x806E #x806F))
-          (true (gethash nid nodes) "node ~x" nid))
-        (flet ((pc (nid) (destructuring-bind (data sub parent) (gethash nid nodes)
-                           (declare (ignore parent))
-                           (pst-test-pc pst data sub)))
-               (tc (nid) (destructuring-bind (data sub parent) (gethash nid nodes)
-                           (declare (ignore parent))
-                           (pst-test-tc pst data sub)))
-               (text (properties tag) (tuatara:utf-16-text (cdr (assoc tag properties)))))
-          ;; the root's two rows of [MS-PST] 2.7.1, the search folder of spam in it but not listed
-          (is equal '("Top of Personal Folders" "Search Root")
-              (mapcar (lambda (row) (text row #x3001001F)) (tc #x12D)))
-          (is equal '("Deleted Items" "Inbox") (mapcar (lambda (row) (text row #x3001001F)) (tc #x802D)))
-          (let* ((inbox (pst-test-number (cdr (assoc #x67F20003 (second (tc #x802D)))) 0 4))
-                 (rows (tc (logior (logandc2 inbox #x1F) #xE)))
-                 (messages (loop for nid being the hash-keys of nodes using (hash-value entry)
-                                 when (and (= 4 (logand nid #x1F)) (= (third entry) inbox)) collect nid)))
-            (is string= "Tests" (text (pc #x21) #x3001001F))
-            (is = 240 (length rows))
-            (is = 240 (length messages))
-            (is = 240 (pst-test-number (cdr (assoc #x36020003 (pc inbox))) 0 4))
-            (is equal '("Birds") (mapcar (lambda (row) (text row #x3001001F)) (tc (logior (logandc2 inbox #x1F) #xD))))
-            (loop for nid in (sort messages #'<) for i from 0
-                  do (destructuring-bind (data sub parent) (gethash nid nodes)
-                       (declare (ignore parent))
-                       (let* ((written (pst-test-message i))
-                              (properties (pst-test-pc pst data sub))
-                              (subnodes (pst-test-subnodes pst sub)))
-                         ;; each property as given, but the flags saying it has attachments; those every
-                         ;; message has added
-                         (loop for (tag . value) in (outlook::pst-message-properties written)
-                               unless (or (= tag #x0E070003) (equalp value (cdr (assoc tag properties))))
-                                 do (false tag "message ~d property ~x" i tag))
-                         (dolist (tag '(#x0E080003 #x0E170003 #x30070040 #x30080040 #x300B0102 #x0E060040))
-                           (true (assoc tag properties) "message ~d lacks ~x" i tag))
-                         (is = (if (evenp i) #x11 0) (pst-test-number (cdr (assoc #x0E070003 properties)) 0 4))
-                         (is equal '("Kākā" "Second")
-                             (mapcar (lambda (row) (text row #x3001001F))
-                                     (apply #'pst-test-tc pst (gethash #x692 subnodes))))
-                         (let ((attachments (loop for k being the hash-keys of subnodes using (hash-value entry)
-                                                  when (= 5 (logand k #x1F))
-                                                    collect (pst-test-pc pst (first entry) (second entry)))))
-                           (is = (+ (if (evenp i) 1 0) (if (zerop i) 1 0)) (length attachments))
-                           (when (evenp i)
-                             (let ((file (find #x37010102 attachments :key (lambda (a) (car (assoc #x37010102 a))))))
-                               (is equalp (cdr (assoc #x37010102 (first (outlook::pst-message-attachments written))))
-                                   (cdr (assoc #x37010102 file)))
-                               (is = (* 3000 (1+ i)) (pst-test-number (cdr (assoc #x0E200003 file)) 0 4))
-                               (is string= (format nil "notes ū ~d.txt" i) (text file #x3707001F)))))))))))))
-  ;; past 2 GB nothing is written yet: refused as the place is given out
+      (let ((pst (pst-test-read (pst-test-write (namestring dir) "kea.pst" 240 :encoding encoding))))
+        (is = (if (eq encoding :permute) 1 0) (aref (pst-test-header pst) 513))
+        (pst-test-check-written pst 240))))
+  ;; past 50 GB, the most Outlook takes, nothing is written: refused as the place is given out
   (let ((writer (outlook::make-pst-writer nil "none")))
-    (setf (outlook::pst-writer-end writer) (- (* 2 1024 1024 1024) 4096))
+    (setf (outlook::pst-writer-end writer) (- (* 50 1024 1024 1024) 4096))
     (fail (outlook::pst-allocate writer 8192 64))))
+
+(defun pst-test-skip (writer to)
+  "Have WRITER give out nothing more before the offset TO, the octets between given to nothing: a
+hole in the file, which takes no room on the drive."
+  (outlook::pst-note-free writer (outlook::pst-writer-end writer) to)
+  (setf (outlook::pst-writer-end writer) to))
+
+(define-test (outlook pst-written-past-free-page-maps)
+  ;; a mailbox of more than 4 GB, its messages read back and its map pages where [MS-PST] 2.2.2.7
+  ;; puts them: the free page map (FPMap) due past the first 2 GB among them, which messages go
+  ;; round. Holes skip the most of it, so that it takes little room on the drive
+  (with-test-directory (dir)
+    (let ((messages 0) (path nil))
+      (sb-int:encapsulate 'outlook::pst-new-nid 'pst-test-skip
+                          (lambda (function writer type)
+                            (when (= type 4)
+                              (case (incf messages)
+                                (3 (pst-test-skip writer (- (outlook::pst-section-start 8192) 20000)))
+                                (8 (pst-test-skip writer (+ (expt 2 32) 1000)))))
+                            (funcall function writer type)))
+      (unwind-protect (setf path (pst-test-write (namestring dir) "far.pst" 12))
+        (sb-int:unencapsulate 'outlook::pst-new-nid 'pst-test-skip))
+      (let ((pst (pst-test-read path)) (fpmap (+ (outlook::pst-section-start 8192) 1024)))
+        (true (> (pst-test-size pst) (expt 2 32)))
+        (pst-test-check-written pst 12)
+        ;; the FPMap read where it is due, and blocks after it
+        (is = #x85 (aref (pst-test-range pst fpmap 512) 496))
+        (true (loop for (ib) being the hash-values of (pst-test-blocks pst) thereis (< fpmap ib (expt 2 32))))))))
 
 (defun pst-test-mailbox (directory pst)
   "The mailbox at PST read for a list as one opened is (readpst writing into DIRECTORY): its list
@@ -2273,7 +2481,7 @@ type and contents, an attached message compared alike."
                :width 140 :height 30))
             (is equal '("birds (2).pst" "birds.pst")
                 (sort (mapcar #'first (tuatara.io:directory-entries copies)) #'string<))
-            (let ((pst (pst-test-read (tuatara:file-octets (concatenate 'string copies "birds.pst")))))
+            (let ((pst (pst-test-read (concatenate 'string copies "birds.pst"))))
               (is equal '() (pst-test-problems pst)))
             (multiple-value-bind (back back-job) (pst-test-mailbox (merge-pathnames "back/" dir)
                                                                    (concatenate 'string copies "birds.pst"))
@@ -2343,7 +2551,7 @@ out, an attached message's too, and Attachments/NAME, an attachment's contents) 
   ;; refuses a mailbox whose map has an empty stream
   (with-test-directory (dir)
     (let* ((path (pst-test-write (namestring dir) "map.pst" 2))
-           (pst (pst-test-read (tuatara:file-octets path))))
+           (pst (pst-test-read path)))
       (is equal '() (pst-test-problems pst))
       (destructuring-bind (data sub parent) (gethash #x61 (pst-test-nodes pst))
         (declare (ignore parent))
@@ -2378,7 +2586,7 @@ out, an attached message's too, and Attachments/NAME, an attachment's contents) 
                                                            writer properties (outlook::pst-local-nids) subnodes)
                                                           0)
                                        (outlook::pst-finish writer))))
-      (let ((pst (pst-test-read (tuatara:file-octets path))))
+      (let ((pst (pst-test-read path)))
         (is equal '() (pst-test-problems pst))
         (destructuring-bind (data sub parent) (gethash #x21 (pst-test-nodes pst))
           (declare (ignore parent))

@@ -52,6 +52,7 @@ what reads them."
   (entry-preview-keys 'outlook-mailbox-mode "the list of a mailbox")
   (pushnew 'mail-visit *file-views*)
   (pushnew 'mailbox-visit *file-views*)
+  (pushnew 'mailbox-visit *sandboxed-file-views*)
   (pushnew 'outlook-preview-text *preview-text-functions*)
   (pushnew 'outlook-health-words *health-decoder-functions*))
 
