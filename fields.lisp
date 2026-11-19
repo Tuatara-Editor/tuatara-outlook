@@ -4,9 +4,9 @@
 ;;;; As each message of a mailbox is read for the list, its fields are written
 ;;;; beside the text a search looks through: every header, each on a line of
 ;;;; its own as often as the message has it (Received many times), the names
-;;;; of its attachments, and what the Outlook item readpst wrote of it says of
+;;;; of its attachments, and what the Outlook item written of it says of
 ;;;; itself, each property by the name Microsoft gives it (outlook-importance,
-;;;; outlook-conversation-topic). The names found in the mailbox are kept with
+;;;; outlook-conversation-topic), a named property by what it stands for. The names found in the mailbox are kept with
 ;;;; the list, and Tuatara's filters of a list's parts (C-x / f, C-x / h) offer
 ;;;; them: a filter on one tries its pattern on that field's values alone, and
 ;;;; a message without the field is no match. Nothing in a field is run.
@@ -38,7 +38,7 @@ name of an attachment, a label of yours, or what the Outlook item says."
 lower case: each of its headers whose name may be one (MAILBOX-HEADER-NAME-P),
 as often as it has it, encoded words decoded, on one line; attachment name
 and the name of each attachment; and what the Outlook item at MSG, the same
-message as readpst wrote it, says of itself, outlook and a space before each
+message written as an Outlook item, says of itself, outlook and a space before each
 property's name (MSG-FIELDS), when MSG is given and can be read."
   (append (loop for (name . value) in (mime-part-headers part)
                 when (mailbox-header-name-p name)

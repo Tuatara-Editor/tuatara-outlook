@@ -1,4 +1,4 @@
-;;;; cfb.lisp --- Compound files read, and the compressed RTF an Outlook item keeps its body in.
+;;;; cfb.lisp --- Compound files read and written, and the compressed RTF an Outlook item keeps its body in.
 ;;;; Copyright (C) 2026 Michael A Jones.  GPL-3.0-or-later; see LICENSE.
 ;;;;
 ;;;; An Outlook item (.msg) is a compound file, the format of Office
@@ -9,7 +9,9 @@
 ;;;; harm its reader, so every chain is followed with each sector seen once
 ;;;; and none past the file's end, every stream is held to what its chain
 ;;;; holds, and the directory tree is walked with each entry seen once,
-;;;; never by recursion.
+;;;; never by recursion. A compound file is written too, whole, for an Outlook
+;;;; item made of a message of a mailbox (msg.lisp): sectors of 512 octets,
+;;;; each storage's entries kept as a balanced red-black tree.
 ;;;;
 ;;;; The body of an item may be kept only as RTF, compressed (Microsoft's
 ;;;; MS-OXRTFCP, "LZFu"); its text is taken out roughly: control words and
@@ -216,6 +218,152 @@ come to more than twice the file, as streams sharing their sectors would."
           (t (cfb-sector-octets (cfb-octets cfb)
                                 (cfb-chain (cfb-entry-start entry) (cfb-fat cfb) (cfb-sectors cfb) :what "A stream")
                                 (cfb-sector-size cfb) :size size)))))
+
+;;; Written
+
+(defun cfb-name-less-p (a b)
+  "True when the name A comes before B in a storage's tree of a compound
+file: the shorter first, else by their characters in upper case (MS-CFB
+2.6.4)."
+  (if (/= (length a) (length b))
+      (< (length a) (length b))
+      (string< (string-upcase a) (string-upcase b))))
+
+(defun cfb-write (root)
+  "The octets of a new compound file holding ROOT, the children of its root:
+each (NAME . OCTETS) for a stream or (NAME . CHILDREN) for a storage,
+CHILDREN a list alike. Streams of fewer than 4,096 octets are kept in the
+mini stream, the rest in sectors of 512 octets of their own (MS-CFB, version
+3)."
+  (let ((entries (make-array 16 :adjustable t :fill-pointer 0))
+        (sectors (make-array 64 :adjustable t :fill-pointer 0))
+        (mini '()) (mini-size 0)
+        (mini-fat (make-array 64 :adjustable t :fill-pointer 0))
+        (fat (make-array 128 :adjustable t :fill-pointer 0)))
+    (labels ((chain (table start count)
+               (loop for k from start below (+ start count)
+                     do (vector-push-extend (if (= k (+ start count -1)) #xFFFFFFFE (1+ k)) table)))
+             (sector-stream (octets)
+               (let ((start (fill-pointer sectors)) (count (ceiling (length octets) 512)))
+                 (dotimes (k count) (vector-push-extend (list octets (* k 512)) sectors))
+                 (chain fat start count)
+                 start))
+             (entry (name type)
+               (let ((entry (list :name name :type type :left #xFFFFFFFF :right #xFFFFFFFF :child #xFFFFFFFF
+                                  :color 1 :start 0 :size 0)))
+                 (vector-push-extend entry entries)
+                 (values entry (1- (fill-pointer entries)))))
+             (tree (indices depth)
+               ;; a balanced tree of the sorted INDICES; its deepest nodes red where the tree is not full
+               (when indices
+                 (let* ((middle (floor (length indices) 2))
+                        (index (nth middle indices))
+                        (entry (aref entries index))
+                        (left (subseq indices 0 middle)) (right (nthcdr (1+ middle) indices)))
+                   (setf (getf entry :left) (or (tree left (1+ depth)) #xFFFFFFFF)
+                         (getf entry :right) (or (tree right (1+ depth)) #xFFFFFFFF)
+                         (getf entry :depth) depth)
+                   (setf (aref entries index) entry)
+                   index)))
+             (add (children)
+               (let ((indices (loop for (name . value) in children
+                                    collect (multiple-value-bind (entry index)
+                                                (entry name (if (listp value) 1 2))
+                                              (declare (ignore entry))
+                                              (if (listp value)
+                                                  (setf (getf (aref entries index) :child) (add value))
+                                                  (let ((size (length value)))
+                                                    (setf (getf (aref entries index) :size) size
+                                                          (getf (aref entries index) :start)
+                                                          (cond ((zerop size) #xFFFFFFFE)
+                                                                ((< size 4096)
+                                                                 (let ((start (floor mini-size 64))
+                                                                       (padded (* 64 (ceiling size 64))))
+                                                                   (push value mini)
+                                                                   (push (make-array (- padded size)
+                                                                                     :element-type '(unsigned-byte 8)
+                                                                                     :initial-element 0)
+                                                                         mini)
+                                                                   (incf mini-size padded)
+                                                                   (chain mini-fat start (ceiling size 64))
+                                                                   start))
+                                                                (t (sector-stream value))))))
+                                              index))))
+                 (let* ((sorted (sort indices #'cfb-name-less-p :key (lambda (i) (getf (aref entries i) :name))))
+                        (top (tree sorted 0))
+                        (deepest (loop for i in sorted maximize (getf (aref entries i) :depth)))
+                        (full (= (length sorted) (1- (expt 2 (1+ deepest))))))
+                   (unless full
+                     (dolist (i sorted)
+                       (when (= deepest (getf (aref entries i) :depth))
+                         (setf (getf (aref entries i) :color) 0))))
+                   (or top #xFFFFFFFF)))))
+      (entry "Root Entry" 5)
+      (setf (getf (aref entries 0) :child) (add root))
+      (let* ((mini-octets (let ((out (make-array mini-size :element-type '(unsigned-byte 8))) (at 0))
+                            (dolist (piece (reverse mini) out)
+                              (replace out piece :start1 at)
+                              (incf at (length piece)))))
+             (mini-start (if (plusp (length mini-octets)) (sector-stream mini-octets) #xFFFFFFFE))
+             (mini-fat-octets (let ((octets (make-array (* 4 (* 128 (ceiling (length mini-fat) 128)))
+                                                        :element-type '(unsigned-byte 8) :initial-element #xFF)))
+                                (loop for value across mini-fat for at from 0 by 4
+                                      do (dotimes (k 4) (setf (aref octets (+ at k)) (ldb (byte 8 (* 8 k)) value))))
+                                octets))
+             (mini-fat-start (if (plusp (length mini-fat)) (sector-stream mini-fat-octets) #xFFFFFFFE))
+             (directory (make-array (* 512 (ceiling (* 128 (length entries)) 512))
+                                    :element-type '(unsigned-byte 8) :initial-element 0)))
+        (setf (getf (aref entries 0) :start) mini-start (getf (aref entries 0) :size) (length mini-octets))
+        (flet ((put (at value count)
+                 (dotimes (k count) (setf (aref directory (+ at k)) (ldb (byte 8 (* 8 k)) value)))))
+          (loop for entry across entries for at from 0 by 128
+                do (let ((name (getf entry :name)))
+                     (loop for c across (subseq name 0 (min 31 (length name))) for k from 0
+                           do (put (+ at (* 2 k)) (min #xFFFF (char-code c)) 2))
+                     (put (+ at 64) (* 2 (1+ (min 31 (length name)))) 2)
+                     (setf (aref directory (+ at 66)) (getf entry :type)
+                           (aref directory (+ at 67)) (getf entry :color))
+                     (put (+ at 68) (getf entry :left) 4)
+                     (put (+ at 72) (getf entry :right) 4)
+                     (put (+ at 76) (getf entry :child) 4)
+                     (put (+ at 116) (getf entry :start) 4)
+                     (put (+ at 120) (getf entry :size) 4)))
+          (loop for at from (* 128 (length entries)) below (length directory) by 128
+                do (put (+ at 68) #xFFFFFFFF 4) (put (+ at 72) #xFFFFFFFF 4) (put (+ at 76) #xFFFFFFFF 4)))
+        (let* ((directory-start (sector-stream directory))
+               (used (fill-pointer sectors))
+               (fat-count 1) (difat-count 0))
+          (loop (let* ((fats (ceiling (+ used fat-count difat-count) 128))
+                       (difats (if (> fats 109) (ceiling (- fats 109) 127) 0)))
+                  (when (and (= fats fat-count) (= difats difat-count)) (return))
+                  (setf fat-count fats difat-count difats)))
+          (dotimes (k fat-count) (vector-push-extend #xFFFFFFFD fat))
+          (dotimes (k difat-count) (vector-push-extend #xFFFFFFFC fat))
+          (let* ((total (+ used fat-count difat-count))
+                 (out (make-array (* 512 (1+ total)) :element-type '(unsigned-byte 8) :initial-element 0)))
+            (flet ((put (at value count)
+                     (dotimes (k count) (setf (aref out (+ at k)) (ldb (byte 8 (* 8 k)) value)))))
+              (replace out *compound-file-signature*)
+              (put 24 #x3E 2) (put 26 3 2) (put 28 #xFFFE 2) (put 30 9 2) (put 32 6 2)
+              (put 44 fat-count 4) (put 48 directory-start 4) (put 56 4096 4)
+              (put 60 mini-fat-start 4) (put 64 (ceiling (length mini-fat) 128) 4)
+              (put 68 (if (plusp difat-count) (+ used fat-count) #xFFFFFFFE) 4) (put 72 difat-count 4)
+              (dotimes (k 109) (put (+ 76 (* 4 k)) (if (< k fat-count) (+ used k) #xFFFFFFFF) 4))
+              (loop for (octets from) across sectors for k from 0
+                    do (replace out octets :start1 (* 512 (1+ k)) :start2 from
+                                           :end2 (min (length octets) (+ from 512))))
+              (loop for value across fat for k from 0
+                    do (put (+ 512 (* 512 used) (* 4 k)) value 4))
+              (loop for k from (length fat) below (* 128 fat-count)
+                    do (put (+ 512 (* 512 used) (* 4 k)) #xFFFFFFFF 4))
+              ;; the DIFAT sectors: the FAT sectors past the header's 109, then the next DIFAT sector
+              (dotimes (d difat-count)
+                (let ((base (* 512 (+ 1 used fat-count d))))
+                  (dotimes (k 127)
+                    (let ((n (+ 109 (* d 127) k)))
+                      (put (+ base (* 4 k)) (if (< n fat-count) (+ used n) #xFFFFFFFF) 4)))
+                  (put (+ base 508) (if (< (1+ d) difat-count) (+ used fat-count d 1) #xFFFFFFFE) 4))))
+            out))))))
 
 ;;; The body kept as compressed RTF
 

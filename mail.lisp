@@ -2,23 +2,13 @@
 ;;;; Copyright (C) 2026 Michael A Jones.  GPL-3.0-or-later; see LICENSE.
 ;;;;
 ;;;; A message read from an Outlook item (.msg), a saved mail (.eml) or a
-;;;; mailbox (.pst, .ost, by readpst) becomes one MAIL, shown one way
+;;;; mailbox (.pst, .ost) becomes one MAIL, shown one way
 ;;;; whichever it came from (view.lisp). Its texts come in many encodings,
 ;;;; named by a charset (MIME) or a code page (Outlook); both are read
 ;;;; leniently, an octet that is not of the encoding shown as such, never an
 ;;;; error.
 
 (in-package #:outlook)
-
-(define-package-setting *outlook-readpst-program* "readpst"
-  "The program that reads Outlook mailboxes into separate messages, shut in the
-sandbox.
-The mailboxes are personal storage table (.pst) or offline storage table
-\(.ost) files. The program is readpst, of the libpst package. Set it in the
-init file after the outlook package is loaded.
-- a name: looked for in the system's own directories of programs.
-- a path: that program."
-  :values string)
 
 (define-package-setting *outlook-page-program* "weasyprint"
   "The program that draws a message written in HTML as it looks, as pages, shut
@@ -30,18 +20,18 @@ internet. Set it in the init file after the outlook package is loaded.
   :values string)
 
 (define-package-setting *outlook-include-deleted* t
-  "Whether the list of a mailbox (.pst, .ost) shows the items it still holds that
-were deleted.
-They are listed in the folders they were deleted from, beside the others.
+  "Whether the list of a mailbox (.pst, .ost) shows its deleted items.
+They are those of its folder of deleted items (Deleted Items) and of the
+folders in it.
 - t: list them.
-- nil: list only the items the mailbox holds as not deleted."
+- nil: leave them out."
   :values boolean)
 
 (define-package-setting *outlook-largest-file* (* 256 1024 1024)
   "The most octets an Outlook item (.msg) or a saved mail (.eml) may have to be
 read as a message.
 An attachment or a part of one may hold as many. A larger one is opened as any
-file.
+file. A message of a mailbox is read with no more of the mailbox than this.
 - a size, 1 octet or more: a whole number of octets, or words such as
   \"512M\"; 256 megabytes (MB) by default."
   :values (octets 1 *))
@@ -55,14 +45,14 @@ deep as twice this.
   :values (integer 0 *))
 
 (define-package-setting *outlook-mailbox-seconds* 3600
-  "The most seconds readpst may take reading a mailbox (.pst, .ost).
-After them it is stopped and what it wrote by then is listed.
+  "The most seconds reading a mailbox (.pst, .ost) may take.
+After them it is stopped and what was read by then is listed.
 - a time, 1 second or more: seconds, or words such as \"90m\" or \"2h\"; 3600
   (an hour) by default."
   :values (seconds 1 * :whole))
 
 (define-package-setting *outlook-mailbox-most-files* 1000000
-  "The most files readpst writes that a mailbox's (.pst, .ost) list takes in.
+  "The most files written of a mailbox (.pst, .ost) its list takes in.
 Past them the rest are left out, and the list says so. Raise it to list a
 larger mailbox whole.
 - a whole number, 1 or more: the files, a million by default."
@@ -78,10 +68,10 @@ says how many were.
   :values (integer 1 *))
 
 (define-package-setting *outlook-mailbox-space* (* 32 1024 1024 1024)
-  "The most octets readpst may write reading a mailbox (.pst, .ost).
-Its messages go in your cache directory. It is stopped at the limit, as it is
-when the drive has less than 1 gigabyte (GB) free, and what it wrote by then
-is listed.
+  "The most octets reading a mailbox (.pst, .ost) may write.
+Its messages go in your cache directory. Reading is stopped at the limit, as
+it is when the drive has less than 1 gigabyte (GB) free, and what was read by
+then is listed.
 - a size, 1 octet or more: a whole number of octets, or words such as \"64G\";
   32 GB by default."
   :values (octets 1 *))

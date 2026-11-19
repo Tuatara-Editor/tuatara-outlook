@@ -6,10 +6,12 @@
 ;;;; a fixed size in one stream (__properties_version1.0) and each of the
 ;;;; others in a stream of its own (__substg1.0_NNNNTTTT); a storage for each
 ;;;; recipient and each attachment, laid out alike; an attachment that is an
-;;;; item itself, a storage within, read as one to a depth. Named properties
-;;;; (those numbered from 0x8000) are left out. An item is read too as a
-;;;; message to be written in a new mailbox (pst.lisp), its properties as
-;;;; they are stored.
+;;;; item itself, a storage within, read as one to a depth. An item is read
+;;;; too as a message to be written in a new mailbox (pst.lisp), its
+;;;; properties as they are stored, its named properties (those numbered from
+;;;; 0x8000) with what its map of them says they stand for. A message of a
+;;;; mailbox is written as an Outlook item too, for the list of the mailbox
+;;;; (items.lisp).
 
 (in-package #:outlook)
 
@@ -48,8 +50,7 @@ octets of a string, binary data or a GUID as its stream holds them, or
 recipient or an attachment, whose fixed-size properties' stream has HEADER
 octets before them (MSG-STORED-PROPERTIES): a hash table from each property's
 number to (TYPE . VALUE), VALUE a number, a universal time, T or NIL, octets,
-a string, or (:storage . ENTRY). Named ones of any size but fixed are left
-out."
+a string, or (:storage . ENTRY)."
   (let ((table (make-hash-table)))
     (loop for (tag . raw) in (msg-stored-properties cfb entry header)
           for type = (ldb (byte 16 0) tag)
@@ -63,9 +64,13 @@ out."
                (#x0040 (setf (gethash id table) (cons type (filetime-universal-time (cfb-number raw 0 8)))))
                ;; a string of Unicode before one of the item's code page
                ((#x001F #x001E #x0102)
-                (when (and (< id #x8000) (not (and (eql old #x001F) (/= type #x001F))))
-                  (setf (gethash id table) (cons type (if (= type #x001F) (utf-16-text raw) raw)))))
-               (#x000D (when (< id #x8000) (setf (gethash id table) (cons type raw))))))
+                (unless (and (eql old #x001F) (/= type #x001F))
+                  (setf (gethash id table)
+                        (cons type (if (= type #x001F)
+                                       (let ((text (pst-utf-16-text raw)))
+                                         (subseq text 0 (or (position (code-char 0) text) (length text))))
+                                       raw)))))
+               (#x000D (setf (gethash id table) (cons type raw)))))
     table))
 
 (defun msg-value (properties id)
@@ -231,6 +236,7 @@ read as one when DEPTH is below *OUTLOOK-NESTING-LIMIT*."
             (mail-message-id mail) (text #x1035)
             (mail-headers mail) (let ((h (text #x007D))) (and h (string-right-trim '(#\Return #\Newline #\Nul) h))))
       (mail-detail mail "Created" (time-words (value #x3007)))
+      (mail-detail mail "Entry identifier" (let ((id (value #x0FFF))) (and (vectorp id) (octets-hex id))))
       (mail-detail mail "Last changed" (time-words (value #x3008)))
       (mail-detail mail "Last changed by" (text #x3FFA))
       (mail-detail mail "In reply to" (text #x1042))
@@ -252,7 +258,8 @@ read as one when DEPTH is below *OUTLOOK-NESTING-LIMIT*."
     (#x0070 "conversation-topic") (#x0071 "conversation-index") (#x0C1A "sender-name") (#x0C1D "sender-search-key")
     (#x0C1E "sender-address-type") (#x0C1F "sender-email-address") (#x0E02 "display-bcc") (#x0E03 "display-cc")
     (#x0E04 "display-to") (#x0E06 "message-delivery-time") (#x0E07 "message-flags") (#x0E08 "message-size")
-    (#x0E1D "normalized-subject") (#x0FF9 "record-key") (#x1035 "internet-message-id")
+    (#x0E1D "normalized-subject") (#x0E09 "parent-entry-id") (#x0FF9 "record-key") (#x0FFF "entry-id")
+    (#x1035 "internet-message-id")
     (#x1039 "internet-references") (#x1042 "in-reply-to-id") (#x1046 "original-message-id") (#x3007 "creation-time")
     (#x3008 "last-modification-time") (#x300B "search-key") (#x3FDE "internet-codepage")
     (#x3FFA "last-modifier-name") (#x3FFD "message-codepage") (#x5D01 "sender-smtp-address")
@@ -260,20 +267,48 @@ read as one when DEPTH is below *OUTLOOK-NESTING-LIMIT*."
   "The names Microsoft's MS-OXPROPS gives the properties of an Outlook item,
 each (NUMBER NAME), as the fields of a message are named (MSG-FIELDS).")
 
+(defparameter *msg-property-sets*
+  '(("00020328-0000-0000-C000-000000000046" "mapi") ("00020329-0000-0000-C000-000000000046" "public")
+    ("00020386-0000-0000-C000-000000000046" "internet-headers") ("00062002-0000-0000-C000-000000000046" "appointment")
+    ("00062003-0000-0000-C000-000000000046" "task") ("00062004-0000-0000-C000-000000000046" "address")
+    ("00062008-0000-0000-C000-000000000046" "common") ("0006200A-0000-0000-C000-000000000046" "log")
+    ("0006200B-0000-0000-C000-000000000046" "sticky-note") ("6ED8DA90-450B-101B-98DA-00AA003F1305" "meeting")
+    ("41F28F13-83F4-4114-A584-EEDB5A6B0BFF" "messaging") ("00062040-0000-0000-C000-000000000046" "sharing"))
+  "The property sets Microsoft's MS-OXPROPS names, each (GUID WORD), WORD what
+the field of a named property of the set named by a number begins with
+\(MSG-FIELD-NAME).")
+
+(defun msg-field-name (id names)
+  "The name of the field of the property numbered ID of an Outlook item whose
+named properties NAMES says what they stand for (MSG-NAME-TABLE): that
+MS-OXPROPS gives it (*MSG-FIELD-NAMES*); for a named one, its name, or its
+property set's word and its number (address-8083), the set written out when
+it has no word (*MSG-PROPERTY-SETS*); else 0x and its number."
+  (let ((named (and (>= id #x8000) (gethash id names))))
+    (cond ((assoc id *msg-field-names*) (second (assoc id *msg-field-names*)))
+          ((and named (stringp (cdr named))) (cdr named))
+          (named (format nil "~a-~(~4,'0x~)"
+                         (or (second (find (car named) *msg-property-sets* :key (lambda (set) (pst-guid (first set)))
+                                                                            :test #'equalp))
+                             (octets-hex (car named)))
+                         (cdr named)))
+          (t (format nil "0x~(~4,'0x~)" id)))))
+
 (defparameter *msg-contents-properties* '(#x007D #x1000 #x1009 #x1013)
   "The properties of an Outlook item that hold its contents, not what it says
 of itself: its internet headers and its bodies, plain, compressed RTF and HTML.")
 
 (defun msg-fields (octets)
   "What the Outlook item in OCTETS (a .msg) says of itself, each (NAME . TEXT):
-each of its properties but those of its contents (*MSG-CONTENTS-PROPERTIES*)
-and the named ones, NAME the name MS-OXPROPS gives it (*MSG-FIELD-NAMES*), or
-0x and its number for one not named there;
+each of its properties but those of its contents (*MSG-CONTENTS-PROPERTIES*),
+NAME the name MS-OXPROPS gives it or what a named one stands for
+\(MSG-FIELD-NAME);
 TEXT a string as it is, a time in universal time, importance, sensitivity and
 the message flags in words, a number written, octets in hexadecimal. In the
 order of their numbers; an error when OCTETS are no Outlook item."
   (let* ((cfb (cfb-read octets))
          (properties (msg-properties cfb (aref (cfb-entries cfb) 0) 32))
+         (names (msg-name-table cfb))
          (codepage (or (msg-value properties #x3FFD) (msg-value properties #x3FDE)))
          (fields '()))
     (maphash (lambda (id entry)
@@ -289,9 +324,7 @@ order of their numbers; an error when OCTETS are no Outlook item."
                                      ((consp value) nil)
                                      (t (msg-string properties id codepage)))))
                      (when (and text (plusp (length text)))
-                       (push (list id (or (second (assoc id *msg-field-names*)) (format nil "0x~(~4,'0x~)" id))
-                                   (one-line text))
-                             fields))))))
+                       (push (list id (msg-field-name id names) (one-line text)) fields))))))
              properties)
     (mapcar (lambda (field) (cons (second field) (third field))) (sort fields #'< :key #'first))))
 
@@ -315,17 +348,33 @@ Windows-1252."
               (charset-text octets "windows-1252" :end end)
               text)))))
 
-(defun msg-pst-properties (cfb entry header charset depth)
+(defun msg-name-table (cfb)
+  "The named properties of the Outlook item in the compound file (CFB), from
+the map in its storage __nameid_version1.0 ([MS-OXMSG] 2.2.3): a table from
+each property number from #x8000 to (GUID . NAME) (PST-NAME-TABLE); empty
+when it has none."
+  (let* ((root (aref (cfb-entries cfb) 0))
+         (map (find "__nameid_version1.0" (cfb-children cfb root) :key #'cfb-entry-name :test #'string=)))
+    (if (and map (eq (cfb-entry-type map) :storage))
+        (flet ((stream (name)
+                 (let ((child (find name (cfb-children cfb map) :key #'cfb-entry-name :test #'string=)))
+                   (and child (eq (cfb-entry-type child) :stream) (cfb-stream-octets cfb child)))))
+          (pst-name-table (stream "__substg1.0_00020102") (stream "__substg1.0_00030102")
+                          (stream "__substg1.0_00040102")))
+        (make-hash-table))))
+
+(defun msg-pst-properties (cfb entry header charset depth names)
   "The properties of the storage ENTRY of the compound file (CFB), HEADER
 octets before its fixed-size ones (MSG-STORED-PROPERTIES), as PST-MESSAGE
-keeps them: named ones left out, a string of eight-bit characters read in
+keeps them: a named one kept when NAMES (MSG-NAME-TABLE) says what it stands
+for, else left out, a string of eight-bit characters read in
 CHARSET (MSG-EIGHT-BIT-TEXT) and made Unicode, a string's null left out, a
 fixed-size value cut to its size, and an attached item read as a message
 \(MSG-PST-MESSAGE) while DEPTH is below *OUTLOOK-NESTING-LIMIT*, never one
 being read already, and no more of them than *MSG-ITEM-LIMIT*."
   (loop for (tag . raw) in (msg-stored-properties cfb entry header)
         for type = (pst-property-type tag)
-        for value = (cond ((>= (ldb (byte 16 16) tag) #x8000) nil)
+        for value = (cond ((and (>= (ldb (byte 16 16) tag) #x8000) (not (gethash (ldb (byte 16 16) tag) names))) nil)
                           ((pst-fixed-size type) (subseq raw 0 (pst-fixed-size type)))
                           ((= type #x001E) (pst-text (msg-eight-bit-text raw charset)))
                           ((= type #x001F)
@@ -336,29 +385,144 @@ being read already, and no more of them than *MSG-ITEM-LIMIT*."
                           ((= type #x000D)
                            (and (< depth *outlook-nesting-limit*) (< (length *msg-items*) *msg-item-limit*)
                                 (not (member (cdr raw) *msg-items*))
-                                (msg-pst-message cfb (cdr raw) :header 24 :depth (1+ depth) :charset charset)))
+                                (msg-pst-message cfb (cdr raw) :header 24 :depth (1+ depth) :charset charset
+                                                                :names names)))
                           (t raw))
         when value collect (cons (if (= type #x001E) (logior (logandc2 tag #xFFFF) #x001F) tag) value)))
 
-(defun msg-pst-message (cfb entry &key (header 32) (depth 0) charset)
+(defun msg-pst-message (cfb entry &key (header 32) (depth 0) charset (names (msg-name-table cfb)))
   "The item in the storage ENTRY of the compound file (CFB) (an item of its
 own, HEADER 32; an attached one, 24) as a PST-MESSAGE, to be written in a
 mailbox: its properties, its recipients' and its attachments', as
 MSG-PST-PROPERTIES reads them, its strings of eight-bit characters in the
-code page it names, else in CHARSET; an attached item as a message to a
-depth. A recipient with neither a name nor an address, as readpst writes for
-kinds of recipient a message has none of, is left out."
+code page it names, else in CHARSET, and what its named properties stand
+for, from NAMES, the item's map of them (MSG-NAME-TABLE); an attached item as
+a message to a depth. A recipient with neither a name nor an address is left
+out."
   (push entry *msg-items*)
   (let* ((properties (msg-properties cfb entry header))
          (charset (or (mail-codepage-charset (or (msg-value properties #x3FFD) (msg-value properties #x3FDE)))
                       charset)))
     (flet ((each (prefix)
              (loop for storage in (msg-children-named cfb entry prefix)
-                   collect (msg-pst-properties cfb storage 8 charset depth))))
-      (make-pst-message
-       :properties (msg-pst-properties cfb entry header charset depth)
-       :recipients (remove-if-not (lambda (recipient)
-                                    (some (lambda (tag) (plusp (length (pst-value recipient tag))))
-                                          '(#x3001001F #x3003001F #x39FE001F)))
-                                  (each "__recip_version1.0_#"))
-       :attachments (each "__attach_version1.0_#")))))
+                   collect (msg-pst-properties cfb storage 8 charset depth names))))
+      (let ((own (msg-pst-properties cfb entry header charset depth names))
+            (recipients (remove-if-not (lambda (recipient)
+                                         (some (lambda (tag) (plusp (length (pst-value recipient tag))))
+                                               '(#x3001001F #x3003001F #x39FE001F)))
+                                       (each "__recip_version1.0_#")))
+            (attachments (each "__attach_version1.0_#")))
+        (make-pst-message
+         :properties own :recipients recipients :attachments attachments
+         :names (loop for id being the hash-keys of names using (hash-value name)
+                      when (some (lambda (properties) (find id properties :key (lambda (p) (ldb (byte 16 16) (car p)))))
+                                 (cons own (append recipients attachments)))
+                        collect (cons id name)))))))
+
+;;; A message of a mailbox written as an Outlook item
+
+(defun msg-multiple-values (type octets)
+  "The values of a property of several values of TYPE (the type with #x1000
+set), OCTETS as a mailbox keeps them ([MS-PST] 2.3.3.4), each an octet
+vector: those of a fixed size cut in turn; those of any size by the count
+and offsets they begin with. NIL when OCTETS are not as that says."
+  (let ((size (pst-fixed-size (logand type #x0FFF))))
+    (if size
+        (loop for at from 0 to (- (length octets) size) by size collect (subseq octets at (+ at size)))
+        (let ((count (and (>= (length octets) 4) (octets-integer octets 0 4))))
+          (when (and count (<= (* 4 (1+ count)) (length octets)))
+            (loop for i below count
+                  for start = (octets-integer octets (* 4 (1+ i)) 4)
+                  for end = (if (< (1+ i) count) (octets-integer octets (* 4 (+ 2 i)) 4) (length octets))
+                  when (<= start end (length octets)) collect (subseq octets start end)))))))
+
+(defun msg-stored-streams (properties header &key counts)
+  "The streams and storages of an Outlook item's storage holding PROPERTIES,
+each (TAG . VALUE) as PST-MESSAGE keeps them (a message attached as a
+PST-MESSAGE, made a storage by MSG-ITEM-STORAGE), laid out as [MS-OXMSG]
+2.4 says: the stream of properties, HEADER octets of it before them (32 for
+an item of its own, 24 for one attached, 8 for a recipient or an
+attachment), COUNTS its recipients' and attachments' numbers for the first
+two; a stream for each value of any size, a string with its null after it;
+a stream for each of several values. Children as CFB-WRITE takes them."
+  (let ((fixed (pst-octets header)) (records '()) (children '()))
+    (when counts
+      (destructuring-bind (recipients attachments) counts
+        (pst-put fixed 8 recipients 4) (pst-put fixed 12 attachments 4)
+        (pst-put fixed 16 recipients 4) (pst-put fixed 20 attachments 4)))
+    (loop for (tag . value) in properties
+          for type = (pst-property-type tag)
+          for size = (pst-fixed-size type)
+          for name = (format nil "__substg1.0_~8,'0X" tag)
+          do (let ((record (pst-octets 16)))
+               (pst-put record 0 tag 4)
+               (pst-put record 4 6 4)
+               (cond ((and size (<= size 8)) (replace record value :start1 8 :end2 (min 8 (length value))))
+                     ((pst-message-p value)
+                      (pst-put record 8 #xFFFFFFFF 4)
+                      (push (cons name (msg-item-storage value 24)) children))
+                     ((logtest type #x1000)
+                      (let ((values (msg-multiple-values type value)))
+                        (if (pst-fixed-size (logand type #x0FFF))
+                            (progn (pst-put record 8 (length value) 4) (push (cons name value) children))
+                            (let* ((null (case type (#x101F 2) (#x101E 1) (t 0)))
+                                   (lengths (pst-join (loop for v in values
+                                                            collect (pst-number (+ (length v) null) 4)
+                                                            when (= type #x1102) collect (pst-octets 4)))))
+                              (pst-put record 8 (length lengths) 4)
+                              (push (cons name lengths) children)
+                              (loop for v in values for i from 0
+                                    do (push (cons (format nil "~a-~8,'0X" name i)
+                                                   (pst-join (list v (pst-octets null))))
+                                             children))))))
+                     (t (let ((stream (case type
+                                        (#x001F (pst-join (list value (pst-octets 2))))
+                                        (#x001E (pst-join (list value (pst-octets 1))))
+                                        (t value))))
+                          (pst-put record 8 (length stream) 4)
+                          (push (cons name stream) children))))
+               (push record records)))
+    (cons (cons "__properties_version1.0" (pst-join (cons fixed (nreverse records)))) (nreverse children))))
+
+(defun msg-item-storage (message header)
+  "The children of the storage of the Outlook item MESSAGE, a PST-MESSAGE,
+HEADER octets before its properties (32 of its own, 24 attached): its
+properties (MSG-STORED-STREAMS), a storage for each recipient and each
+attachment, numbered from 0, each with its number among its properties."
+  (let ((recipients (pst-message-recipients message)) (attachments (pst-message-attachments message)))
+    (append (msg-stored-streams (pst-message-properties message) header
+                                :counts (list (length recipients) (length attachments)))
+            (loop for recipient in recipients for i from 0
+                  collect (cons (format nil "__recip_version1.0_#~8,'0X" i)
+                                (msg-stored-streams (cons (pst-property #x30000003 i)
+                                                          (remove #x30000003 recipient :key #'car))
+                                                    8)))
+            (loop for attachment in attachments for i from 0
+                  collect (cons (format nil "__attach_version1.0_#~8,'0X" i)
+                                (msg-stored-streams (cons (pst-property #x0E210003 i)
+                                                          (remove #x0E210003 attachment :key #'car))
+                                                    8))))))
+
+(defun msg-name-streams (names)
+  "The storage of named properties of an Outlook item ([MS-OXMSG] 2.2.3):
+NAMES, a table from (GUID . NAME) to the number from #x8000 given it, as the
+streams of property sets, of entries and of names a string, laid out as a
+mailbox's map of named properties is (PST-NAME-STREAMS)."
+  (multiple-value-bind (guids entries strings) (pst-name-streams names)
+    (list (cons "__substg1.0_00020102" guids)
+          (cons "__substg1.0_00030102" entries)
+          (cons "__substg1.0_00040102" strings))))
+
+(defun msg-write (message &key entry-id)
+  "MESSAGE, a PST-MESSAGE, as an Outlook item (.msg, [MS-OXMSG]), octets: a
+compound file (CFB-WRITE) of its properties, recipients, attachments and
+messages attached, and its named properties' map; ENTRY-ID, when given, the
+entry identifier it had in its mailbox, among its properties."
+  (let* ((names (make-hash-table :test 'equalp))
+         (message (pst-renamed message names))
+         (properties (pst-message-properties message)))
+    (when entry-id
+      (setf properties (cons (cons #x0FFF0102 entry-id) (remove #x0FFF0102 properties :key #'car))))
+    (setf (pst-message-properties message) properties)
+    (cfb-write (append (msg-item-storage message 32)
+                       (list (cons "__nameid_version1.0" (msg-name-streams names)))))))
