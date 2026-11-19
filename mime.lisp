@@ -1,7 +1,7 @@
 ;;;; mime.lisp --- Internet mail read: headers, MIME parts and their encodings, HTML as text.
 ;;;; Copyright (C) 2026 Michael A Jones.  GPL-3.0-or-later; see LICENSE.
 ;;;;
-;;;; A saved mail (.eml), and each message readpst takes out of a mailbox, is
+;;;; A saved mail (.eml), and each message taken out of a mailbox, is
 ;;;; internet mail: headers, then a body that may be made of parts within
 ;;;; parts (MIME), each in an encoding of its own (base64, quoted-printable)
 ;;;; and a charset. It is read here from its octets, by positions in them,
@@ -10,7 +10,9 @@
 ;;;; within parts are read to a depth, and to a number of them, and a
 ;;;; boundary that never comes leaves the rest of the message one part.
 ;;;; HTML is read as text: its markup left out, links and pictures named,
-;;;; nothing it points to fetched.
+;;;; nothing it points to fetched. Mail is written too, for the messages of a
+;;;; mailbox read (items.lisp): parts in base64 or quoted-printable, headers
+;;;; of other characters than ASCII as encoded words, lines folded.
 
 (in-package #:outlook)
 
@@ -187,6 +189,135 @@ the octet XX, = at a line's end joining it to the next, the rest as it is."
                                       ((= j end) (setf i end) t))))
                              (t (vector-push o out) (incf i))))))))
     (coerce out '(simple-array (unsigned-byte 8) (*)))))
+
+;;; Written
+
+(defparameter *mime-base64-digits*
+  (map '(simple-array (unsigned-byte 8) (64)) #'char-code
+       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+  "The 64 digits of base64 (RFC 2045 6.8), in the order of their values, each
+as its octet in ASCII.")
+
+(defun mime-base64 (octets)
+  "OCTETS in base64 (RFC 2045 6.8), in lines of 76 characters, each ended by
+a line feed, as a part of mail is written: the octets of those ASCII
+characters."
+  (declare (type (simple-array (unsigned-byte 8) (*)) octets) (optimize speed))
+  (let* ((count (length octets))
+         (digits (* 4 (ceiling count 3)))
+         (out (make-array (+ digits (ceiling digits 76)) :element-type '(unsigned-byte 8)))
+         (table *mime-base64-digits*)
+         (at 0) (column 0))
+    (declare (type fixnum count at column) (type (simple-array (unsigned-byte 8) (64)) table))
+    (loop for i of-type fixnum from 0 below count by 3
+          do (let* ((left (- count i))
+                    (n (logior (ash (aref octets i) 16)
+                               (if (> left 1) (ash (aref octets (+ i 1)) 8) 0)
+                               (if (> left 2) (aref octets (+ i 2)) 0))))
+               (declare (type (unsigned-byte 24) n) (type fixnum left))
+               (setf (aref out at) (aref table (ldb (byte 6 18) n))
+                     (aref out (+ at 1)) (aref table (ldb (byte 6 12) n))
+                     (aref out (+ at 2)) (if (> left 1) (aref table (ldb (byte 6 6) n)) 61)
+                     (aref out (+ at 3)) (if (> left 2) (aref table (ldb (byte 6 0) n)) 61))
+               (incf at 4)
+               (when (= (incf column 4) 76)
+                 (setf (aref out at) 10 column 0)
+                 (incf at))))
+    (when (plusp column) (setf (aref out at) 10) (incf at))
+    (if (= at (length out)) out (subseq out 0 at))))
+
+(defun mime-quoted-printable (text)
+  "TEXT, a string (in UTF-8) or octets, its lines ended by line feeds (a
+carriage return before one left out), in quoted-printable (RFC 2045 6.7):
+each octet that is not printable ASCII, and = itself, written =XX, a space
+or tab at a line's end too; no line longer than 76 characters, the longer
+broken by a = at their end: the octets of those ASCII characters."
+  (let* ((octets (coerce (if (stringp text) (string-octets text) text) '(simple-array (unsigned-byte 8) (*))))
+         (count (length octets))
+         (out (make-array (+ 16 (* 3 count) (* 2 (ceiling (* 3 count) 75))) :element-type '(unsigned-byte 8)))
+         (at 0) (column 0)
+         (digits "0123456789ABCDEF"))
+    (declare (type (simple-array (unsigned-byte 8) (*)) octets) (type fixnum count at column)
+             (type (simple-array (unsigned-byte 8) (*)) out) (optimize speed))
+    (loop for i of-type fixnum from 0 below count
+          for o of-type (unsigned-byte 8) = (aref octets i)
+          do (cond ((= o 10)
+                    (setf (aref out at) 10 column 0)
+                    (incf at))
+                   ((and (= o 13) (< (1+ i) count) (= 10 (aref octets (1+ i)))))
+                   (t (let* ((last (or (= (1+ i) count) (= 10 (aref octets (1+ i)))
+                                       (and (= 13 (aref octets (1+ i))) (< (+ i 2) count)
+                                            (= 10 (aref octets (+ i 2))))))
+                             (plain (or (<= 33 o 60) (<= 62 o 126) (and (or (= o 32) (= o 9)) (not last))))
+                             (width (if plain 1 3)))
+                        (when (> (+ column width) 75)
+                          (setf (aref out at) 61 (aref out (1+ at)) 10 column 0)
+                          (incf at 2))
+                        (if plain
+                            (setf (aref out at) o)
+                            (setf (aref out at) 61
+                                  (aref out (+ at 1)) (char-code (schar digits (ash o -4)))
+                                  (aref out (+ at 2)) (char-code (schar digits (logand o 15)))))
+                        (incf at width)
+                        (incf column width)))))
+    (subseq out 0 at)))
+
+(defun mime-ascii-p (text)
+  "True when TEXT is printable ASCII alone, with spaces and tabs."
+  (every (lambda (c) (or (char<= #\Space c #\~) (char= c #\Tab))) text))
+
+(defun mime-encode-words (text)
+  "TEXT as a header's value may hold it: as it is when it is printable ASCII,
+else in encoded words of UTF-8 in base64 (RFC 2047), each short enough for a
+line and holding whole characters."
+  (if (mime-ascii-p text)
+      text
+      (let ((words '()) (piece (make-string-output-stream)) (size 0))
+        (flet ((flush ()
+                 (let ((chunk (get-output-stream-string piece)))
+                   (when (plusp (length chunk))
+                     (push (format nil "=?utf-8?B?~a?=" (string-right-trim '(#\Newline)
+                                                                           (octets-string (mime-base64
+                                                                                           (string-octets chunk)))))
+                           words))
+                   (setf size 0))))
+          (loop for c across (one-line text)
+                for octets = (string-octet-length (string c))
+                do (when (> (+ size octets) 45) (flush))
+                   (write-char c piece)
+                   (incf size octets))
+          (flush)
+          (format nil "~{~a~^ ~}" (nreverse words))))))
+
+(defun mime-parameter (name value)
+  "The parameter NAME of a header, given VALUE, as written after a ; of its
+line: NAME=\"VALUE\" when VALUE is printable ASCII, else with VALUE in UTF-8
+percent-encoded (RFC 2231), NAME*=utf-8''..."
+  (if (mime-ascii-p value)
+      (format nil "~a=\"~a\"" name (cl-ppcre:regex-replace-all "([\"\\\\])" value "\\\\\\1"))
+      (format nil "~a*=utf-8''~{~a~}" name
+              (loop for o across (string-octets value)
+                    collect (if (or (<= 48 o 57) (<= 65 o 90) (<= 97 o 122) (find (code-char o) "-._~"))
+                                (string (code-char o))
+                                (format nil "%~2,'0X" o))))))
+
+(defun mime-header-line (name value)
+  "The header NAME with VALUE as a line of mail, folded before a space where
+it would pass 78 characters, ended by a line feed; a line break in VALUE
+made a space."
+  (let ((words (uiop:split-string (substitute-if #\Space (lambda (c) (member c '(#\Return #\Newline))) value)
+                                  :separator " "))
+        (column (+ 2 (length name))))
+    (with-output-to-string (out)
+      (format out "~a:" name)
+      (loop for word in words for first = t then nil
+            do (when (and (not first) (> (+ column 1 (length word)) 78))
+                 (write-char #\Newline out)
+                 (setf column 0))
+               (write-char #\Space out)
+               (write-string word out)
+               (incf column (1+ (length word))))
+      (write-char #\Newline out))))
 
 ;;; Parts
 
@@ -429,7 +560,9 @@ says, or NIL when it cannot be read as one."
     "importance"
     "x-priority")
   "The headers of internet mail shown among what a message says of itself,
-besides those every message shows; and those readpst adds (X-libpst-...).")
+besides those every message shows; and those the reading of a mailbox adds,
+what it found wrong in the message (X-Tuatara-Reading-Note), as readpst
+added its own (X-libpst-...).")
 
 (defun mime-mail (part &key (depth 0))
   "The MAIL the internet mail PART (MIME-READ) is: its headers, its body (its
@@ -455,6 +588,8 @@ whole."
       (dolist (name *mail-shown-headers*)
         (mail-detail mail (string-capitalize name) (header name)))
       (loop for (name . value) in (mime-part-headers part)
+            when (string= name "x-tuatara-reading-note")
+              do (mail-detail mail "Reading note" (mime-decode-words value))
             when (uiop:string-prefix-p "x-libpst-" name)
               do (mail-detail mail name (mime-decode-words value)))
       (when body

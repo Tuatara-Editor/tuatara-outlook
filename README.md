@@ -8,14 +8,14 @@ read are never changed.
 
 ## Loading it, step by step
 
-1. **Install what it needs.** readpst, which reads mailboxes, and WeasyPrint,
-   which draws a message as it looks (`P`):
+1. **Install what it needs.** WeasyPrint, which draws a message as it looks
+   (`P`); mailboxes are read by the package itself:
 
    | System | Command |
    |---|---|
-   | Fedora | `sudo dnf install libpst weasyprint` |
-   | Ubuntu, Debian | `sudo apt install pst-utils weasyprint` |
-   | Arch, Omarchy | `sudo pacman -S libpst python-weasyprint` |
+   | Fedora | `sudo dnf install weasyprint` |
+   | Ubuntu, Debian | `sudo apt install weasyprint` |
+   | Arch, Omarchy | `sudo pacman -S python-weasyprint` |
 
 2. **Open your init file**: in Tuatara press `C-x C-f`, type
    `~/.config/tuatara/init.lisp` and press `RET`.
@@ -28,8 +28,7 @@ read are never changed.
 
 4. **Save** with `C-x C-s`, **quit** with `C-x C-c`, and **start Tuatara
    again**. Answer `y` when it asks whether to load outlook; it asks once.
-5. **Check it**: `M-x check-health` says whether readpst and WeasyPrint are
-   found; then open a `.msg`, `.eml` or `.pst` file.
+5. **Check it**: `M-x check-health` says whether WeasyPrint is found; then open a `.msg`, `.eml` or `.pst` file.
 
 Once it is loaded, opening one of these files shows it as a message, or a
 list of messages:
@@ -67,38 +66,90 @@ here.
 | A mailbox | `C-x / l`                       | Lists the filters narrowing the list, each with how many items it leaves; there `d` takes away the filter on the line and `D` all of them.                                                                                                                             |
 | A mailbox | `C-x / r`                       | Takes every filter away: the whole list again.                                                                                                                                                                                                                         |
 | A message | `q`                             | Closes it, back to the mailbox (or wherever it was opened from); `h` moves the cursor left, as everywhere.                                                                                                                                                             |
-| A mailbox | `q`                             | Closes it. What readpst wrote stays in the cache, so the mailbox opens again at once (see Mailboxes).                                                                                                                                                                  |
+| A mailbox | `q`                             | Closes it. What was written of it stays in the cache, so the mailbox opens again at once (see Mailboxes).                                                                                                                                                              |
 | A mailbox | `h`                             | Asks, then closes it and goes back to its directory in rimu, on the mailbox. The moves by word (`w`, `b`, `W`, `B`) do nothing in the list; `V` is the one selection, of whole lines.                                                                                  |
 | A mailbox | `C-c o h`, `C-c o c`            | The same as `h` and `C`, under outlook's own prefix.                                                                                                                                                                                                                   |
 | A mailbox | `C-c o +`, `C-c o -`, `C-c o l` | The same as `+`, `-` and `L`.                                                                                                                                                                                                                                          |
 
 ## Mailboxes
 
-A mailbox is read by `readpst`, of the libpst package, shut in Tuatara's
-sandbox: no network, and none of your files but the mailbox. Its messages are
-written to your cache directory, each twice, as saved mail and as an Outlook
-item, so that they can be copied out as either. Install libpst from your
-system's packages (`readpst` on the `PATH` of the system's own program
-directories).
+A mailbox is read by the package itself, as Microsoft's
+[MS-PST](https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/)
+lays it out: the Unicode format of Outlook 2003 and later (`.pst`, and the
+offline `.ost` of Outlook 2003 to 2010) and the ANSI format of Outlook 97 to
+2002, its blocks as they are, permuted or cyclic. It is read where it is, a
+block at a time, never whole, however large it is, and never in the editor:
+the package's reader runs in a Tuatara of its own shut in by Tuatara's
+sandbox, as every program reading a file from outside does. There it sees
+the mailbox, read only, and the directory it writes the messages in, and
+nothing else: no home directory, no network. The editor reads only the
+messages written. The mailbox itself is never written to, nor its access
+time changed. Without the sandbox (bwrap), no mailbox is read. Its messages
+are written to your cache directory, each twice, as saved mail and as an
+Outlook item holding every property the mailbox gives it, so that they can
+be copied out as either. A contact is written as a vCard (`.vcf`), an
+appointment, a task or a journal entry as iCalendar (`.ics`); a
+distribution list, a note and any other item as a message.
+
+Nothing is left out without a word. A message that cannot be read is listed
+as one, saying why ("(could not be read) Message 200084 of the mailbox could
+not be read: block 1a4 is not in the blocks' B-tree"); a part of a message
+that cannot be read (an attachment, a value) is said so in the message, in
+lines `Reading note` shows when it is opened, and an attachment whose
+contents are missing is a short text of that name saying so. What was found
+wrong in the mailbox as a whole (a check, CRC, that does not match, a page
+of its B-trees that cannot be read) is said above the list. Messages whose
+folder is not in the mailbox, or lies more than 64 folders deep, are listed
+under `Orphans`, those of folders outside the top of the personal folders
+under `Outside the top folder`; deleted items are listed with the others
+while `*outlook-include-deleted*` says so. Two folders in one folder whose
+names are alike, or alike but for case, are told apart by (2), (3) after the
+name, as is one named as a file the reader writes beside it. A folder whose
+path would pass 1,024 octets has its name cut to fit,
+and the list shows its path whole. Should the reader stop part way (it
+failed, or ran out of memory), what it wrote by then is listed, and the list
+says where it stopped and why; it says too when fewer files are there to be
+listed than the reader wrote. readpst, which read mailboxes before, left out without a word a
+message of more than about 440 properties, and distribution lists; both
+are listed now. A damaged mailbox is read as far as it can be, every offset
+and size checked, every tree of the file followed with each part seen once,
+so that reading it ends; nothing in it is run. A message is read with no
+more than an eighth of the reader's memory, and never more than
+`*outlook-largest-file*`, of its file, a part it names again and again
+counted each time, and with no more than 256 messages attached to it and to
+those, so that a small file cannot make the reader take memory or time
+without end; its text and the attachments read by then are kept, and what is
+past them is said in the message.
+
+The offline mailboxes of Outlook 2013 and later (`.ost` of pages of 4 KB,
+their blocks compressed) are not described by MS-PST; such a mailbox is
+refused, saying so.
+
+On a mailbox of 20,000 messages (340 MB), the package reads and writes its
+messages in 5.3 seconds where readpst took 4.8, and lists what it wrote in
+8.8 seconds where listing readpst's took 9.6.
 
 A mailbox from outside (in your downloads, on a removable drive, or in
 another of Tuatara's untrusted directories) is listed as well when it is
-opened safely, since only readpst, shut in, reads it. The copy made for
-readpst is refused when another file was put in the mailbox's place after
-it was opened. A message or an Outlook item from outside opens as its text,
-as Tuatara itself reads those.
+opened safely. It is refused when another file was put in the mailbox's
+place after it was opened. The mailbox is opened once: the file summed is
+the very file the reader reads, whatever is put at its path meanwhile, and a
+mailbox that changes while it is read is refused. A message or an Outlook item
+from outside opens as its text, as Tuatara itself reads those.
 
-What readpst wrote is kept in Tuatara's cache after the list is closed, found
-again by the mailbox's SHA-256 sum and the options it was read with
-(`*outlook-include-deleted*`). Opening the same mailbox again, from this
+What was written of a mailbox is kept in Tuatara's cache after the list is
+closed, found again by the mailbox's SHA-256 sum and the options it was read
+with (`*outlook-include-deleted*`). Opening the same mailbox again, from this
 computer or from a server, sums it and lists it from what was kept, without
-running readpst. It is cleared as Tuatara clears every entry of its cache:
+reading it again. It is cleared as Tuatara clears every entry of its cache:
 `*cache-keep*` after it was last used, one day as standard, never while the
 list is open, never when pinned. `M-x list-cache` shows it under "Mailboxes
-read by readpst", where `RET` lists it again, `p` pins it and `d`, `x` delete
-it. A mailbox on a server is read by readpst from the copy Tuatara fetched,
-checked before and after to be as it was fetched; no second copy is made.
-This needs Tuatara 0.90.35 or later.
+read", where `RET` lists it again, `p` pins it and `d`, `x` delete it. What
+readpst wrote in earlier versions is not used: such a mailbox is read anew. A
+mailbox on a server is read from the copy Tuatara fetched, checked before
+and after to be as it was fetched; no second copy is made, and none of a
+mailbox on this computer either, which is checked before and after to be
+as it was summed. This needs Tuatara 0.90.38 or later.
 
 ## Attachments earlier in a conversation
 
@@ -114,7 +165,7 @@ open, from a copy only you can read, shut in the sandbox, nothing in it run.
 The earlier mails are found by the Message-IDs the message's `In-Reply-To`
 and `References` headers name, and theirs in turn; when those find none, by
 Outlook's conversation index (the `Thread-Index` header, or the
-PR_CONVERSATION_INDEX readpst writes in the Outlook item): its first 22
+PR_CONVERSATION_INDEX of the Outlook item): its first 22
 octets name the conversation and each reply adds 5, so a message whose index
 is the start of this one's is earlier in the same conversation. The links are
 read as the mailbox is listed and looked up in tables made once; reading the
@@ -134,7 +185,7 @@ part of a saved mail, or an Outlook item's HTML, or the HTML its rich text
 keeps. A message of plain text alone looks as it is shown already.
 
 It is drawn by [WeasyPrint](https://weasyprint.org), shut in Tuatara's
-sandbox as readpst is: no network, so nothing is fetched from the internet (a
+sandbox: no network, so nothing is fetched from the internet (a
 picture, a style, a tracking pixel) and the sender cannot learn the message
 was opened; the line over the pages says how many such things it holds.
 WeasyPrint runs no scripts at all. It sees only the message's HTML and the
@@ -157,9 +208,9 @@ buffers with it, when the cursor leaves the list and the preview.
 
 `C` opens a menu of copying out the messages marked with `m` (or, with none
 marked, the one on the line) into a directory you choose, each a file of its
-own: `e` as saved mail (`.eml`, internet mail as readpst wrote it), `m` as
-Outlook items (`.msg`, written by readpst from the mailbox itself, beside
-each `.eml`); `M-x outlook-export-eml` and `M-x outlook-export-msg` do the
+own: `e` as saved mail (`.eml`, internet mail as it was written of the
+mailbox), `m` as Outlook items (`.msg`, written from the mailbox itself,
+beside each `.eml`, every property kept); `M-x outlook-export-eml` and `M-x outlook-export-msg` do the
 same without the menu. A
 copy is named by when the message was sent and its subject,
 `2026-04-30 0915 kea survey.msg`; a name already taken gets `(2)`, `(3)`
@@ -176,7 +227,7 @@ filter left.
 
 `b` collects the messages into one mbox file, the format most mail programs
 import (`M-x outlook-export-mbox` does the same without the menu): each
-message as readpst wrote it, after a `From ` line with its sender's address
+message as it was written, after a `From ` line with its sender's address
 and when it was sent, a line of a message beginning with `From ` (after any
 number of `>`) written with one `>` more, as the mboxrd form does, so that
 reading it back gives each message as it was. It asks for the file; a name
@@ -192,16 +243,11 @@ overwritten. It is written in the background, a file stopped half-way
 deleted, and never in an evidence directory. Contacts and appointments are
 left out.
 
-Each message is written from what readpst gave of it. Its properties
-(sender, dates, flags, conversation, attachments' kinds and contents) come
-from the Outlook item. The rest comes from the saved mail, where the Outlook
-item holds it in eight-bit characters that may have lost some, or holds it
-not at all: the subject, the plain text and the HTML, the attachments'
-names, the recipients (from the To, Cc and Bcc headers, with their names and
-addresses) and a message attached to it. Its internet headers are those readpst gives, without the
-MIME-Version, Content-Type and Content-Transfer-Encoding lines readpst leaves
-out. Named properties (Outlook's categories among them) are not written, as
-readpst gives none.
+Each message is written from the Outlook item written of it as the mailbox
+was read: every property, recipient and attachment the mailbox gave it, a
+message attached to it with its own, and its named properties (Outlook's
+categories, a contact's addresses, an appointment's times and the rest) with
+what they stand for, given numbers of the new mailbox's own.
 
 The mailbox is written as Microsoft's
 [MS-PST](https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/)
@@ -213,9 +259,9 @@ deleted items and the search folders). A mailbox may be as large as 50 GB,
 the most Outlook takes as it is installed: the maps of which parts of the
 file are taken are written where MS-PST puts them, however far the file
 goes (each allocation map, page map, free map and free page map), the file
-streamed to the drive as it is made. Read back by readpst, the 71
-messages of the Enron sample mailbox come out as they went in: their
-headers, text, HTML and attachments alike.
+streamed to the drive as it is made. Read back, by the package and by
+libpff, the messages copied out come out as they went in: their headers,
+text, HTML and attachments alike.
 
 ## Labels
 
@@ -232,12 +278,14 @@ otherwise), never in the mailbox nor beside it, in a file named by
 the mailbox's SHA-256 sum: whenever that mailbox is opened again, a copy of it
 too, its labels come back, and a mailbox changed in any way starts with none.
 A message is known by its folder, its Message-ID and the SHA-256 sum of its
-headers as readpst wrote them; two messages of a folder alike in all three (a
+headers as they were written; two messages of a folder alike in all three (a
 Message-ID forged or copied, headers alike) are told apart by their order.
-The numbers readpst gives its files are not used: they follow the order of
-the folder and change when deleted items are read or left out. The mailbox is
-summed from the copy readpst reads, so it is read once, and nothing is
-written near it.
+The numbers its files are given are not used: they follow the order of the
+folder and change when deleted items are read or left out. Nothing is
+written near the mailbox. Labels put on before this version, when readpst read
+mailboxes, were kept under the headers readpst wrote, which the package
+writes otherwise: they stay in the labels file, and the label manager shows
+them, but they show on no message read now.
 
 Each change is a line added to the end of the mailbox's labels file, in one
 write while holding the file's lock, so two sessions labelling the same
@@ -317,7 +365,7 @@ a message larger than `*outlook-search-text-limit*` only that much is
 searched, and of one larger than `*outlook-largest-file*` only its headers;
 the list says how many such messages there are. Nothing in a message is run,
 attachments other than text are never decoded, and the mailbox and what
-readpst wrote are never changed.
+what was written of it are never changed.
 
 ## Filtering by a field
 
@@ -328,20 +376,21 @@ names completed from those found in the mailbox as it was listed: `from`,
 name) and `your label` first, then every other header its messages have
 (`received`, `message-id`, `in-reply-to`, `references`, `reply-to`,
 `return-path`, `x-mailer`, `x-originating-ip` and the rest), and what the
-Outlook item readpst wrote of each message says of itself, named `outlook`, a
+Outlook item written of each message says of itself, named `outlook`, a
 space and the name Microsoft gives the property: `outlook importance`,
 `outlook sensitivity`, `outlook message-class`, `outlook client-submit-time`,
 `outlook message-delivery-time`, `outlook message-flags`,
 `outlook conversation-topic`, `outlook conversation-index`,
 `outlook sender-name`, `outlook sender-address-type`,
 `outlook sender-email-address`, `outlook sent-representing-name`,
-`outlook display-to` and so on, each one readpst writes. The question says
+`outlook display-to`, `outlook entry-id`, `outlook creation-time` and so
+on, and its named properties by what they stand for, `outlook Keywords` or,
+named by a number, the property set's word and the number,
+`outlook address-8083`. The question says
 beside each whether it is a header or one of these. The names Tuatara makes
 up hold a space, which no header's name may, so a header such as
 `Attachment:` or `Label:` in a message stays a header and never poses as one
 of them; a line whose name holds a space is no header and is not offered.
-Named properties, Outlook's categories among them, are not written by
-readpst, so they cannot be filtered by.
 
 Then it asks for the pattern: a regular expression, or literal text after
 `M-r`, exactly as Tuatara's search reads it. It is tried on that field's
@@ -360,15 +409,14 @@ remembered as either) and given later as `[[:name:]]` in any pattern.
 
 | Setting | Standard | Values | What it is |
 |---|---|---|---|
-| `*outlook-readpst-program*` | `"readpst"` | text | The program that reads mailboxes. |
 | `*outlook-page-program*` | `"weasyprint"` | text | The program that draws a message as it looks. |
-| `*outlook-include-deleted*` | `t` | `t` or `nil` | Lists the items a mailbox still holds that were deleted, in the folders they were deleted from; `nil` for only those not deleted. |
-| `*outlook-largest-file*` | 256 MB | a size, 1 or more, or words such as `"512M"` | The most an item or saved mail, or an attachment in one, may hold to be read as a message; a larger one opens as any file. |
+| `*outlook-include-deleted*` | `t` | `t` or `nil` | Lists a mailbox's deleted items, its folder Deleted Items and the folders in it; `nil` leaves them out. |
+| `*outlook-largest-file*` | 256 MB | a size, 1 or more, or words such as `"512M"` | The most an item or saved mail, or an attachment in one, may hold to be read as a message; a larger one opens as any file. A message of a mailbox reads no more of the mailbox than this. |
 | `*outlook-nesting-limit*` | `8` | a whole number, 0 or more | How many levels of messages attached to messages are shown as messages; deeper ones are listed as not read. |
-| `*outlook-mailbox-seconds*` | `3600` | a time, 1 second or more, or words such as `"2h"` | The most seconds readpst may take; it is stopped then, and what it wrote is listed. |
-| `*outlook-mailbox-most-files*` | 1 million | a whole number, 1 or more | The most files readpst wrote that a mailbox's list takes in; the rest are left out, and the list says so. |
+| `*outlook-mailbox-seconds*` | `3600` | a time, 1 second or more, or words such as `"2h"` | The most seconds reading a mailbox may take; it is stopped then, and what was read is listed. |
+| `*outlook-mailbox-most-files*` | 1 million | a whole number, 1 or more | The most files written of a mailbox its list takes in; the rest are left out, and the list says so. |
 | `*outlook-search-text-limit*` | 16 million | a whole number, 1 or more | The most characters of a mailbox's message its list's search looks through; a larger one is searched that far, and the list counts them. |
-| `*outlook-mailbox-space*` | 32 GB | a size, 1 or more, or words such as `"64G"` | The most readpst may write; it is stopped there, or when the drive has less than 1 GB free. |
+| `*outlook-mailbox-space*` | 32 GB | a size, 1 or more, or words such as `"64G"` | The most reading a mailbox may write; it is stopped there, or when the drive has less than 1 GB free. |
 | `*outlook-preview*` | `t` | `t` or `nil` | Shows the message on the line beside a mailbox's list; `nil` leaves it off until `P` turns it on in one list. |
 
 Set them in the package's `:config`:
@@ -386,8 +434,9 @@ Set them in the package's `:config`:
 ## Credits
 
 - Microsoft's Open Specifications, MS-CFB and MS-OXMSG: how an Outlook item is
-  read; MS-PST (revision 11.2): how a mailbox is written.
-- libpst's `readpst`: how a mailbox is read.
+  read and written; MS-PST (revision 11.2): how a mailbox is read and written.
+- libpst's `readpst`, which read mailboxes before, and libpff's `pffexport`,
+  against which the package's reading was checked.
 - WeasyPrint: how a message is drawn as it looks.
 
 ## License

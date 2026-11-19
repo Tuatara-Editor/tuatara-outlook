@@ -16,118 +16,12 @@
 ;;;; time, only the B-trees' entries and the folders' rows kept meanwhile; the
 ;;;; B-trees, the allocation maps and the header last. Strings are written in
 ;;;; UTF-16; the data blocks permuted (NDB_CRYPT_PERMUTE, as Outlook writes
-;;;; them) or as they are. A file is at most 50 GB, the most Outlook takes.
+;;;; them), cyclic (NDB_CRYPT_CYCLIC) or as they are. A file is at most 50 GB,
+;;;; the most Outlook takes. The ANSI format of Outlook 97 to 2002, its
+;;;; numbers and offsets of four octets, is written too, for the tests of the
+;;;; reader (pst-read.lisp).
 
 (in-package #:outlook)
-
-;;; Octets
-
-(deftype pst-octets () '(simple-array (unsigned-byte 8) (*)))
-
-(defun pst-octets (size)
-  "A new vector of SIZE octets, each 0."
-  (make-array size :element-type '(unsigned-byte 8) :initial-element 0))
-
-(defun pst-put (octets at value count)
-  "Store the unsigned integer VALUE in COUNT octets of OCTETS from AT, least
-significant first, as every number in a mailbox is kept; return OCTETS."
-  (dotimes (i count octets)
-    (setf (aref octets (+ at i)) (ldb (byte 8 (* 8 i)) value))))
-
-(defun pst-number (value count)
-  "The unsigned integer VALUE in COUNT octets, least significant first."
-  (pst-put (pst-octets count) 0 value count))
-
-(defun pst-join (parts)
-  "The octet vectors PARTS, a list, one after another in one vector."
-  (let ((out (pst-octets (reduce #'+ parts :key #'length))) (at 0))
-    (dolist (part parts out)
-      (replace out part :start1 at)
-      (incf at (length part)))))
-
-(defun pst-text (string)
-  "STRING in UTF-16, least significant octet first, with no null after it: a
-string property of a Unicode mailbox (PtypString, [MS-OXCDATA] 2.11.1). A
-character past U+FFFF takes two units (a surrogate pair)."
-  (let ((units '()))
-    (loop for char across string
-          for code = (char-code char)
-          do (if (> code #xFFFF)
-                 (let ((rest (- code #x10000)))
-                   (push (+ #xD800 (ash rest -10)) units)
-                   (push (+ #xDC00 (logand rest #x3FF)) units))
-                 (push code units)))
-    (let ((out (pst-octets (* 2 (length units)))))
-      (loop for unit in (nreverse units) for at from 0 by 2 do (pst-put out at unit 2))
-      out)))
-
-(defun pst-groups (list size)
-  "LIST cut into lists of at most SIZE elements, in order; NIL for none."
-  (loop while list
-        collect (loop repeat size while list collect (pop list))))
-
-(defun pst-filetime (time)
-  "The universal time TIME as Windows keeps times (a FILETIME): 100-nanosecond
-steps since 1601, the inverse of FILETIME-UNIVERSAL-TIME."
-  (* (+ time 9435484800) 10000000))
-
-;;; Checks and encoding
-
-(defparameter *pst-crc-table*
-  (let ((table (make-array 256 :element-type '(unsigned-byte 32))))
-    (dotimes (n 256 table)
-      (let ((c n))
-        (dotimes (k 8) (setf c (if (logbitp 0 c) (logxor (ash c -1) #xEDB88320) (ash c -1))))
-        (setf (aref table n) c))))
-  "The table of the cyclic redundancy check (CRC) of every check in a mailbox,
-[MS-PST] 5.3's CrcTableOffset32: that of the reflected polynomial #xEDB88320.")
-
-(defun pst-crc (octets &key (start 0) (end (length octets)))
-  "The 32-bit CRC of OCTETS from START below END as [MS-PST] 5.3 computes it:
-begun from 0 and not inverted at the end, unlike the CRC-32 of zip files."
-  (declare (type pst-octets octets) (type fixnum start end) (optimize speed))
-  (let ((crc 0) (table *pst-crc-table*))
-    (declare (type (unsigned-byte 32) crc) (type (simple-array (unsigned-byte 32) (256)) table))
-    (loop for i of-type fixnum from start below end
-          do (setf crc (logxor (aref table (logand (logxor crc (aref octets i)) #xFF)) (ash crc -8))))
-    crc))
-
-(defparameter *pst-permutation*
-  (coerce '(65 54 19 98 168 33 110 187 244 22 204 4 127 100 232 93
-            30 242 203 42 116 197 94 53 210 149 71 158 150 45 154 136
-            76 125 132 63 219 172 49 182 72 95 246 196 216 57 139 231
-            35 59 56 142 200 193 223 37 177 32 165 70 96 78 156 251
-            170 211 86 81 69 124 85 0 7 201 43 157 133 155 9 160
-            143 173 179 15 99 171 137 75 215 167 21 90 113 102 66 191
-            38 74 107 152 250 234 119 83 178 112 5 44 253 89 58 134
-            126 206 6 235 130 120 87 199 141 67 175 180 28 212 91 205
-            226 233 39 79 195 8 114 128 207 176 239 245 40 109 190 48
-            77 52 146 213 14 60 34 50 229 228 249 159 194 209 10 129
-            18 225 238 145 131 118 227 151 230 97 138 23 121 164 183 220
-            144 122 92 140 2 166 202 105 222 80 26 17 147 185 82 135
-            88 252 237 29 55 73 27 106 224 41 51 153 189 108 217 148
-            243 64 84 111 240 198 115 184 214 62 101 24 68 31 221 103
-            16 241 12 25 236 174 3 161 20 123 169 11 255 248 163 192
-            162 1 247 46 188 36 104 117 13 254 186 47 181 208 218 61)
-          '(simple-array (unsigned-byte 8) (256)))
-  "The octet each octet of a data block is written as when the mailbox is
-permuted: the first table of mpbbCrypt, [MS-PST] 5.1 (mpbbR).")
-
-(defun pst-permute (octets)
-  "OCTETS permuted as NDB_CRYPT_PERMUTE writes a data block ([MS-PST] 5.1), a
-new vector."
-  (declare (type pst-octets octets) (optimize speed))
-  (let ((out (pst-octets (length octets))) (table *pst-permutation*))
-    (declare (type (simple-array (unsigned-byte 8) (256)) table))
-    (dotimes (i (length octets) out)
-      (setf (aref out i) (aref table (aref octets i))))))
-
-(defun pst-signature (ib bid)
-  "The signature of a block or page with block identifier (BID) at the file
-offset IB, [MS-PST] 5.5: the two halves of their low 32 bits, exclusive-ored
-together, exclusive-ored."
-  (let ((x (logand (logxor ib bid) #xFFFFFFFF)))
-    (logand #xFFFF (logxor (ash x -16) x))))
 
 ;;; The node database: where things go in the file
 
@@ -179,18 +73,26 @@ map pages."
   "The number of the AMap mapping the file offset AT."
   (floor (- at +pst-first-amap+) +pst-amap-span+))
 
-(defstruct (pst-writer (:constructor make-pst-writer (fd path &key (encoding :permute)))
+(defstruct (pst-writer (:constructor make-pst-writer (fd path &key (encoding :permute) (format :unicode)))
                        (:copier nil))
   "A mailbox being written to the file open as file descriptor (FD) at PATH,
-its data blocks ENCODING (:permute or :none). END is the first octet not yet
+its data blocks ENCODING (:permute, :cyclic or :none), in FORMAT (:unicode, or
+:ansi, Outlook 97 to 2002's). END is the first octet not yet
 given out; FREE the stretches before it given to nothing, each (START . END),
 latest first. NEXT-BLOCK is the next block's identifier counter, NEXT-PAGE
-the next page's identifier, even. BLOCKS holds three numbers for each block
+the next page's identifier, even. NAMES numbers the named properties of the
+messages written, a table from (GUID . NAME) to a number from #x8000
+\(PST-RENAMED), two of Outlook's own names in it from the start, as libpff
+refuses a map with an empty stream. BLOCKS holds three numbers for each block
 written, in the order of their identifiers: its identifier, where it is, how
 many octets of data. NODES holds each node's entry of the node B-tree, (NID
 DATA SUB PARENT). LAST-NIDS is the last index given to each type of node
 number (the header's rgnid)."
-  fd path encoding (end (pst-section-data 0)) (free '()) (next-block 1) (next-page 2)
+  fd path encoding format (end (pst-section-data 0)) (free '()) (next-block 1) (next-page 2)
+  (names (let ((names (make-hash-table :test 'equalp)))
+           (setf (gethash (cons *pst-common-guid* #x8501) names) #x8000
+                 (gethash (cons *pst-public-strings-guid* "Keywords") names) #x8001)
+           names))
   (blocks (make-array 1024 :adjustable t :fill-pointer 0))
   (nodes (make-array 256 :adjustable t :fill-pointer 0))
   (last-nids (let ((last (make-array 32 :initial-element #x400)))
@@ -199,6 +101,20 @@ number (the header's rgnid)."
                last)))
 
 (setf (documentation 'pst-writer-p 'function) "True when OBJECT is a PST-WRITER.")
+
+(defun pst-writer-ansi-p (writer)
+  "True when WRITER writes the ANSI format, else the Unicode one."
+  (eq (pst-writer-format writer) :ansi))
+
+(defun pst-writer-word (writer)
+  "The octets of a block identifier or an offset in the mailbox WRITER
+writes: eight in the Unicode format, four in the ANSI one."
+  (if (pst-writer-ansi-p writer) 4 8))
+
+(defun pst-writer-room (writer)
+  "The most octets of data a block of the mailbox WRITER writes holds: 8,176
+in the Unicode format, 8,180 in the ANSI one ([MS-PST] 2.2.2.8)."
+  (if (pst-writer-ansi-p writer) 8180 8176))
 
 (defun pst-note-free (writer from to)
   "Note that the octets of the file from FROM below TO are given to nothing,
@@ -244,25 +160,32 @@ properties (2), hierarchy (#xD), contents (#xE) or associated contents
 ;;; The node database: blocks and nodes
 
 (defun pst-block (writer data &key internal)
-  "Write DATA, at most 8,176 octets, as a new block ([MS-PST] 2.2.2.8): padded
-to a multiple of 64 octets with its trailer, a data block permuted when the
-mailbox is; INTERNAL for a block of the node database's own (a data tree's
-or a subnode tree's). Returns its block identifier (BID)."
-  (let ((cb (length data)))
-    (assert (<= cb 8176))
-    (let* ((size (* 64 (ceiling (+ cb 16) 64)))
+  "Write DATA, at most PST-WRITER-ROOM octets, as a new block ([MS-PST]
+2.2.2.8): padded to a multiple of 64 octets with its trailer, a data block
+encoded as the mailbox is; INTERNAL for a block of the node database's own
+\(a data tree's or a subnode tree's). Returns its block identifier (BID)."
+  (let ((cb (length data)) (ansi (pst-writer-ansi-p writer)))
+    (assert (<= cb (pst-writer-room writer)))
+    (let* ((trailer (if ansi 12 16))
+           (size (* 64 (ceiling (+ cb trailer) 64)))
            (bid (logior (* 4 (pst-writer-next-block writer)) (if internal 2 0)))
            (at (pst-allocate writer size 64))
-           (stored (if (and (not internal) (eq (pst-writer-encoding writer) :permute))
-                       (pst-permute (coerce data 'pst-octets))
-                       (coerce data 'pst-octets)))
-           (block (pst-octets size)))
+           (stored (let ((copy (copy-seq (coerce data 'pst-octets))))
+                     (if internal
+                         copy
+                         (case (pst-writer-encoding writer)
+                           (:permute (pst-permute copy))
+                           (:cyclic (pst-cyclic copy (logand bid #xFFFFFFFF)))
+                           (t copy)))))
+           (block (pst-octets size))
+           (end (- size trailer)))
       (incf (pst-writer-next-block writer))
       (replace block stored)
-      (pst-put block (- size 16) cb 2)
-      (pst-put block (- size 14) (pst-signature at bid) 2)
-      (pst-put block (- size 12) (pst-crc stored) 4)
-      (pst-put block (- size 8) bid 8)
+      (pst-put block end cb 2)
+      (pst-put block (+ end 2) (pst-signature at bid) 2)
+      (if ansi
+          (progn (pst-put block (+ end 4) bid 4) (pst-put block (+ end 8) (pst-crc stored) 4))
+          (progn (pst-put block (+ end 4) (pst-crc stored) 4) (pst-put block (+ end 8) bid 8)))
       (pst-write-at writer block at)
       (let ((blocks (pst-writer-blocks writer)))
         (vector-push-extend bid blocks)
@@ -277,48 +200,55 @@ blocks of a data tree hold them."
         collect (subseq octets start (min (length octets) (+ start size)))))
 
 (defun pst-data-tree (writer chunks)
-  "Write CHUNKS, a list of pieces of at most 8,176 octets each, as a data tree
-\([MS-PST] 2.2.2.8.3.2): one data block, or data blocks listed by an XBLOCK, or
-XBLOCKs listed by an XXBLOCK. Returns its BID; 0 for no chunks."
-  (labels ((listing (level entries)
-             ;; entries are (BID . OCTETS-BELOW)
-             (let ((block (pst-octets (+ 8 (* 8 (length entries))))))
-               (setf (aref block 0) 1 (aref block 1) level)
-               (pst-put block 2 (length entries) 2)
-               (pst-put block 4 (reduce #'+ entries :key #'cdr) 4)
-               (loop for (bid) in entries for at from 8 by 8 do (pst-put block at bid 8))
-               (cons (pst-block writer block :internal t) (reduce #'+ entries :key #'cdr)))))
-    (let ((blocks (mapcar (lambda (chunk) (cons (pst-block writer chunk) (length chunk))) chunks)))
-      (cond ((null blocks) 0)
-            ((null (rest blocks)) (car (first blocks)))
-            ((<= (length blocks) 1021) (car (listing 1 blocks)))
-            (t (let ((xblocks (mapcar (lambda (group) (listing 1 group)) (pst-groups blocks 1021))))
-                 (assert (<= (length xblocks) 1021))
-                 (car (listing 2 xblocks))))))))
+  "Write CHUNKS, a list of pieces of at most PST-WRITER-ROOM octets each, as
+a data tree ([MS-PST] 2.2.2.8.3.2): one data block, or data blocks listed by
+an XBLOCK, or XBLOCKs listed by an XXBLOCK. Returns its BID; 0 for no
+chunks."
+  (let* ((word (pst-writer-word writer))
+         (per (floor (- (pst-writer-room writer) 8) word)))
+    (labels ((listing (level entries)
+               ;; entries are (BID . OCTETS-BELOW)
+               (let ((block (pst-octets (+ 8 (* word (length entries))))))
+                 (setf (aref block 0) 1 (aref block 1) level)
+                 (pst-put block 2 (length entries) 2)
+                 (pst-put block 4 (reduce #'+ entries :key #'cdr) 4)
+                 (loop for (bid) in entries for at from 8 by word do (pst-put block at bid word))
+                 (cons (pst-block writer block :internal t) (reduce #'+ entries :key #'cdr)))))
+      (let ((blocks (mapcar (lambda (chunk) (cons (pst-block writer chunk) (length chunk))) chunks)))
+        (cond ((null blocks) 0)
+              ((null (rest blocks)) (car (first blocks)))
+              ((<= (length blocks) per) (car (listing 1 blocks)))
+              (t (let ((xblocks (mapcar (lambda (group) (listing 1 group)) (pst-groups blocks per))))
+                   (assert (<= (length xblocks) per))
+                   (car (listing 2 xblocks)))))))))
 
 (defun pst-subnode-tree (writer entries)
   "Write the subnode B-tree of ENTRIES, each (NID DATA SUB), the nodes within
 a node ([MS-PST] 2.2.2.8.3.3): an SLBLOCK of them, or SLBLOCKs listed by an
 SIBLOCK. Returns its BID; 0 for no entries."
-  (flet ((leaf (group)
-           (let ((block (pst-octets (+ 8 (* 24 (length group))))))
-             (setf (aref block 0) 2 (aref block 1) 0)
-             (pst-put block 2 (length group) 2)
-             (loop for (nid data sub) in group for at from 8 by 24
-                   do (pst-put block at nid 8) (pst-put block (+ at 8) data 8) (pst-put block (+ at 16) sub 8))
-             (cons (first (first group)) (pst-block writer block :internal t)))))
-    (when entries
-      (let ((leaves (mapcar #'leaf (pst-groups (sort (copy-list entries) #'< :key #'first) 340))))
-        (if (null (rest leaves))
-            (return-from pst-subnode-tree (cdr (first leaves)))
-            (let ((block (pst-octets (+ 8 (* 16 (length leaves))))))
-              (assert (<= (length leaves) 510))
-              (setf (aref block 0) 2 (aref block 1) 1)
-              (pst-put block 2 (length leaves) 2)
-              (loop for (nid . bid) in leaves for at from 8 by 16
-                    do (pst-put block at nid 8) (pst-put block (+ at 8) bid 8))
-              (return-from pst-subnode-tree (pst-block writer block :internal t))))))
-    0))
+  (let* ((word (pst-writer-word writer))
+         (head (if (pst-writer-ansi-p writer) 4 8))
+         (room (- (pst-writer-room writer) head)))
+    (flet ((leaf (group)
+             (let ((block (pst-octets (+ head (* 3 word (length group))))))
+               (setf (aref block 0) 2 (aref block 1) 0)
+               (pst-put block 2 (length group) 2)
+               (loop for (nid data sub) in group for at from head by (* 3 word)
+                     do (pst-put block at nid word) (pst-put block (+ at word) data word)
+                        (pst-put block (+ at word word) sub word))
+               (cons (first (first group)) (pst-block writer block :internal t)))))
+      (when entries
+        (let ((leaves (mapcar #'leaf (pst-groups (sort (copy-list entries) #'< :key #'first) (floor room (* 3 word))))))
+          (if (null (rest leaves))
+              (return-from pst-subnode-tree (cdr (first leaves)))
+              (let ((block (pst-octets (+ head (* 2 word (length leaves))))))
+                (assert (<= (length leaves) (floor room (* 2 word))))
+                (setf (aref block 0) 2 (aref block 1) 1)
+                (pst-put block 2 (length leaves) 2)
+                (loop for (nid . bid) in leaves for at from head by (* 2 word)
+                      do (pst-put block at nid word) (pst-put block (+ at word) bid word))
+                (return-from pst-subnode-tree (pst-block writer block :internal t))))))
+      0)))
 
 (defun pst-node (writer nid data sub &optional (parent 0))
   "Enter the node NID in the node B-tree: its data tree DATA and subnode tree
@@ -330,20 +260,23 @@ SUB (BIDs, 0 for none), and PARENT, the folder it is in ([MS-PST]
 
 (defun pst-page (writer ptype contents &key at bid)
   "Write a 512-octet page of PTYPE ([MS-PST] 2.2.2.7.1) holding CONTENTS, its
-first 496 octets at most: at AT, where the maps go, its identifier its
-offset and its signature 0; else at a new place, its identifier BID or the
-next page's, signed. Returns (BID . IB)."
+first 496 octets at most (500 in the ANSI format): at AT, where the maps go,
+its identifier its offset and its signature 0; else at a new place, its
+identifier BID or the next page's, signed. Returns (BID . IB)."
   (let* ((map (member ptype '(#x82 #x83 #x84 #x85)))
+         (ansi (pst-writer-ansi-p writer))
+         (trailer (if ansi 500 496))
          (ib (or at (pst-allocate writer 512 512)))
          (bid (cond (map ib) (bid)
                     ;; in steps of two, the lowest bit kept clear (2.2.2.2)
                     (t (prog1 (pst-writer-next-page writer) (incf (pst-writer-next-page writer) 2)))))
          (page (pst-octets 512)))
-    (replace page contents :end2 (min 496 (length contents)))
-    (setf (aref page 496) ptype (aref page 497) ptype)
-    (pst-put page 498 (if map 0 (pst-signature ib bid)) 2)
-    (pst-put page 500 (pst-crc page :end 496) 4)
-    (pst-put page 504 bid 8)
+    (replace page contents :end2 (min trailer (length contents)))
+    (setf (aref page trailer) ptype (aref page (1+ trailer)) ptype)
+    (pst-put page (+ trailer 2) (if map 0 (pst-signature ib bid)) 2)
+    (if ansi
+        (progn (pst-put page 504 bid 4) (pst-put page 508 (pst-crc page :end trailer) 4))
+        (progn (pst-put page 500 (pst-crc page :end trailer) 4) (pst-put page 504 bid 8)))
     (pst-write-at writer page ib)
     (cons bid ib)))
 
@@ -354,32 +287,35 @@ order of their keys: ENTRY, a function of an entry's index, a page's
 contents and an offset in them, puts that entry there and returns its key.
 The leaves are filled and written one at a time, so that no more than a
 page of entries is made at once. Returns the root's (BID . IB)."
-  (flet ((page (level width count fill)
-           (let ((contents (pst-octets 496)))
-             (dotimes (i count) (funcall fill i contents (* i width)))
-             (setf (aref contents 488) count (aref contents 489) (floor 488 width)
-                   (aref contents 490) width (aref contents 491) level)
-             (pst-page writer ptype contents))))
-    (let ((pages (loop with per = (floor 488 size)
-                       for first from 0 below (max count 1) by per
-                       collect (let* ((key nil)
-                                      (place (page 0 size (min per (- count first))
-                                                   (lambda (i contents at)
-                                                     (let ((k (funcall entry (+ first i) contents at)))
-                                                       (when (zerop i) (setf key k)))))))
-                                 (cons key place))))
-          (level 0))
-      (loop while (rest pages)
-            do (incf level)
-               (setf pages (loop for group in (pst-groups pages 20)
-                                 collect (cons (car (first group))
-                                               (page level 24 (length group)
+  (let* ((word (pst-writer-word writer))
+         (area (if (pst-writer-ansi-p writer) 496 488))
+         (link (* 3 word)))
+    (flet ((page (level width count fill)
+             (let ((contents (pst-octets (+ area 8))))
+               (dotimes (i count) (funcall fill i contents (* i width)))
+               (setf (aref contents area) count (aref contents (+ area 1)) (floor area width)
+                     (aref contents (+ area 2)) width (aref contents (+ area 3)) level)
+               (pst-page writer ptype contents))))
+      (let ((pages (loop with per = (floor area size)
+                         for first from 0 below (max count 1) by per
+                         collect (let* ((key nil)
+                                        (place (page 0 size (min per (- count first))
                                                      (lambda (i contents at)
-                                                       (destructuring-bind (key bid . ib) (nth i group)
-                                                         (pst-put contents at key 8)
-                                                         (pst-put contents (+ at 8) bid 8)
-                                                         (pst-put contents (+ at 16) ib 8))))))))
-      (cdr (first pages)))))
+                                                       (let ((k (funcall entry (+ first i) contents at)))
+                                                         (when (zerop i) (setf key k)))))))
+                                   (cons key place))))
+            (level 0))
+        (loop while (rest pages)
+              do (incf level)
+                 (setf pages (loop for group in (pst-groups pages (floor area link))
+                                   collect (cons (car (first group))
+                                                 (page level link (length group)
+                                                       (lambda (i contents at)
+                                                         (destructuring-bind (key bid . ib) (nth i group)
+                                                           (pst-put contents at key word)
+                                                           (pst-put contents (+ at word) bid word)
+                                                           (pst-put contents (+ at word word) ib word))))))))
+        (cdr (first pages))))))
 
 (defun pst-set-slots (amap from below value)
   "Set the bits of AMAP, an AMap's 496 octets, for its slots from FROM below
@@ -423,8 +359,9 @@ each AMap with a bit for each of its 64-octet slots, set when it is taken
 writes them, the density list taking their place (2.2.2.7.3); each free page
 map (FPMap) with every bit set, as every PMap says it has no free page
 \(2.2.2.7.6); each free map (FMap) with the longest run of free slots of each
-AMap from its own part on (2.2.2.7.5). Returns the free octets counted and
-each AMap's free slots, a vector."
+AMap from its own part on (2.2.2.7.5). In the ANSI format the bits of an
+AMap, a PMap and an FPMap follow four octets of padding. Returns the free
+octets counted and each AMap's free slots, a vector."
   (let ((free (reverse (pst-writer-free writer))) (end (pst-writer-end writer))
         (slots (make-array sections)) (longest (pst-octets sections)) (amap (pst-octets 496))
         (full (make-array 496 :element-type '(unsigned-byte 8) :initial-element #xFF))
@@ -434,9 +371,10 @@ each AMap's free slots, a vector."
         (multiple-value-bind (rest count most) (pst-section-amap amap section end free)
           (setf free rest (svref slots section) count (aref longest section) (min 255 most))
           (incf total (* 64 count)))
-        (pst-page writer #x84 amap :at start)
-        (when (zerop (mod section 8)) (pst-page writer #x83 full :at (+ 512 start)))
-        (when (pst-fpmap-section-p section) (pst-page writer #x85 full :at (+ 1024 start)))))
+        (flet ((bits (octets) (if (pst-writer-ansi-p writer) (pst-join (list (pst-octets 4) octets)) octets)))
+          (pst-page writer #x84 (bits amap) :at start)
+          (when (zerop (mod section 8)) (pst-page writer #x83 (bits full) :at (+ 512 start)))
+          (when (pst-fpmap-section-p section) (pst-page writer #x85 (bits full) :at (+ 1024 start))))))
     (loop for section from 128 below sections by 496
           do (pst-page writer #x82 (subseq longest section (min sections (+ section 496)))
                        :at (+ 1024 (pst-section-start section))))
@@ -456,37 +394,65 @@ each AMap's free slots, a vector."
 
 (defun pst-finish (writer)
   "Write what ends the mailbox: the node and block B-trees, the maps, the
-density list, and last the header ([MS-PST] 2.2.2.6) pointing at them, with
-its checks; the file padded to the end of the last part an AMap maps."
+density list (of the Unicode format alone), and last the header ([MS-PST]
+2.2.2.6) pointing at them, with its checks; the file padded to the end of
+the last part an AMap maps."
   (let* ((blocks (pst-writer-blocks writer))
          (nodes (sort (pst-writer-nodes writer) #'< :key #'first))
+         (word (pst-writer-word writer))
          ;; the blocks are listed in the order of their identifiers, given in turn
-         (bbt (pst-btree writer #x80 (floor (length blocks) 3) 24
+         (bbt (pst-btree writer #x80 (floor (length blocks) 3) (* 3 word)
                          (lambda (i page at)
                            (let ((bid (aref blocks (* 3 i))))
-                             (pst-put page at bid 8)
-                             (pst-put page (+ at 8) (aref blocks (+ (* 3 i) 1)) 8)
-                             (pst-put page (+ at 16) (aref blocks (+ (* 3 i) 2)) 2)
+                             (pst-put page at bid word)
+                             (pst-put page (+ at word) (aref blocks (+ (* 3 i) 1)) word)
+                             (pst-put page (+ at word word) (aref blocks (+ (* 3 i) 2)) 2)
                              ;; held by the B-tree and by what refers to it (2.2.2.7.7.3.1)
-                             (pst-put page (+ at 18) 2 2)
+                             (pst-put page (+ at word word 2) 2 2)
                              bid))))
-         (nbt (pst-btree writer #x81 (length nodes) 32
+         (nbt (pst-btree writer #x81 (length nodes) (* 4 word)
                          (lambda (i page at)
                            (destructuring-bind (nid data sub parent) (aref nodes i)
-                             (pst-put page at nid 8)
-                             (pst-put page (+ at 8) data 8)
-                             (pst-put page (+ at 16) sub 8)
-                             (pst-put page (+ at 24) parent 4)
+                             (pst-put page at nid word)
+                             (pst-put page (+ at word) data word)
+                             (pst-put page (+ at word word) sub word)
+                             (pst-put page (+ at (* 3 word)) parent 4)
                              nid))))
          (sections (1+ (pst-section-of (1- (pst-writer-end writer)))))
          (eof (pst-section-start sections)))
     (pst-note-free writer (pst-writer-end writer) eof)
     (setf (pst-writer-free writer) (sort (pst-writer-free writer) #'> :key #'car))
     (multiple-value-bind (free slots) (pst-write-maps writer sections)
-      (pst-write-density-list writer slots)
+      (unless (pst-writer-ansi-p writer) (pst-write-density-list writer slots))
       ;; the file reaches its end: the last octet written, the rest a hole
-      (let ((last-amap (pst-section-start (1- sections))))
+      (let ((last-amap (pst-section-start (1- sections)))
+            (crypt (case (pst-writer-encoding writer) (:permute 1) (:cyclic 2) (t 0))))
         (when (< (pst-writer-end writer) eof) (pst-write-at writer (pst-octets 1) (1- eof)))
+        (when (pst-writer-ansi-p writer)
+          (let ((header (pst-octets 512)))
+            (replace header #(#x21 #x42 #x44 #x4E))
+            (replace header #(#x53 #x4D) :start1 8)
+            (pst-put header 10 14 2)
+            (pst-put header 12 19 2)
+            (setf (aref header 14) 1 (aref header 15) 1)
+            (pst-put header 24 (* 4 (pst-writer-next-block writer)) 4)
+            (pst-put header 28 (pst-writer-next-page writer) 4)
+            (pst-put header 32 1 4)
+            (loop for last across (pst-writer-last-nids writer) for at from 36 by 4 do (pst-put header at last 4))
+            ;; the root (2.2.2.5)
+            (pst-put header 168 eof 4)
+            (pst-put header 172 last-amap 4)
+            (pst-put header 176 free 4)
+            (pst-put header 184 (car nbt) 4)
+            (pst-put header 188 (cdr nbt) 4)
+            (pst-put header 192 (car bbt) 4)
+            (pst-put header 196 (cdr bbt) 4)
+            (setf (aref header 200) 2)
+            (fill header #xFF :start 204 :end 460)
+            (setf (aref header 460) #x80 (aref header 461) crypt)
+            (pst-put header 4 (pst-crc header :start 8 :end (+ 8 471)) 4)
+            (pst-write-at writer header 0)
+            (return-from pst-finish eof)))
         (let ((header (pst-octets 564)))
           (replace header #(#x21 #x42 #x44 #x4E))
           (replace header #(#x53 #x4D) :start1 8)
@@ -506,7 +472,7 @@ its checks; the file padded to the end of the last part an AMap maps."
           (pst-put header 240 (cdr bbt) 8)
           (setf (aref header 248) 2)
           (fill header #xFF :start 256 :end 512)
-          (setf (aref header 512) #x80 (aref header 513) (if (eq (pst-writer-encoding writer) :permute) 1 0))
+          (setf (aref header 512) #x80 (aref header 513) crypt)
           (pst-put header 516 (* 4 (pst-writer-next-block writer)) 8)
           (pst-put header 4 (pst-crc header :start 8 :end (+ 8 471)) 4)
           (pst-put header 524 (pst-crc header :start 8 :end (+ 8 516)) 4)
@@ -617,38 +583,6 @@ index records over them as needed. Returns the header's HID."
 
 ;;; Lists, tables and properties: property values
 
-(defun pst-property-type (tag)
-  "The type of the property TAG: its low 16 bits."
-  (ldb (byte 16 0) tag))
-
-(defun pst-fixed-size (type)
-  "The octets a value of the property TYPE takes, when all its values take as
-many ([MS-OXCDATA] 2.11.1); NIL for one of any size (a string, binary
-data, an object, several values)."
-  (case type
-    (#x0002 2) ((#x0003 #x0004 #x000A) 4) (#x000B 1) ((#x0005 #x0006 #x0007 #x0014 #x0040) 8) (#x0048 16)))
-
-(defstruct (pst-message (:copier nil))
-  "A message to be written in a mailbox. PROPERTIES is each of its
-properties, (TAG . VALUE), TAG the property's number and type and VALUE its
-octets as a property context keeps them (strings in UTF-16 with no null after
-them, PST-TEXT), or, of an object (type #x000D), the PST-MESSAGE attached.
-RECIPIENTS and ATTACHMENTS are each a list of properties alike."
-  (properties '()) (recipients '()) (attachments '()))
-
-(setf (documentation 'pst-message-p 'function) "True when OBJECT is a PST-MESSAGE.")
-
-(defun pst-property (tag value)
-  "The property TAG with VALUE as PST-MESSAGE keeps it: a string as UTF-16,
-a whole number in the octets the type takes, T or NIL as a boolean, octets
-as they are, a PST-MESSAGE as it is."
-  (let ((type (pst-property-type tag)))
-    (cons tag (cond ((stringp value) (pst-text value))
-                    ((eq type #x000B) (pst-number (if value 1 0) 1))
-                    ((integerp value)
-                     (pst-number (ldb (byte (* 8 (pst-fixed-size type)) 0) value) (pst-fixed-size type)))
-                    (t value)))))
-
 (defun pst-local-nids ()
   "A counter of the node numbers given to the nodes within one node: a function
 of a node type giving the next number of that type."
@@ -692,10 +626,6 @@ whose car is the list. Returns the BID of the data tree."
                                  (t (pst-put record 4 (pst-variable-value writer heap value nids subnodes) 4)))
                            record))))
     (pst-data-tree writer (pst-heap-chunks heap (pst-bth heap 2 6 records)))))
-
-(defun pst-value (properties tag)
-  "The value of the property TAG in PROPERTIES (PST-MESSAGE's), or NIL."
-  (cdr (assoc tag properties)))
 
 (defun pst-table-context (writer columns rows)
   "Write a table context ([MS-PST] 2.3.4) of COLUMNS, property tags, and
@@ -745,24 +675,29 @@ the subnode tree, two values."
                                (pst-put matrix (+ base offset) (pst-heap-add heap value) 4))
                            (pst-put matrix (+ base offset) (pst-variable-value writer heap value nids subnodes) 4))
                        (setf (ldb (byte 1 (- 7 (mod bit 8))) (aref matrix (+ base at (floor bit 8)))) 1))))))
-      (let ((rows-hnid
-              (cond ((null rows) 0)
-                    ((<= (length matrix) 3580) (pst-heap-add heap matrix))
-                    (t (let* ((per-block (floor 8176 row-size))
-                              (chunks (loop for start from 0 below (length rows) by per-block
-                                            for last = (>= (+ start per-block) (length rows))
-                                            collect (let ((piece (subseq matrix (* start row-size)
-                                                                         (* (min (length rows) (+ start per-block))
-                                                                            row-size))))
-                                                      ;; every block but the last is a whole 8 KB (2.3.4.4)
-                                                      (if last piece (replace (pst-octets 8176) piece)))))
-                              (nid (funcall nids #x1F)))
-                         (push (list nid (pst-data-tree writer chunks) 0) (car subnodes))
-                         nid))))
-            (index (pst-bth heap 4 4 (mapcar (lambda (pair)
-                                               (pst-join (list (pst-number (car pair) 4) (pst-number (cdr pair) 4))))
-                                             (sort (loop for (row-id) in rows for i from 0 collect (cons row-id i))
-                                                   #'< :key #'car)))))
+      (let* ((rows-hnid
+               (cond ((null rows) 0)
+                     ((<= (length matrix) 3580) (pst-heap-add heap matrix))
+                     (t (let* ((room (pst-writer-room writer))
+                               (per-block (floor room row-size))
+                               (chunks (loop for start from 0 below (length rows) by per-block
+                                             for last = (>= (+ start per-block) (length rows))
+                                             collect (let ((piece (subseq matrix (* start row-size)
+                                                                          (* (min (length rows) (+ start per-block))
+                                                                             row-size))))
+                                                       ;; every block but the last is a whole 8 KB (2.3.4.4)
+                                                       (if last piece (replace (pst-octets room) piece)))))
+                               (nid (funcall nids #x1F)))
+                          (push (list nid (pst-data-tree writer chunks) 0) (car subnodes))
+                          nid))))
+             ;; a row's index in two octets in the ANSI format (2.3.4.3)
+             (index-size (if (pst-writer-ansi-p writer) 2 4))
+             (index (pst-bth heap 4 index-size (mapcar (lambda (pair)
+                                                         (pst-join (list (pst-number (car pair) 4)
+                                                                         (pst-number (cdr pair) index-size))))
+                                                       (sort (loop for (row-id) in rows for i from 0
+                                                                   collect (cons row-id i))
+                                                             #'< :key #'car)))))
         (setf (aref info 0) #x7C (aref info 1) count)
         (loop for end in rgib for k from 2 by 2 do (pst-put info k end 2))
         (pst-put info 10 index 4)
@@ -955,26 +890,12 @@ RECORD-KEY ([MS-PST] 2.4.3.2): four octets of flags, 0, the key, the
 number."
   (pst-join (list (pst-octets 4) record-key (pst-number nid 4))))
 
-(defun pst-name-entry (number guid index &key string)
-  "The record (NAMEID, [MS-PST] 2.4.7.1) of a named property named by the
-NUMBER in the property set GUID (1 PS_MAPI, 2 PS_PUBLIC_STRINGS, 3 and on
-the GUID stream's), its property number #x8000 and INDEX; with STRING, of
-one named by a string, NUMBER where the string stream holds it (or, in a
-hash bucket, the string's CRC)."
-  (pst-join (list (pst-number number 4) (pst-number (logior (ash guid 1) (if string 1 0)) 2) (pst-number index 2))))
-
-(defun pst-name-bucket (entry count)
-  "The hash bucket of the named property's record ENTRY among COUNT buckets
-\([MS-PST] 2.4.7.5): its first four octets exclusive-ored with the next two,
-modulo COUNT."
-  (mod (logxor (octets-integer entry 0 4) (octets-integer entry 4 2)) count))
-
 (defun pst-write-store (writer name record-key)
   "Write what every mailbox holds but its folders ([MS-PST] 2.7): the message
 store called NAME with its record key RECORD-KEY and where its top folder,
-deleted items and search folders are (2.4.3.1); a map of named properties
-holding two names, as libpff refuses a map with an empty stream (2.4.7,
-2.7.3.2); the tables every new folder, recipient table
+deleted items and search folders are (2.4.3.1); the map of the named
+properties of the messages written (PST-WRITER-NAMES, 2.4.7, 2.7.3.2); the
+tables every new folder, recipient table
 and attachment table copies its columns from (2.7.3.3); and the empty
 queues of searching (2.7.3.5)."
   (flet ((pc (nid properties)
@@ -988,19 +909,11 @@ queues of searching (2.7.3.5)."
                    (pst-property #x35E30102 (pst-entry-id record-key #x8062))
                    (pst-property #x35E70102 (pst-entry-id record-key #x8042))
                    (pst-property #x67FF0003 0)))
-    ;; libpff refuses a map whose streams are empty: two of Outlook's own names, a number and a string
-    (let* ((name (pst-text "Keywords"))
-           (strings (pst-join (list (pst-number (length name) 4) name (pst-octets (mod (- (length name)) 4)))))
-           (entries (list (pst-name-entry #x8501 3 0) (pst-name-entry 0 2 1 :string t)))
-           (hashed (list (first entries) (pst-name-entry (pst-crc name) 2 1 :string t))))
-      (pc #x61 (append (list (pst-property #x00010003 251)
-                             ;; PSETID_Common, {00062008-0000-0000-C000-000000000046}
-                             (pst-property #x00020102 (pst-join (list (pst-number #x00062008 4) (pst-octets 4)
-                                                                      (pst-number #x46000000000000C0 8))))
-                             (pst-property #x00030102 (pst-join entries)) (pst-property #x00040102 strings))
-                       (loop for entry in hashed
-                             collect (pst-property (logior (ash (+ #x1000 (pst-name-bucket entry 251)) 16) #x0102)
-                                                   entry)))))
+    (multiple-value-bind (guids entries strings buckets) (pst-name-streams (pst-writer-names writer))
+      (pc #x61 (append (list (pst-property #x00010003 251) (pst-property #x00020102 guids)
+                             (pst-property #x00030102 entries) (pst-property #x00040102 strings))
+                       (loop for (bucket . held) in buckets
+                             collect (pst-property (logior (ash (+ #x1000 bucket) 16) #x0102) held)))))
     (template #x60D *pst-hierarchy-columns*)
     (template #x60E *pst-contents-columns*)
     (template #x60F *pst-associated-columns*)
@@ -1010,18 +923,21 @@ queues of searching (2.7.3.5)."
     (pst-node writer #x1E1 0 0)
     (pst-node writer #x201 0 0)))
 
-(defun write-pst (fd path name folders &key (encoding :permute) (each #'identity))
+(defun write-pst (fd path name folders &key (encoding :permute) (format :unicode) (each #'identity))
   "Write a new mailbox ([MS-PST]) into the empty file open as file descriptor
 \(FD) at PATH, NAME the name its top folder is shown by, holding FOLDERS, each
 \(NAMES . SOURCES): NAMES the path of the folder under the top of the
 mailbox, a list of names, and SOURCES what EACH, a function, makes a
-PST-MESSAGE of, or NIL to leave out; each is made and written in turn, the
+PST-MESSAGE of, or NIL to leave out, its named properties numbered anew for
+the mailbox (PST-RENAMED); each is made and written in turn, the
 message and its attachments in the file before the next is made. Beside them
 the folders every mailbox has: the top of the personal folders, deleted
 items, the root of searches and a search folder of spam (2.7.2). Data
-blocks are permuted, or with ENCODING :none written as they are. Returns the
-file's size."
-  (let* ((writer (make-pst-writer fd path :encoding encoding))
+blocks are permuted, with ENCODING :cyclic encoded by NDB_CRYPT_CYCLIC, with
+:none written as they are; with FORMAT :ansi the mailbox is of the ANSI
+format of Outlook 97 to 2002, which the tests of the reader take. Returns
+the file's size."
+  (let* ((writer (make-pst-writer fd path :encoding encoding :format format))
          (*random-state* (make-random-state t))
          (record-key (let ((key (pst-octets 16))) (dotimes (i 16 key) (setf (aref key i) (random 256)))))
          (top (make-pst-folder "Top of Personal Folders" #x401))
@@ -1032,7 +948,8 @@ file's size."
     (loop for (names . sources) in folders
           for folder = (pst-folder-under writer top names)
           do (dolist (source sources)
-               (let ((message (funcall each source)))
+               (let ((message (let ((made (funcall each source)))
+                                (and made (pst-renamed made (pst-writer-names writer))))))
                  (when message
                    (let ((nid (pst-new-nid writer 4)))
                      (multiple-value-bind (data sub size properties) (pst-message-node writer message)

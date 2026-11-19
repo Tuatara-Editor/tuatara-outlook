@@ -190,12 +190,13 @@ of its own called NAME (made unique)."
 
 ;;; Read in the background
 
-(defstruct (mail-read-job (:include job) (:constructor make-mail-read-job (buffer path &optional earlier))
+(defstruct (mail-read-job (:include job) (:constructor make-mail-read-job (buffer path &optional earlier item))
                          (:copier nil))
   "The message in the file at PATH being read for BUFFER, a job; MAIL, what was
 read. EARLIER is the earlier messages of its conversation whose attachments
-it shows, each (PATH . WORDS)."
-  path mail earlier)
+it shows, each (PATH . WORDS). ITEM is the path of the same message as an
+Outlook item, whose words of itself it shows too, or NIL."
+  path mail earlier item)
 
 (setf (documentation 'mail-read-job-p 'function) "True when OBJECT is a MAIL-READ-JOB.")
 
@@ -224,24 +225,38 @@ left out."
         when (and mail (mail-attachments mail))
           collect (cons words (mail-attachments mail))))
 
-(defun mail-view-buffer (native &key safe name preview earlier)
+(defun mail-with-item-details (mail item)
+  "MAIL with what the Outlook item at ITEM, the same message, says of itself
+\(MSG-MAIL's details: its kind, flags, when it was made and changed, its
+entry identifier) added to its details where MAIL lacks them; MAIL as it is
+when the item cannot be read."
+  (let ((read (handler-case (msg-read (file-octets item :limit *outlook-largest-file*)) (error () nil))))
+    (when read
+      (loop for (label . text) in (mail-details read)
+            unless (assoc label (mail-details mail) :test #'string=) do (mail-detail mail label text)))
+    mail))
+
+(defun mail-view-buffer (native &key safe name preview earlier item)
   "The buffer showing the message in the file at NATIVE (an Outlook item or a
 saved mail), read in the background when there is none yet; called NAME, or
 by the file's name; SAFE when the file is to be shown as text safely
 \(\\[outlook-view-file-text]). With PREVIEW, one of its own for the preview beside
 a mailbox's list (*MAIL-PREVIEWS*), its name saying so. EARLIER, the earlier
 messages of its conversation, each (PATH . WORDS), are read with it for
-their attachments (MAIL-READ-EARLIER)."
+their attachments (MAIL-READ-EARLIER). ITEM, the path of the same message as
+an Outlook item, adds what that says of itself (MAIL-WITH-ITEM-DETAILS)."
   (let ((name (format nil "~a~:[~; (preview)~]" (or (one-line name) (native-file-name native)) preview)))
     (reading-buffer (if preview '*mail-previews* '*mail-views*) (lambda (b) (car (buffer-local b 'mail-source))) native
                     name (format nil "Reading ~a...~%" name) 'outlook-view-mode
                     (lambda (buffer)
                       (setf (buffer-local buffer 'mail-source) (cons native safe))
-                      (start-job-thread (make-mail-read-job buffer native earlier)
+                      (start-job-thread (make-mail-read-job buffer native earlier item)
                                         (lambda (job)
                                           (let ((mail (outlook-read-file (mail-read-job-path job))))
                                             (when (mail-p mail)
-                                              (setf (mail-earlier mail) (mail-read-earlier (mail-read-job-earlier job))))
+                                              (setf (mail-earlier mail) (mail-read-earlier (mail-read-job-earlier job)))
+                                              (when (mail-read-job-item job)
+                                                (mail-with-item-details mail (mail-read-job-item job))))
                                             (setf (mail-read-job-mail job) mail)))
                                         :name "tuatara mail reading")))))
 
@@ -529,8 +544,6 @@ mailbox's size and how to read it; NIL for any other file."
 
 (defun outlook-health-words ()
   "What reads Outlook's files here, as \\[check-health] says it."
-  (let ((readpst (sandbox-find-program *outlook-readpst-program*))
-        (pages (sandbox-find-program *outlook-page-program*)))
-    (format nil "Outlook items (.msg) and saved mail (.eml) by Tuatara; ~a; ~a"
-            (program-health-words "mailboxes (.pst, .ost)" readpst "install readpst (Fedora: libpst)")
-            (program-health-words "messages as they look" pages "install weasyprint"))))
+  (format nil "Outlook items (.msg), saved mail (.eml) and mailboxes (.pst, .ost) by Tuatara; ~a"
+          (program-health-words "messages as they look" (sandbox-find-program *outlook-page-program*)
+                                "install weasyprint")))

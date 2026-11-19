@@ -8,8 +8,8 @@
 ;;;; mailbox's SHA-256 sum: a copy of the mailbox, wherever it is, has the
 ;;;; same labels, and a mailbox changed in any way has none. Each message is
 ;;;; known by its folder and its Message-ID, or where it has none by the
-;;;; SHA-256 sum of its headers as readpst wrote them, which stay the same
-;;;; each time the mailbox is read; the numbers readpst names its files by do
+;;;; SHA-256 sum of its headers as written when the mailbox was read, which
+;;;; stay the same each time it is read; the numbers its files are named by do
 ;;;; not, as they follow the order of the folder and whether deleted items are
 ;;;; read. Each change is a line added to the file in the
 ;;;; background. A line beginning @ tells what the file is for, so that the
@@ -32,7 +32,7 @@ space, the spaces around it taken off; NIL when nothing is left."
 (defun mailbox-message-identity (part folder)
   "What a message of a mailbox, PART (MIME-READ) in FOLDER, is known by from one
 reading of the mailbox to the next: its folder, its Message-ID (empty when it
-has none) and the SHA-256 sum of its headers as readpst wrote them, apart by
+has none) and the SHA-256 sum of its headers as written, apart by
 tabs, a tab within either made a space. Two messages of one folder alike in
 all three are told apart by their order (MAILBOX-NUMBER-IDENTITIES)."
   (let ((id (mime-header part "message-id")))
@@ -44,7 +44,7 @@ all three are told apart by their order (MAILBOX-NUMBER-IDENTITIES)."
   "Give each message of FOLDERS, each (NAME . ITEMS), whose identity an earlier
 message of the mailbox has already (a Message-ID forged or copied, headers
 alike) a number after it, 2 for the second, 3 for the third, in the order
-readpst wrote them, so that no two share labels."
+they were written, so that no two share labels."
   (let ((seen (make-hash-table :test 'equal)))
     (loop for (nil . items) in folders
           do (dolist (item items)
@@ -145,10 +145,10 @@ meanwhile; when it holds more than twice as many lines as that, and
 (defun mailbox-labels-name (sum)
   "The name of the labels journal of the mailbox whose SHA-256 sum is SUM, as
 it is read now: SUM, or SUM.with-deleted while *OUTLOOK-INCLUDE-DELETED* has
-readpst list deleted items too. The two are kept apart because readpst numbers
-a folder's items in its own order, deleted ones among them when they are read,
-so that the order telling alike messages apart (MAILBOX-NUMBER-IDENTITIES)
-changes with the setting."
+deleted items listed too. The two are kept apart, as they were when readpst
+read mailboxes and numbered a folder's items in its own order, deleted ones
+among them, so that the order telling alike messages apart
+\(MAILBOX-NUMBER-IDENTITIES) changed with the setting."
   (format nil "~a~:[~;.with-deleted~]" sum *outlook-include-deleted*))
 
 (defun mailbox-read-labels (name)
