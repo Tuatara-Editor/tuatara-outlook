@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src  'self'; img-src 'self' file:; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Copying messages out &ndash; outlook Manual</title>
+<link rel="icon" href="tuatara.png">
+<link rel="stylesheet" href="manual.css">
+<script src="manual.js" defer></script>
+</head>
+<body>
+<div class="site">
+<nav class="toc" id="contents" aria-label="Contents">
+<strong>outlook Manual</strong>
+<small>for Tuatara 0.90.38 and later</small>
+<p class="tools"><a href="all.html">All on one page</a>
+<button type="button" class="theme" hidden>Dark</button></p>
+<input type="search" placeholder="Search the manual" aria-label="Search the manual">
+<ol class="chapters"><li id="nav-index"><a href="index.html">0 Contents</a></li><li id="nav-01-what-outlook-is"><a href="01-what-outlook-is.html">1 What outlook is</a><ol><li><a href="01-what-outlook-is.html#what-it-reads">1.1 What it reads</a></li><li><a href="01-what-outlook-is.html#how-it-keeps-a-file-safe">1.2 How it keeps a file safe</a></li><li><a href="01-what-outlook-is.html#where-things-are-kept">1.3 Where things are kept</a></li><li><a href="01-what-outlook-is.html#the-parts-of-this-manual">1.4 The parts of this manual</a></li><li><a href="01-what-outlook-is.html#keys">1.5 Keys</a></li></ol></li><li id="nav-02-reading-a-message"><a href="02-reading-a-message.html">2 Reading a message</a><ol><li><a href="02-reading-a-message.html#the-keys-of-a-message">2.1 The keys of a message</a></li><li><a href="02-reading-a-message.html#attachments">2.2 Attachments</a></li><li><a href="02-reading-a-message.html#seeing-a-message-as-it-looks">2.3 Seeing a message as it looks</a></li><li><a href="02-reading-a-message.html#attachments-earlier-in-a-conversation">2.4 Attachments earlier in a conversation</a></li></ol></li><li id="nav-03-mailboxes"><a href="03-mailboxes.html">3 Mailboxes</a><ol><li><a href="03-mailboxes.html#what-is-read">3.1 What is read</a></li><li><a href="03-mailboxes.html#how-it-is-read">3.2 How it is read</a></li><li><a href="03-mailboxes.html#nothing-is-left-out-without-a-word">3.3 Nothing is left out without a word</a></li><li><a href="03-mailboxes.html#a-mailbox-from-outside">3.4 A mailbox from outside</a></li><li><a href="03-mailboxes.html#the-cache">3.5 The cache</a></li><li><a href="03-mailboxes.html#the-list-and-its-keys">3.6 The list and its keys</a></li><li><a href="03-mailboxes.html#the-preview">3.7 The preview</a></li></ol></li><li id="nav-04-searching-and-filtering"><a href="04-searching-and-filtering.html">4 Searching and filtering a mailbox</a><ol><li><a href="04-searching-and-filtering.html#the-filters">4.1 The filters</a></li><li><a href="04-searching-and-filtering.html#searching">4.2 Searching</a></li><li><a href="04-searching-and-filtering.html#filtering-by-a-field">4.3 Filtering by a field</a></li></ol></li><li id="nav-05-labels"><a href="05-labels.html">5 Labels</a><ol><li><a href="05-labels.html#putting-labels-on-and-taking-them-off">5.1 Putting labels on and taking them off</a></li><li><a href="05-labels.html#where-labels-are-kept">5.2 Where labels are kept</a></li><li><a href="05-labels.html#the-label-manager">5.3 The label manager</a></li></ol></li><li id="nav-06-copying-messages-out" class="here"><a class="here" href="06-copying-messages-out.html">6 Copying messages out</a><ol><li><a href="06-copying-messages-out.html#the-menu">6.1 The menu</a></li><li><a href="06-copying-messages-out.html#files-one-for-each-message">6.2 Files, one for each message</a></li><li><a href="06-copying-messages-out.html#one-mbox-file">6.3 One mbox file</a></li><li><a href="06-copying-messages-out.html#a-new-outlook-mailbox">6.4 A new Outlook mailbox</a></li></ol></li><li id="nav-07-settings-and-limits"><a href="07-settings-and-limits.html">7 Settings and limits</a><ol><li><a href="07-settings-and-limits.html#the-settings">7.1 The settings</a></li><li><a href="07-settings-and-limits.html#fixed-limits">7.2 Fixed limits</a></li><li><a href="07-settings-and-limits.html#what-outlook-does-not-do">7.3 What outlook does not do</a></li></ol></li><li id="nav-08-every-command-and-setting"><a href="08-every-command-and-setting.html">8 Every command and setting</a><ol><li><a href="08-every-command-and-setting.html#every-command">8.1 Every command</a></li><li><a href="08-every-command-and-setting.html#every-setting">8.2 Every setting</a></li></ol></li></ol>
+</nav>
+<main>
+<article>
+<div class="node"><span>Previous: <a href="05-labels.html">Labels</a></span><span>Next: <a href="07-settings-and-limits.html">Settings and limits</a></span><span>Up: <a href="index.html">Contents</a></span></div>
+<h1 id="copying-messages-out">Copying messages out</h1>
+<p class="lead">Messages from a mailbox as files, as one mbox file, or as a new mailbox.</p>
+<h2 id="the-menu"><span class="num">6.1</span> The menu</h2>
+<p><kbd>C</kbd> in a mailbox's list (<kbd>C-c o c</kbd>) opens a menu of copying out the messages
+marked with <kbd>m</kbd>, or, with none marked, the one on the line. <kbd>C-h</kbd> there lists
+the menu.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>e</kbd></td><td>Copies each as saved mail (<code>.eml</code>), then asks for the directory</td></tr>
+<tr><td></td><td>(made when it is not there).</td></tr>
+<tr><td><kbd>m</kbd></td><td>Copies each as an Outlook item (<code>.msg</code>), then asks for the</td></tr>
+<tr><td></td><td>directory.</td></tr>
+<tr><td><kbd>b</kbd></td><td>Collects them into one mbox file.</td></tr>
+<tr><td><kbd>p</kbd></td><td>Writes them into a new Outlook mailbox (<code>.pst</code>).</td></tr>
+<tr><td><kbd>a</kbd></td><td>First, switches to every message shown (see below).</td></tr>
+</tbody></table></div>
+<p><kbd>M-x outlook-export-eml</kbd>, <kbd>M-x outlook-export-msg</kbd>, <kbd>M-x outlook-export-mbox</kbd>
+and <kbd>M-x outlook-export-pst</kbd> do the same without the menu.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>C</kbd>, <kbd>C-c o c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
+</tbody></table></div>
+<p>Marks stay on messages a filter hides, and <kbd>C</kbd> copies them too. The question
+names how many it copies.</p>
+<p><kbd>a</kbd> in the menu, All shown, switches from the messages marked to every message
+the list's filters leave, those under folded folders too, marked or not. So <kbd>C a
+e</kbd> copies out as saved mail all that a search, a label or a field filter left.</p>
+<p>Copying runs in the background. The message line then says how many were copied
+and which could not be.</p>
+<h2 id="files-one-for-each-message"><span class="num">6.2</span> Files, one for each message</h2>
+<p><kbd>e</kbd> writes internet mail as it was written of the mailbox. <kbd>m</kbd> writes the
+Outlook item from the mailbox itself, beside each <code>.eml</code>, every property kept.</p>
+<p>A copy is named by when the message was sent and its subject, as in <code>2026-04-30
+0915 kea survey.msg</code>. A name already taken gets <code>(2)</code>, <code>(3)</code> and so on, and
+nothing in the directory is overwritten. Characters a name cannot hold on other
+systems' drives (<code>: * ? &quot; &lt; &gt; | / \</code>) are left out or made <code>-</code>.</p>
+<h2 id="one-mbox-file"><span class="num">6.3</span> One mbox file</h2>
+<p><kbd>b</kbd> collects the messages into one mbox file, the format most mail programs
+import. Each message is as it was written, after a <code>From = line with its
+sender's address and when it was sent. A line of a message beginning with =From
+= (after any number of =&gt;</code>) is written with one <code>&gt;</code> more, as the mboxrd form
+does, so that reading it back gives each message as it was.</p>
+<p>It asks for the file. A name taken gets <code>(2)</code>, <code>(3)</code> and so on, and nothing is
+overwritten. It is written in the background, and a copy stopped half-way is
+deleted. Contacts and appointments are left out.</p>
+<h2 id="a-new-outlook-mailbox"><span class="num">6.4</span> A new Outlook mailbox</h2>
+<p><kbd>p</kbd> writes the messages into a new Outlook mailbox (<code>.pst</code>), in the folders they
+are listed in, below its top folder. It asks for the file. <code>.pst</code> is added to a
+name without it, a name taken gets <code>(2)</code>, <code>(3)</code> and so on, and nothing is
+overwritten. It is written in the background, a file stopped half-way deleted,
+and never in an evidence directory. Contacts and appointments are left out.</p>
+<p>Each message is written from the Outlook item written of it as the mailbox was
+read: every property, recipient and attachment the mailbox gave it, a message
+attached to it with its own, and its named properties (Outlook's categories, a
+contact's addresses, an appointment's times and the rest) with what they stand
+for, given numbers of the new mailbox's own.</p>
+<p>The mailbox is written as Microsoft's
+<a href="https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/">MS-PST</a>
+lays out the Unicode format Outlook 2003 and later read. Its strings are in
+Unicode, its data blocks are encoded as Outlook encodes them (the permutation of
+MS-PST section 5.1), and every block and page has its check. The folders and
+tables Outlook needs to open it are there too (the top of the personal folders,
+deleted items and the search folders).</p>
+<p>A mailbox may be as large as 50 GB, the most Outlook takes as it is installed.
+The maps of which parts of the file are taken are written where MS-PST puts
+them, however far the file goes (each allocation map, page map, free map and
+free page map), and the file is streamed to the drive as it is made. Read back,
+by the package and by libpff, the messages copied out come out as they went in:
+their headers, text, HTML and attachments alike.</p>
+<div class="node end"><span>Previous: <a href="05-labels.html">Labels</a></span><span>Next: <a href="07-settings-and-limits.html">Settings and limits</a></span><span>Up: <a href="index.html">Contents</a></span></div>
+</article>
+</main>
+</div>
+</body>
+</html>
