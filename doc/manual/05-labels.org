@@ -1,0 +1,110 @@
+#+title: Labels
+#+language: en
+
+* Labels
+
+Labels of your own on a mailbox's messages, kept apart from the mailbox.
+
+** Putting labels on and taking them off
+
+| Key                | What it does                                          |
+|--------------------+-------------------------------------------------------|
+| ~+~, ~C-c o +~     | Puts labels on the messages marked with ~m~, or with  |
+|                    | none marked on the one on the line.                   |
+| ~-~, ~C-c o -~     | Takes labels off the messages marked, or the one on   |
+|                    | the line, chosen from those they carry.               |
+| ~L~, ~C-c o l~     | Narrows the list to the messages carrying a label, or |
+|                    | any of several. With ~C-u~, to those carrying none of |
+|                    | them.                                                 |
+| ~M~, ~C-c o m~     | Opens the label manager.                              |
+
+~+~ asks for one label or several, apart by commas, the labels used before
+offered as you type. ~RET~ on the empty choice ends the question. Each message's
+labels are shown on its line, in a column of their own while any message
+carries one.
+
+~L~ chooses from the labels the mailbox's messages carry, apart by commas. It is
+one of the list's filters, as a search kept with ~RET~ is (chapter 4). It
+narrows what the filters before it left, ~C-x / l~ lists it and ~C-x / r~ takes
+every filter away. Labels are told apart by case: =kea= is not =Kea=. A message
+labelled or unlabelled while such a filter is on is shown or hidden at once, as
+the filters now say.
+
+The label prompt offers only the labels of the mailbox it is in.
+
+#+table: commands outlook-label outlook-unlabel outlook-filter-labels
+
+** Where labels are kept
+
+The labels are kept for you alone in Tuatara's state directory
+(=~/.local/state/tuatara/outlook/labels/= unless =XDG_STATE_HOME= says
+otherwise), never in the mailbox nor beside it. A file is named by the mailbox's
+SHA-256 sum. Whenever that mailbox is opened again, a copy of it too, its labels
+come back, and a mailbox changed in any way starts with none. Nothing is
+written near the mailbox. The words above a mailbox's list say where its labels
+are kept.
+
+A message is known by its folder, its Message-ID and the SHA-256 sum of its
+headers as they were written. Two messages of a folder alike in all three (a
+Message-ID forged or copied, headers alike) are told apart by their order. The
+numbers its files are given are not used: they follow the order of the folder
+and change when deleted items are read or left out.
+
+Each change is a line added to the end of the mailbox's labels file, in one
+write while holding the file's lock, so two sessions labelling the same mailbox
+lose nothing of each other's. The file is read from the first line, and written
+again with only the labels it leaves once it has grown long.
+
+A line beginning =@= in each labels file says which mailbox it is for: its
+file's name, the path it was last opened from, its size, its SHA-256 sum and
+when its labels last changed. A file from before it existed still reads, and is
+given the line the next time its mailbox is opened.
+
+Labels put on when readpst read mailboxes were kept under the headers readpst
+wrote, which the package writes otherwise. They stay in the labels file, and the
+label manager shows them, but they show on no message read now.
+
+** The label manager
+
+~M-x outlook-label-manager~, or ~M~ (~C-c o m~) in a mailbox's list, lists every
+mailbox that has labels, one section each: its file's name, the path it was last
+opened from, whether the file is there now, the start of its SHA-256 sum, how
+many labels and messages, and when they last changed. A mailbox read with its
+deleted items has a section of its own. Under it is each label with the number
+of messages that carry it. The heading says where the labels are kept and how
+much room they take.
+
+| Key               | What it does                                           |
+|-------------------+--------------------------------------------------------|
+| ~RET~, ~l~        | On a mailbox's line, opens the mailbox when its file   |
+|                   | is there.                                              |
+| ~h~               | On a mailbox's line, folds its section.                |
+| ~q~               | Closes the label manager.                              |
+| ~R~ (~C-c o r~)   | Renames the label on the line, or each one marked, in  |
+|                   | its mailbox only. A message that has the new name      |
+|                   | already only loses the old.                            |
+| ~d~, ~x~          | Mark labels for deletion and take them off every       |
+|                   | message of their mailbox, after asking.                |
+| ~D~ (~C-c o f~)   | Forgets every label of the mailbox on the line, after  |
+|                   | saying how many labels and messages that is.           |
+| ~E~ (~C-c o e~)   | Writes the mailbox's labels into a plain text file, in |
+|                   | a directory you choose and never an evidence           |
+|                   | directory: its SHA-256 sum, its file's name, and each  |
+|                   | message's identity with its labels.                    |
+| ~I~ (~C-c o i~)   | Reads such a file back into the mailbox with the sum   |
+|                   | it holds, adding to the labels there. On another       |
+|                   | mailbox's line it refuses. Elsewhere it goes to the    |
+|                   | mailbox the file is of, which gets its labels back     |
+|                   | after they were forgotten.                             |
+
+Each change is lines added to the mailbox's journal, so labels another session
+put on meanwhile stay. Earlier versions kept a =names= file in the labels
+directory. It is left where it is and ignored, and can be deleted.
+
+The manager reads and changes the journals in the background, so it never holds
+the editor up. The heading says what is under way, and a second change waits for
+the first. A file read by ~I~ is accepted only when its sum is exactly 64
+lowercase hexadecimal digits, the name of a journal. Its file name is cut at 255
+characters and control characters in it become spaces.
+
+#+table: commands outlook-label-open outlook-label-rename outlook-labels-forget outlook-labels-export outlook-labels-import

@@ -1,0 +1,102 @@
+#+title: Searching and filtering a mailbox
+#+language: en
+
+* Searching and filtering a mailbox
+
+Narrowing a mailbox's list to the messages you want.
+
+** The filters
+
+A list can be narrowed by any number of filters, and they stack: each narrows
+what the ones before it left. A search kept with ~RET~, a field and a label are
+all filters. The list's first line says by what it is narrowed and how many
+items are left.
+
+| Key                  | What it does                                        |
+|----------------------+-----------------------------------------------------|
+| ~C-s~, ~C-r~         | Narrows the list, as a regular expression is typed, |
+|                      | to the messages whose headers or contents match.    |
+|                      | ~RET~ keeps the pattern as a filter, ~C-g~ lets the |
+|                      | one typed go.                                       |
+| ~C-x / f~            | Keeps the messages one field of which a pattern     |
+|                      | matches.                                            |
+| ~C-x / h~            | Hides the messages one field of which a pattern     |
+|                      | matches.                                            |
+| ~L~                  | Narrows the list to the messages carrying a label   |
+|                      | (chapter 5).                                        |
+| ~C-x / l~            | Lists the filters, each with how many items it      |
+|                      | leaves. There ~d~ takes away the filter on the line |
+|                      | and ~D~ all of them. The later filters are worked   |
+|                      | out again.                                          |
+| ~C-x / r~            | Takes every filter away: the whole list again.      |
+
+~RET~ on a message of the narrowed list opens it with the filters' matches lit.
+
+** Searching
+
+~C-s~ (or ~C-r~) in a mailbox's list does not move through its lines. It
+narrows the list, as the pattern is typed, to the messages it matches.
+
+A message matches when the pattern, a regular expression, is found in any of
+its headers (all of them, not only those the list shows: =^X-Mailer:.*Outlook=,
+=^Received:.*203\.0\.113=), in the text of any of its text parts, or in an
+attachment's name. Text is decoded from base64 or quoted-printable and from its
+charset, and HTML is searched as its text. Messages attached to it are looked
+through alike. Case is ignored while the pattern has no capital letter. ~M-r~
+switches to literal text.
+
+~RET~ keeps the pattern as a filter. The next ~C-s~ narrows what that filter
+left, so =invoice= then =^from:.*acme= leaves the messages that have both. ~C-g~
+lets go only the pattern being typed.
+
+The text searched is made once, as the mailbox is listed: for each message, in
+the list's own private directory, deleted with it. Matching runs in the
+background, the mode line saying how far it has got, and starts again as the
+pattern changes. The editor goes on meanwhile, however large the mailbox.
+
+Of a message larger than =*outlook-search-text-limit*= only that much is
+searched, and of one larger than =*outlook-largest-file*= only its headers. The
+list says how many such messages there are. Nothing in a message is run,
+attachments other than text are never decoded, and the mailbox and what was
+written of it are never changed.
+
+** Filtering by a field
+
+~C-x / f~ keeps the messages one field of which a pattern matches, and ~C-x / h~
+hides them. It asks for the field first, the names completed from those found
+in the mailbox as it was listed:
+
+- =from=, =to=, =cc=, =bcc=, =subject=, =date=, =attachment name= (an
+  attachment's name) and =your label=, first;
+- then every other header its messages have (=received=, =message-id=,
+  =in-reply-to=, =references=, =reply-to=, =return-path=, =x-mailer=,
+  =x-originating-ip= and the rest);
+- and what the Outlook item written of each message says of itself, named
+  =outlook=, a space and the name Microsoft gives the property: =outlook
+  importance=, =outlook sensitivity=, =outlook message-class=, =outlook
+  client-submit-time=, =outlook message-delivery-time=, =outlook message-flags=,
+  =outlook conversation-topic=, =outlook conversation-index=, =outlook
+  sender-name=, =outlook sender-address-type=, =outlook sender-email-address=,
+  =outlook sent-representing-name=, =outlook display-to=, =outlook entry-id=,
+  =outlook creation-time= and so on. Its named properties are given by what they
+  stand for, =outlook Keywords=, or, named by a number, by the property set's
+  word and the number, =outlook address-8083=.
+
+The question names beside each whether it is a header or one of these. The names
+Tuatara makes up hold a space, which no header's name may, so a header such as
+=Attachment:= or =Label:= in a message stays a header and never poses as one of
+them. A line whose name holds a space is no header and is not offered.
+
+Then it asks for the pattern: a regular expression, or literal text after
+~M-r~, exactly as Tuatara's search reads it. It is tried on that field's values
+alone. A message with a header many times (=received=) is kept when any of them
+matches. A message without the field is not kept by ~C-x / f~, and not hidden by
+~C-x / h~.
+
+The filter stacks with the others and is listed by ~C-x / l~. Opening a message
+the list was narrowed to lights the header lines that matched, from the header's
+name to the match.
+
+A pattern used often can be saved under a name with Tuatara's ~M-x
+save-named-pattern~ (a regular expression, or literal text after ~M-r~,
+remembered as either) and given later as =[[:name:]]= in any pattern.

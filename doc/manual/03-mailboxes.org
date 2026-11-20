@@ -1,0 +1,143 @@
+#+title: Mailboxes
+#+language: en
+
+* Mailboxes
+
+How a mailbox is read, listed, kept in the cache and opened.
+
+** What is read
+
+A mailbox is read by the package itself, as Microsoft's
+[[https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/][MS-PST]]
+lays it out: the Unicode format of Outlook 2003 and later (=.pst=, and the
+offline =.ost= of Outlook 2003 to 2010) and the ANSI format of Outlook 97 to
+2002, its blocks as they are, permuted or cyclic.
+
+The offline mailboxes of Outlook 2013 and later (=.ost= of pages of 4 KB, their
+blocks compressed) are not described by MS-PST. Such a mailbox is refused, and
+the refusal says so.
+
+** How it is read
+
+A mailbox is read where it is, a block at a time, never whole, however large it
+is, and never in the editor. The package's reader runs in a Tuatara of its own
+shut in by Tuatara's sandbox. There it sees the mailbox, read only, and the
+directory it writes the messages in, and nothing else. The editor reads only
+the messages written. The mailbox itself is never written to, nor its access
+time changed. Without the sandbox (=bwrap=), no mailbox is read.
+
+The messages are written to your cache directory, each twice: as saved mail and
+as an Outlook item holding every property the mailbox gives it, so that they can
+be copied out as either. A contact is written as a vCard (=.vcf=). An
+appointment, a task or a journal entry is written as iCalendar (=.ics=). A
+distribution list, a note and any other item is written as a message.
+
+A damaged mailbox is read as far as it can be. Every offset and size is
+checked, and every tree of the file is followed with each part seen once, so
+that reading it ends. Nothing in it is run.
+
+A message is read with no more than an eighth of the reader's memory, and never
+more than =*outlook-largest-file*= of its file, a part it names again and again
+counted each time. Its text and the attachments read by then are kept, and what
+is past them is said in the message.
+
+readpst, which read mailboxes before, left out without a word a message of more
+than about 440 properties, and distribution lists. Both are listed now.
+
+On a mailbox of 20,000 messages (340 MB), the package reads and writes its
+messages in 5.3 seconds where readpst took 4.8, and lists what it wrote in 8.8
+seconds where listing readpst's took 9.6.
+
+** Nothing is left out without a word
+
+- A message that cannot be read is listed as one, saying why: "(could not be
+  read) Message 200084 of the mailbox could not be read: block 1a4 is not in
+  the blocks' B-tree".
+- A part of a message that cannot be read is said so in the message.
+- What was found wrong in the mailbox as a whole (a check, CRC, that does not
+  match, a page of its B-trees that cannot be read) is said above the list.
+- Messages whose folder is not in the mailbox, or lies more than 64 folders
+  deep, are listed under =Orphans=. Those of folders outside the top of the
+  personal folders are under =Outside the top folder=.
+- Deleted items are listed with the others while =*outlook-include-deleted*=
+  says so.
+- Two folders in one folder whose names are alike, or alike but for case, are
+  told apart by (2), (3) after the name, as is a folder named as a file the
+  reader writes beside it. A folder whose path would pass 1,024 octets has its
+  name cut to fit, and the list shows its path whole.
+- Should the reader stop part way (it failed, or ran out of memory), what it
+  wrote by then is listed, and the list says where it stopped and why. It says
+  too when fewer files are there to be listed than the reader wrote.
+
+** A mailbox from outside
+
+A mailbox in your downloads, on a removable drive, or in another of Tuatara's
+untrusted directories is listed as well when it is opened safely. It is refused
+when another file was put in the mailbox's place after it was opened.
+
+The mailbox is opened once. The file summed is the very file the reader reads,
+whatever is put at its path meanwhile, and a mailbox that changes while it is
+read is refused. A message or an Outlook item from outside opens as its text, as
+Tuatara itself reads those.
+
+** The cache
+
+What was written of a mailbox is kept in Tuatara's cache after the list is
+closed. It is found again by the mailbox's SHA-256 sum and the options it was
+read with (=*outlook-include-deleted*=). Opening the same mailbox again, from
+this computer or from a server, sums it and lists it from what was kept,
+without reading it again.
+
+It is cleared as Tuatara clears every entry of its cache: =*cache-keep*= after
+it was last used, one day as standard, never while the list is open, never when
+pinned. ~M-x cache-manager~ shows it under "Mailboxes read", where ~RET~ lists
+it again, ~P~ pins it and ~d~, ~x~ delete it. What readpst wrote in earlier
+versions is not used: such a mailbox is read anew.
+
+A mailbox on a server is read from the copy Tuatara fetched, checked before and
+after to be as it was fetched. No second copy is made, and none of a mailbox on
+this computer either, which is checked before and after to be as it was summed.
+This needs Tuatara 0.90.38 or later.
+
+** The list and its keys
+
+| Key                | What it does                                            |
+|--------------------+---------------------------------------------------------|
+| ~RET~, ~l~         | Opens the item on the line: a message as one, read      |
+|                    | only, the matches of the list's filters lit in it; a    |
+|                    | contact or an appointment as its text, safely. On a     |
+|                    | folder's line, folds or unfolds the folder.             |
+| ~o~                | Opens the item on the line in another window, the list  |
+|                    | staying where it is.                                    |
+| ~n~, ~p~           | Go to the next item and the one before, over the        |
+|                    | folders' lines.                                         |
+| ~TAB~, ~S-TAB~     | Fold or unfold the folder the line is in; every folder. |
+| ~m~, ~u~, ~U~, ~t~ | Mark the message on the line (=>=) and move down; take  |
+|                    | its mark off; take every mark off; mark those shown     |
+|                    | that are not marked and unmark those marked, as in      |
+|                    | rimu. A count marks as many.                            |
+| ~P~                | Turns the preview off and on.                           |
+| ~q~                | Closes the list. What was written of it stays in the    |
+|                    | cache, so the mailbox opens again at once.              |
+| ~h~                | Asks, then closes the list and goes back to its         |
+|                    | directory in rimu, on the mailbox.                      |
+| ~C-c o h~          | The same as ~h~.                                        |
+
+The moves by word (~w~, ~b~, ~W~, ~B~) do nothing in the list. ~V~ is the one
+selection, of whole lines.
+
+The keys that search, filter, label and copy are in chapters 4, 5 and 6.
+
+#+table: commands outlook-back-to-directory
+
+** The preview
+
+As the cursor goes from line to line of a list, the message on the line is shown
+in a window beside it, on its right when there is room, else below it, as rimu
+shows the file on its line. It is read in the background, as a message opened
+is, by Tuatara itself. Nothing in it is run and nothing it points to is
+fetched.
+
+~P~ turns the preview off in that list and on again. =*outlook-preview*= says
+whether new lists have it. The preview goes, its buffers with it, when the
+cursor leaves the list and the preview.
