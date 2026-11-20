@@ -16,6 +16,11 @@ Once it is loaded, opening one of these files shows a message, or a list of the
 messages of a mailbox, which can be searched, filtered, labelled and copied out.
 The manual says how, with every key, command and setting.
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="media/outlook-light.gif">
+  <img alt="A made-up mailbox narrowed to one invoice: the real one from the builder for $1,250.00, a forged one from a look-alike address for $5,950.00 with replies going elsewhere, each PDF opened, and the five messages copied out as saved mail" src="media/outlook.gif">
+</picture>
+
 ## What it needs
 
 - Tuatara 0.90.38 or later.
