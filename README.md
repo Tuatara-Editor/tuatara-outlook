@@ -7,7 +7,8 @@ Outlook items (`.msg`), saved mail (`.eml`) and Outlook mailboxes (`.pst`,
 `.ost`), read as messages, read only. One of the Tuatara project's packages, not
 part of the editor.
 
-It is made for examining mail from evidence. Nothing in a message is run, an
+It is made for examining mail from evidence. It is no mail client: it signs in
+to no account and sends nothing. Nothing in a message is run, an
 attachment is opened only when you ask and from a private copy, and the files
 read are never changed. A mailbox is read by the package itself, in a sandbox,
 however large it is.

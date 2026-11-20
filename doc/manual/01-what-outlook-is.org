@@ -6,7 +6,8 @@
 A package that reads Outlook items, saved mail and Outlook mailboxes as
 messages, and never changes them.
 
-It is made for examining mail from evidence. Nothing in a message is run.
+It is made for examining mail from evidence. It is no mail client: it signs
+in to no account, fetches no mail and sends none. Nothing in a message is run.
 An attachment is opened only when you ask, and from a private copy. The files
 read are never written to.
 
