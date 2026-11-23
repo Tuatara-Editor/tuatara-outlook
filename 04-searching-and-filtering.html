@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src  'self'; img-src 'self' file:; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Searching and filtering a mailbox &ndash; outlook Manual</title>
+<link rel="icon" href="tuatara.png">
+<link rel="stylesheet" href="manual.css">
+<script src="manual.js" defer></script>
+</head>
+<body>
+<div class="site">
+<nav class="toc" id="contents" aria-label="Contents">
+<strong>outlook Manual</strong>
+<small>for Tuatara 0.90.38 and later</small>
+<p class="tools"><a href="all.html">All on one page</a>
+<button type="button" class="theme" hidden>Dark</button></p>
+<input type="search" placeholder="Search the manual" aria-label="Search the manual">
+<ol class="chapters"><li id="nav-index"><a href="index.html">0 Contents</a></li><li id="nav-01-what-outlook-is"><a href="01-what-outlook-is.html">1 What outlook is</a><ol><li><a href="01-what-outlook-is.html#what-it-reads">1.1 What it reads</a></li><li><a href="01-what-outlook-is.html#how-it-keeps-a-file-safe">1.2 How it keeps a file safe</a></li><li><a href="01-what-outlook-is.html#where-things-are-kept">1.3 Where things are kept</a></li><li><a href="01-what-outlook-is.html#the-parts-of-this-manual">1.4 The parts of this manual</a></li><li><a href="01-what-outlook-is.html#keys">1.5 Keys</a></li></ol></li><li id="nav-02-reading-a-message"><a href="02-reading-a-message.html">2 Reading a message</a><ol><li><a href="02-reading-a-message.html#the-keys-of-a-message">2.1 The keys of a message</a></li><li><a href="02-reading-a-message.html#attachments">2.2 Attachments</a></li><li><a href="02-reading-a-message.html#seeing-a-message-as-it-looks">2.3 Seeing a message as it looks</a></li><li><a href="02-reading-a-message.html#attachments-earlier-in-a-conversation">2.4 Attachments earlier in a conversation</a></li></ol></li><li id="nav-03-mailboxes"><a href="03-mailboxes.html">3 Mailboxes</a><ol><li><a href="03-mailboxes.html#what-is-read">3.1 What is read</a></li><li><a href="03-mailboxes.html#how-it-is-read">3.2 How it is read</a></li><li><a href="03-mailboxes.html#nothing-is-left-out-without-a-word">3.3 Nothing is left out without a word</a></li><li><a href="03-mailboxes.html#a-mailbox-from-outside">3.4 A mailbox from outside</a></li><li><a href="03-mailboxes.html#the-cache">3.5 The cache</a></li><li><a href="03-mailboxes.html#the-list-and-its-keys">3.6 The list and its keys</a></li><li><a href="03-mailboxes.html#the-preview">3.7 The preview</a></li></ol></li><li id="nav-04-searching-and-filtering" class="here"><a class="here" href="04-searching-and-filtering.html">4 Searching and filtering a mailbox</a><ol><li><a href="04-searching-and-filtering.html#the-filters">4.1 The filters</a></li><li><a href="04-searching-and-filtering.html#searching">4.2 Searching</a></li><li><a href="04-searching-and-filtering.html#filtering-by-a-field">4.3 Filtering by a field</a></li></ol></li><li id="nav-05-labels"><a href="05-labels.html">5 Labels</a><ol><li><a href="05-labels.html#putting-labels-on-and-taking-them-off">5.1 Putting labels on and taking them off</a></li><li><a href="05-labels.html#where-labels-are-kept">5.2 Where labels are kept</a></li><li><a href="05-labels.html#the-label-manager">5.3 The label manager</a></li></ol></li><li id="nav-06-copying-messages-out"><a href="06-copying-messages-out.html">6 Copying messages out</a><ol><li><a href="06-copying-messages-out.html#the-menu">6.1 The menu</a></li><li><a href="06-copying-messages-out.html#files-one-for-each-message">6.2 Files, one for each message</a></li><li><a href="06-copying-messages-out.html#one-mbox-file">6.3 One mbox file</a></li><li><a href="06-copying-messages-out.html#a-new-outlook-mailbox">6.4 A new Outlook mailbox</a></li></ol></li><li id="nav-07-settings-and-limits"><a href="07-settings-and-limits.html">7 Settings and limits</a><ol><li><a href="07-settings-and-limits.html#the-settings">7.1 The settings</a></li><li><a href="07-settings-and-limits.html#fixed-limits">7.2 Fixed limits</a></li><li><a href="07-settings-and-limits.html#what-outlook-does-not-do">7.3 What outlook does not do</a></li></ol></li><li id="nav-08-every-command-and-setting"><a href="08-every-command-and-setting.html">8 Every command and setting</a><ol><li><a href="08-every-command-and-setting.html#every-command">8.1 Every command</a></li><li><a href="08-every-command-and-setting.html#every-setting">8.2 Every setting</a></li></ol></li></ol>
+</nav>
+<main>
+<article>
+<div class="node"><span>Previous: <a href="03-mailboxes.html">Mailboxes</a></span><span>Next: <a href="05-labels.html">Labels</a></span><span>Up: <a href="index.html">Contents</a></span></div>
+<h1 id="searching-and-filtering-a-mailbox">Searching and filtering a mailbox</h1>
+<p class="lead">Narrowing a mailbox's list to the messages you want.</p>
+<h2 id="the-filters"><span class="num">4.1</span> The filters</h2>
+<p>A list can be narrowed by any number of filters, and they stack: each narrows
+what the ones before it left. A search kept with <kbd>RET</kbd>, a field and a label are
+all filters. The list's first line says by what it is narrowed and how many
+items are left.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>C-s</kbd>, <kbd>C-r</kbd></td><td>Narrows the list, as a regular expression is typed,</td></tr>
+<tr><td></td><td>to the messages whose headers or contents match.</td></tr>
+<tr><td></td><td><kbd>RET</kbd> keeps the pattern as a filter, <kbd>C-g</kbd> lets the</td></tr>
+<tr><td></td><td>one typed go.</td></tr>
+<tr><td><kbd>C-x / f</kbd></td><td>Keeps the messages one field of which a pattern</td></tr>
+<tr><td></td><td>matches.</td></tr>
+<tr><td><kbd>C-x / h</kbd></td><td>Hides the messages one field of which a pattern</td></tr>
+<tr><td></td><td>matches.</td></tr>
+<tr><td><kbd>L</kbd></td><td>Narrows the list to the messages carrying a label</td></tr>
+<tr><td></td><td>(chapter 5).</td></tr>
+<tr><td><kbd>C-x / l</kbd></td><td>Lists the filters, each with how many items it</td></tr>
+<tr><td></td><td>leaves. There <kbd>d</kbd> takes away the filter on the line</td></tr>
+<tr><td></td><td>and <kbd>D</kbd> all of them. The later filters are worked</td></tr>
+<tr><td></td><td>out again.</td></tr>
+<tr><td><kbd>C-x / r</kbd></td><td>Takes every filter away: the whole list again.</td></tr>
+</tbody></table></div>
+<p><kbd>RET</kbd> on a message of the narrowed list opens it with the filters' matches lit.</p>
+<h2 id="searching"><span class="num">4.2</span> Searching</h2>
+<p><kbd>C-s</kbd> (or <kbd>C-r</kbd>) in a mailbox's list does not move through its lines. It
+narrows the list, as the pattern is typed, to the messages it matches.</p>
+<p>A message matches when the pattern, a regular expression, is found in any of
+its headers (all of them, not only those the list shows: <code>^X-Mailer:.*Outlook</code>,
+<code>^Received:.*203\.0\.113</code>), in the text of any of its text parts, or in an
+attachment's name. Text is decoded from base64 or quoted-printable and from its
+charset, and HTML is searched as its text. Messages attached to it are looked
+through alike. Case is ignored while the pattern has no capital letter. <kbd>M-r</kbd>
+switches to literal text.</p>
+<p><kbd>RET</kbd> keeps the pattern as a filter. The next <kbd>C-s</kbd> narrows what that filter
+left, so <code>invoice</code> then <code>^from:.*acme</code> leaves the messages that have both. <kbd>C-g</kbd>
+lets go only the pattern being typed.</p>
+<p>The text searched is made once, as the mailbox is listed: for each message, in
+the list's own private directory, deleted with it. Matching runs in the
+background, the mode line saying how far it has got, and starts again as the
+pattern changes. The editor goes on meanwhile, however large the mailbox.</p>
+<p>Of a message larger than <code>*outlook-search-text-limit*</code> only that much is
+searched, and of one larger than <code>*outlook-largest-file*</code> only its headers. The
+list says how many such messages there are. Nothing in a message is run,
+attachments other than text are never decoded, and the mailbox and what was
+written of it are never changed.</p>
+<h2 id="filtering-by-a-field"><span class="num">4.3</span> Filtering by a field</h2>
+<p><kbd>C-x / f</kbd> keeps the messages one field of which a pattern matches, and <kbd>C-x / h</kbd>
+hides them. It asks for the field first, the names completed from those found
+in the mailbox as it was listed:</p>
+<ul>
+<li><code>from</code>, <code>to</code>, <code>cc</code>, <code>bcc</code>, <code>subject</code>, <code>date</code>, <code>attachment name</code> (an
+  attachment's name) and <code>your label</code>, first;</li>
+<li>then every other header its messages have (<code>received</code>, <code>message-id</code>,
+  <code>in-reply-to</code>, <code>references</code>, <code>reply-to</code>, <code>return-path</code>, <code>x-mailer</code>,
+  <code>x-originating-ip</code> and the rest);</li>
+<li>and what the Outlook item written of each message says of itself, named
+  <code>outlook</code>, a space and the name Microsoft gives the property: <code>outlook
+  importance</code>, <code>outlook sensitivity</code>, <code>outlook message-class</code>, <code>outlook
+  client-submit-time</code>, <code>outlook message-delivery-time</code>, <code>outlook message-flags</code>,
+  <code>outlook conversation-topic</code>, <code>outlook conversation-index</code>, <code>outlook
+  sender-name</code>, <code>outlook sender-address-type</code>, <code>outlook sender-email-address</code>,
+  <code>outlook sent-representing-name</code>, <code>outlook display-to</code>, <code>outlook entry-id</code>,
+  <code>outlook creation-time</code> and so on. Its named properties are given by what they
+  stand for, <code>outlook Keywords</code>, or, named by a number, by the property set's
+  word and the number, <code>outlook address-8083</code>.</li>
+</ul>
+<p>The question names beside each whether it is a header or one of these. The names
+Tuatara makes up hold a space, which no header's name may, so a header such as
+<code>Attachment:</code> or <code>Label:</code> in a message stays a header and never poses as one of
+them. A line whose name holds a space is no header and is not offered.</p>
+<p>Then it asks for the pattern: a regular expression, or literal text after
+<kbd>M-r</kbd>, exactly as Tuatara's search reads it. It is tried on that field's values
+alone. A message with a header many times (<code>received</code>) is kept when any of them
+matches. A message without the field is not kept by <kbd>C-x / f</kbd>, and not hidden by
+<kbd>C-x / h</kbd>.</p>
+<p>The filter stacks with the others and is listed by <kbd>C-x / l</kbd>. Opening a message
+the list was narrowed to lights the header lines that matched, from the header's
+name to the match.</p>
+<p>A pattern used often can be saved under a name with Tuatara's <kbd>M-x
+save-named-pattern</kbd> (a regular expression, or literal text after <kbd>M-r</kbd>,
+remembered as either) and given later as <code>[[:name:]]</code> in any pattern.</p>
+<div class="node end"><span>Previous: <a href="03-mailboxes.html">Mailboxes</a></span><span>Next: <a href="05-labels.html">Labels</a></span><span>Up: <a href="index.html">Contents</a></span></div>
+</article>
+</main>
+</div>
+</body>
+</html>

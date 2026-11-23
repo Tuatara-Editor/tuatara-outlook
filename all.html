@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src  'self'; img-src 'self' file:; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>outlook Manual, all chapters</title>
+<link rel="icon" href="tuatara.png">
+<link rel="stylesheet" href="manual.css">
+<script src="manual.js" defer></script>
+</head>
+<body>
+<div class="site">
+<nav class="toc" id="contents" aria-label="Contents">
+<strong>outlook Manual</strong>
+<small>for Tuatara 0.90.38 and later</small>
+<p class="tools"><a href="index.html">By chapter</a>
+<button type="button" class="theme" hidden>Dark</button></p>
+<input type="search" placeholder="Search the manual" aria-label="Search the manual">
+<ol class="chapters"><li id="nav-index"><a href="index.html">0 Contents</a></li><li id="nav-01-what-outlook-is"><a href="#01-what-outlook-is">1 What outlook is</a><ol><li><a href="#01-what-outlook-is--what-it-reads">1.1 What it reads</a></li><li><a href="#01-what-outlook-is--how-it-keeps-a-file-safe">1.2 How it keeps a file safe</a></li><li><a href="#01-what-outlook-is--where-things-are-kept">1.3 Where things are kept</a></li><li><a href="#01-what-outlook-is--the-parts-of-this-manual">1.4 The parts of this manual</a></li><li><a href="#01-what-outlook-is--keys">1.5 Keys</a></li></ol></li><li id="nav-02-reading-a-message"><a href="#02-reading-a-message">2 Reading a message</a><ol><li><a href="#02-reading-a-message--the-keys-of-a-message">2.1 The keys of a message</a></li><li><a href="#02-reading-a-message--attachments">2.2 Attachments</a></li><li><a href="#02-reading-a-message--seeing-a-message-as-it-looks">2.3 Seeing a message as it looks</a></li><li><a href="#02-reading-a-message--attachments-earlier-in-a-conversation">2.4 Attachments earlier in a conversation</a></li></ol></li><li id="nav-03-mailboxes"><a href="#03-mailboxes">3 Mailboxes</a><ol><li><a href="#03-mailboxes--what-is-read">3.1 What is read</a></li><li><a href="#03-mailboxes--how-it-is-read">3.2 How it is read</a></li><li><a href="#03-mailboxes--nothing-is-left-out-without-a-word">3.3 Nothing is left out without a word</a></li><li><a href="#03-mailboxes--a-mailbox-from-outside">3.4 A mailbox from outside</a></li><li><a href="#03-mailboxes--the-cache">3.5 The cache</a></li><li><a href="#03-mailboxes--the-list-and-its-keys">3.6 The list and its keys</a></li><li><a href="#03-mailboxes--the-preview">3.7 The preview</a></li></ol></li><li id="nav-04-searching-and-filtering"><a href="#04-searching-and-filtering">4 Searching and filtering a mailbox</a><ol><li><a href="#04-searching-and-filtering--the-filters">4.1 The filters</a></li><li><a href="#04-searching-and-filtering--searching">4.2 Searching</a></li><li><a href="#04-searching-and-filtering--filtering-by-a-field">4.3 Filtering by a field</a></li></ol></li><li id="nav-05-labels"><a href="#05-labels">5 Labels</a><ol><li><a href="#05-labels--putting-labels-on-and-taking-them-off">5.1 Putting labels on and taking them off</a></li><li><a href="#05-labels--where-labels-are-kept">5.2 Where labels are kept</a></li><li><a href="#05-labels--the-label-manager">5.3 The label manager</a></li></ol></li><li id="nav-06-copying-messages-out"><a href="#06-copying-messages-out">6 Copying messages out</a><ol><li><a href="#06-copying-messages-out--the-menu">6.1 The menu</a></li><li><a href="#06-copying-messages-out--files-one-for-each-message">6.2 Files, one for each message</a></li><li><a href="#06-copying-messages-out--one-mbox-file">6.3 One mbox file</a></li><li><a href="#06-copying-messages-out--a-new-outlook-mailbox">6.4 A new Outlook mailbox</a></li></ol></li><li id="nav-07-settings-and-limits"><a href="#07-settings-and-limits">7 Settings and limits</a><ol><li><a href="#07-settings-and-limits--the-settings">7.1 The settings</a></li><li><a href="#07-settings-and-limits--fixed-limits">7.2 Fixed limits</a></li><li><a href="#07-settings-and-limits--what-outlook-does-not-do">7.3 What outlook does not do</a></li></ol></li><li id="nav-08-every-command-and-setting"><a href="#08-every-command-and-setting">8 Every command and setting</a><ol><li><a href="#08-every-command-and-setting--every-command">8.1 Every command</a></li><li><a href="#08-every-command-and-setting--every-setting">8.2 Every setting</a></li></ol></li></ol>
+</nav>
+<main>
+<article>
+<h1>outlook Manual</h1>
+<p class="lead">for Tuatara 0.90.38 and later, every chapter on one page</p>
+<p>This manual is written with modal editing on, first and foremost. Where a command also has a key that works with modal editing off, it is given as well, as the non-modal key.</p>
+<section class="chapter" id="01-what-outlook-is">
+<h1 id="01-what-outlook-is--what-outlook-is">What outlook is</h1>
+<p class="lead">A package that reads Outlook items, saved mail and Outlook mailboxes as
+messages, and never changes them.</p>
+<p>It is made for examining mail from evidence. Nothing in a message is run.
+An attachment is opened only when you ask, and from a private copy. The files
+read are never written to.</p>
+<h2 id="01-what-outlook-is--what-it-reads"><span class="num">1.1</span> What it reads</h2>
+<p>Once the package is loaded, opening one of these files shows it as a message,
+or as a list of messages:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>File</th><th>Shown as</th></tr>
+</thead>
+<tbody>
+<tr><td><code>.msg</code> (an Outlook item)</td><td>the message: its headers, text and</td></tr>
+<tr><td></td><td>attachments</td></tr>
+<tr><td><code>.eml</code> (a saved mail)</td><td>the message, its parts read as MIME</td></tr>
+<tr><td><code>.pst</code>, <code>.ost</code> (an Outlook mailbox)</td><td>its folders, and under each its</td></tr>
+<tr><td></td><td>messages, a line each: when sent, from</td></tr>
+<tr><td></td><td>whom, how many attachments, the</td></tr>
+<tr><td></td><td>subject</td></tr>
+</tbody></table></div>
+<p>Rimu's preview shows them too. <kbd>M-x check-health</kbd> says what reads them here,
+and whether the program that draws a message as it looks (WeasyPrint) is found.</p>
+<h2 id="01-what-outlook-is--how-it-keeps-a-file-safe"><span class="num">1.2</span> How it keeps a file safe</h2>
+<p>A mailbox is read by the package itself, never by another program. The reader
+runs in a Tuatara of its own, shut in by Tuatara's sandbox (bubblewrap,
+<code>bwrap</code>), as every program that reads a file from outside does. It sees the
+mailbox, read only, and the directory it writes the messages in, and nothing
+else: no home directory, no network. Without the sandbox no mailbox is read.</p>
+<p>A message is drawn as it looks by WeasyPrint, also shut in the sandbox, with no
+network, so nothing is fetched from the internet and the sender cannot learn
+that the message was opened. An attachment opens in Tuatara, from a copy only
+you can read, unless you ask for the desktop's own program (chapter 2).</p>
+<h2 id="01-what-outlook-is--where-things-are-kept"><span class="num">1.3</span> Where things are kept</h2>
+<ul>
+<li>The messages written of a mailbox go to Tuatara's cache directory (chapter 3).</li>
+<li>Your labels go to Tuatara's state directory, never near the mailbox
+  (chapter 5).</li>
+<li>Messages and mailboxes you copy out go where you say, never into an evidence
+  directory (chapter 6).</li>
+</ul>
+<h2 id="01-what-outlook-is--the-parts-of-this-manual"><span class="num">1.4</span> The parts of this manual</h2>
+<p>Chapter 2 is the message: its keys, its attachments, how it looks. Chapter 3 is
+the mailbox and how it is read. Chapters 4 and 5 narrow a mailbox's list by a
+search, a field or a label. Chapter 6 copies messages out. Chapter 7 gives the
+settings and limits, and chapter 8 lists every command and setting.</p>
+<h2 id="01-what-outlook-is--keys"><span class="num">1.5</span> Keys</h2>
+<p>The commands of outlook have keys of their own and, as every package's do, a
+prefix of their own, <code>C-c o</code>. The keys are in the chapter of each part. Chapter
+8 has them all.</p>
+</section>
+<section class="chapter" id="02-reading-a-message">
+<h1 id="02-reading-a-message--reading-a-message">Reading a message</h1>
+<p class="lead">The message, its attachments, and how to see it as a mail program shows it.</p>
+<h2 id="02-reading-a-message--the-keys-of-a-message"><span class="num">2.1</span> The keys of a message</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>RET</kbd>, a click</td><td>Opens the attachment at point here, from a</td></tr>
+<tr><td></td><td>copy only you can read: an attached</td></tr>
+<tr><td></td><td>message as a message; a PDF, an Office</td></tr>
+<tr><td></td><td>document or a picture as rimu shows it, as</td></tr>
+<tr><td></td><td>pages or as the picture, drawn shut in the</td></tr>
+<tr><td></td><td>sandbox; anything else safely, read only.</td></tr>
+<tr><td><kbd>O</kbd></td><td>Opens the attachment at point in the</td></tr>
+<tr><td></td><td>desktop's own program for its kind, after</td></tr>
+<tr><td></td><td>asking. See below.</td></tr>
+<tr><td><kbd>P</kbd></td><td>Shows the message as it looks. <kbd>T</kbd> there</td></tr>
+<tr><td></td><td>comes back to the message.</td></tr>
+<tr><td><kbd>T</kbd></td><td>Shows the message's file as its text:</td></tr>
+<tr><td></td><td>opened safely when the message came from a</td></tr>
+<tr><td></td><td>mailbox or an attachment, else as any file</td></tr>
+<tr><td></td><td>is opened.</td></tr>
+<tr><td><kbd>C-c o o</kbd>, <kbd>C-c o p</kbd>, <kbd>C-c o t</kbd></td><td>The same as <kbd>O</kbd>, <kbd>P</kbd> and <kbd>T</kbd>.</td></tr>
+<tr><td><kbd>q</kbd></td><td>Closes the message, back to the mailbox</td></tr>
+<tr><td></td><td>(or wherever it was opened from).</td></tr>
+</tbody></table></div>
+<p><kbd>h</kbd> moves the cursor left, as everywhere.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>O</kbd>, <kbd>C-c o o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
+<tr><td>none</td><td><kbd>P</kbd>, <kbd>C-c o p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
+<tr><td>none</td><td><kbd>T</kbd>, <kbd>C-c o t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
+</tbody></table></div>
+<h2 id="02-reading-a-message--attachments"><span class="num">2.2</span> Attachments</h2>
+<p><kbd>RET</kbd> on an attachment opens it in Tuatara from a copy only you can read.
+Nothing in it is run.</p>
+<p><kbd>O</kbd> opens it in the desktop's own program for its kind, after asking. The copy
+is private to you, and only a kind that may be opened outside Tuatara is
+opened: a picture, a PDF, a sound, a video or an Office document. That program
+is not shut in the sandbox.</p>
+<p>A part that cannot be read (an attachment, a value) is said so in the message,
+in lines that <code>Reading note</code> shows when the message is opened. An attachment
+whose contents are missing is a short text of that name saying so.</p>
+<p>A message attached to a message is shown as a message. How many levels deep
+this goes is set by <code>*outlook-nesting-limit*</code>; deeper ones are listed as not
+read. A message and the messages attached to it and to those are limited to 256,
+so that a small file cannot make the reader take memory or time without end.</p>
+<h2 id="02-reading-a-message--seeing-a-message-as-it-looks"><span class="num">2.3</span> Seeing a message as it looks</h2>
+<p><kbd>P</kbd> in a message draws it as a mail program shows it. Its HTML is laid out as on
+a screen, with its colours, tables and fonts and the pictures it carries in
+their places. Above it are its headers (from, to, subject, dates, attachments)
+as a mail program prints them, and its internet headers, whole as they came, are
+on a page of their own after it. The pages are shown in Tuatara's PDF view, with
+its keys (zoom, search, the text).</p>
+<p>The HTML comes from the message itself: the HTML part of a saved mail, an
+Outlook item's HTML, or the HTML its rich text keeps. A message of plain text
+alone looks as it is shown already.</p>
+<p>It is drawn by <a href="https://weasyprint.org">WeasyPrint</a>, shut in Tuatara's sandbox
+with no network, so nothing is fetched from the internet (a picture, a style, a
+tracking pixel). The line over the pages says how many such things the message
+holds. WeasyPrint runs no scripts at all. It sees only the message's HTML and
+the pictures it shows, written into a directory of your cache only you can read,
+and your fonts, read only.</p>
+<p>The program is named by <code>*outlook-page-program*</code>. The pages need poppler's
+<code>pdftoppm</code> too, as any PDF does. The packages that provide WeasyPrint are:
+<code>weasyprint</code> on Fedora, Debian and Ubuntu, <code>python-weasyprint</code> on Arch and
+<code>python3-weasyprint</code> on openSUSE.</p>
+<h2 id="02-reading-a-message--attachments-earlier-in-a-conversation"><span class="num">2.4</span> Attachments earlier in a conversation</h2>
+<p>A reply or a forward quotes the earlier mails of its conversation but seldom
+carries their attachments. When the mailbox holds those earlier mails, a message
+opened from its list ends with &quot;Attachments earlier in this conversation&quot;. Each
+attachment is shown under the subject, sender and date of the message it came
+with, and how it was found (by In-Reply-To, by References, or by the
+conversation index of the header or of the Outlook item). It says too when one
+Message-ID is given to several messages. <kbd>RET</kbd> on one opens it as the message's
+own attachments open, from a copy only you can read, shut in the sandbox,
+nothing in it run.</p>
+<p>The earlier mails are found by the Message-IDs the message's <code>In-Reply-To</code> and
+<code>References</code> headers name, and theirs in turn. When those find none, they are
+found by Outlook's conversation index (the <code>Thread-Index</code> header, or the
+PR_CONVERSATION_INDEX of the Outlook item). Its first 22 octets name the
+conversation and each reply adds 5, so a message whose index is the start of
+this one's is earlier in the same conversation. The links are read as the
+mailbox is listed and looked up in tables made once. Reading the earlier mails
+is part of reading the message, in the background.</p>
+<p>In the Enron sample mailbox (71 messages) every message has a conversation
+index, none has <code>In-Reply-To</code> or <code>References</code>, and two find an earlier message.</p>
+</section>
+<section class="chapter" id="03-mailboxes">
+<h1 id="03-mailboxes--mailboxes">Mailboxes</h1>
+<p class="lead">How a mailbox is read, listed, kept in the cache and opened.</p>
+<h2 id="03-mailboxes--what-is-read"><span class="num">3.1</span> What is read</h2>
+<p>A mailbox is read by the package itself, as Microsoft's
+<a href="https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/">MS-PST</a>
+lays it out: the Unicode format of Outlook 2003 and later (<code>.pst</code>, and the
+offline <code>.ost</code> of Outlook 2003 to 2010) and the ANSI format of Outlook 97 to
+2002, its blocks as they are, permuted or cyclic.</p>
+<p>The offline mailboxes of Outlook 2013 and later (<code>.ost</code> of pages of 4 KB, their
+blocks compressed) are not described by MS-PST. Such a mailbox is refused, and
+the refusal says so.</p>
+<h2 id="03-mailboxes--how-it-is-read"><span class="num">3.2</span> How it is read</h2>
+<p>A mailbox is read where it is, a block at a time, never whole, however large it
+is, and never in the editor. The package's reader runs in a Tuatara of its own
+shut in by Tuatara's sandbox. There it sees the mailbox, read only, and the
+directory it writes the messages in, and nothing else. The editor reads only
+the messages written. The mailbox itself is never written to, nor its access
+time changed. Without the sandbox (<code>bwrap</code>), no mailbox is read.</p>
+<p>The messages are written to your cache directory, each twice: as saved mail and
+as an Outlook item holding every property the mailbox gives it, so that they can
+be copied out as either. A contact is written as a vCard (<code>.vcf</code>). An
+appointment, a task or a journal entry is written as iCalendar (<code>.ics</code>). A
+distribution list, a note and any other item is written as a message.</p>
+<p>A damaged mailbox is read as far as it can be. Every offset and size is
+checked, and every tree of the file is followed with each part seen once, so
+that reading it ends. Nothing in it is run.</p>
+<p>A message is read with no more than an eighth of the reader's memory, and never
+more than <code>*outlook-largest-file*</code> of its file, a part it names again and again
+counted each time. Its text and the attachments read by then are kept, and what
+is past them is said in the message.</p>
+<p>readpst, which read mailboxes before, left out without a word a message of more
+than about 440 properties, and distribution lists. Both are listed now.</p>
+<p>On a mailbox of 20,000 messages (340 MB), the package reads and writes its
+messages in 5.3 seconds where readpst took 4.8, and lists what it wrote in 8.8
+seconds where listing readpst's took 9.6.</p>
+<h2 id="03-mailboxes--nothing-is-left-out-without-a-word"><span class="num">3.3</span> Nothing is left out without a word</h2>
+<ul>
+<li>A message that cannot be read is listed as one, saying why: &quot;(could not be
+  read) Message 200084 of the mailbox could not be read: block 1a4 is not in
+  the blocks' B-tree&quot;.</li>
+<li>A part of a message that cannot be read is said so in the message.</li>
+<li>What was found wrong in the mailbox as a whole (a check, CRC, that does not
+  match, a page of its B-trees that cannot be read) is said above the list.</li>
+<li>Messages whose folder is not in the mailbox, or lies more than 64 folders
+  deep, are listed under <code>Orphans</code>. Those of folders outside the top of the
+  personal folders are under <code>Outside the top folder</code>.</li>
+<li>Deleted items are listed with the others while <code>*outlook-include-deleted*</code>
+  says so.</li>
+<li>Two folders in one folder whose names are alike, or alike but for case, are
+  told apart by (2), (3) after the name, as is a folder named as a file the
+  reader writes beside it. A folder whose path would pass 1,024 octets has its
+  name cut to fit, and the list shows its path whole.</li>
+<li>Should the reader stop part way (it failed, or ran out of memory), what it
+  wrote by then is listed, and the list says where it stopped and why. It says
+  too when fewer files are there to be listed than the reader wrote.</li>
+</ul>
+<h2 id="03-mailboxes--a-mailbox-from-outside"><span class="num">3.4</span> A mailbox from outside</h2>
+<p>A mailbox in your downloads, on a removable drive, or in another of Tuatara's
+untrusted directories is listed as well when it is opened safely. It is refused
+when another file was put in the mailbox's place after it was opened.</p>
+<p>The mailbox is opened once. The file summed is the very file the reader reads,
+whatever is put at its path meanwhile, and a mailbox that changes while it is
+read is refused. A message or an Outlook item from outside opens as its text, as
+Tuatara itself reads those.</p>
+<h2 id="03-mailboxes--the-cache"><span class="num">3.5</span> The cache</h2>
+<p>What was written of a mailbox is kept in Tuatara's cache after the list is
+closed. It is found again by the mailbox's SHA-256 sum and the options it was
+read with (<code>*outlook-include-deleted*</code>). Opening the same mailbox again, from
+this computer or from a server, sums it and lists it from what was kept,
+without reading it again.</p>
+<p>It is cleared as Tuatara clears every entry of its cache: <code>*cache-keep*</code> after
+it was last used, one day as standard, never while the list is open, never when
+pinned. <kbd>M-x cache-manager</kbd> shows it under &quot;Mailboxes read&quot;, where <kbd>RET</kbd> lists
+it again, <kbd>P</kbd> pins it and <kbd>d</kbd>, <kbd>x</kbd> delete it. What readpst wrote in earlier
+versions is not used: such a mailbox is read anew.</p>
+<p>A mailbox on a server is read from the copy Tuatara fetched, checked before and
+after to be as it was fetched. No second copy is made, and none of a mailbox on
+this computer either, which is checked before and after to be as it was summed.
+This needs Tuatara 0.90.38 or later.</p>
+<h2 id="03-mailboxes--the-list-and-its-keys"><span class="num">3.6</span> The list and its keys</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>RET</kbd>, <kbd>l</kbd></td><td>Opens the item on the line: a message as one, read</td></tr>
+<tr><td></td><td>only, the matches of the list's filters lit in it; a</td></tr>
+<tr><td></td><td>contact or an appointment as its text, safely. On a</td></tr>
+<tr><td></td><td>folder's line, folds or unfolds the folder.</td></tr>
+<tr><td><kbd>o</kbd></td><td>Opens the item on the line in another window, the list</td></tr>
+<tr><td></td><td>staying where it is.</td></tr>
+<tr><td><kbd>n</kbd>, <kbd>p</kbd></td><td>Go to the next item and the one before, over the</td></tr>
+<tr><td></td><td>folders' lines.</td></tr>
+<tr><td><kbd>TAB</kbd>, <kbd>S-TAB</kbd></td><td>Fold or unfold the folder the line is in; every folder.</td></tr>
+<tr><td><kbd>m</kbd>, <kbd>u</kbd>, <kbd>U</kbd>, <kbd>t</kbd></td><td>Mark the message on the line (<code>&gt;</code>) and move down; take</td></tr>
+<tr><td></td><td>its mark off; take every mark off; mark those shown</td></tr>
+<tr><td></td><td>that are not marked and unmark those marked, as in</td></tr>
+<tr><td></td><td>rimu. A count marks as many.</td></tr>
+<tr><td><kbd>P</kbd></td><td>Turns the preview off and on.</td></tr>
+<tr><td><kbd>q</kbd></td><td>Closes the list. What was written of it stays in the</td></tr>
+<tr><td></td><td>cache, so the mailbox opens again at once.</td></tr>
+<tr><td><kbd>h</kbd></td><td>Asks, then closes the list and goes back to its</td></tr>
+<tr><td></td><td>directory in rimu, on the mailbox.</td></tr>
+<tr><td><kbd>C-c o h</kbd></td><td>The same as <kbd>h</kbd>.</td></tr>
+</tbody></table></div>
+<p>The moves by word (<kbd>w</kbd>, <kbd>b</kbd>, <kbd>W</kbd>, <kbd>B</kbd>) do nothing in the list. <kbd>V</kbd> is the one
+selection, of whole lines.</p>
+<p>The keys that search, filter, label and copy are in chapters 4, 5 and 6.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>h</kbd>, <kbd>C-c o h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
+</tbody></table></div>
+<h2 id="03-mailboxes--the-preview"><span class="num">3.7</span> The preview</h2>
+<p>As the cursor goes from line to line of a list, the message on the line is shown
+in a window beside it, on its right when there is room, else below it, as rimu
+shows the file on its line. It is read in the background, as a message opened
+is, by Tuatara itself. Nothing in it is run and nothing it points to is
+fetched.</p>
+<p><kbd>P</kbd> turns the preview off in that list and on again. <code>*outlook-preview*</code> says
+whether new lists have it. The preview goes, its buffers with it, when the
+cursor leaves the list and the preview.</p>
+</section>
+<section class="chapter" id="04-searching-and-filtering">
+<h1 id="04-searching-and-filtering--searching-and-filtering-a-mailbox">Searching and filtering a mailbox</h1>
+<p class="lead">Narrowing a mailbox's list to the messages you want.</p>
+<h2 id="04-searching-and-filtering--the-filters"><span class="num">4.1</span> The filters</h2>
+<p>A list can be narrowed by any number of filters, and they stack: each narrows
+what the ones before it left. A search kept with <kbd>RET</kbd>, a field and a label are
+all filters. The list's first line says by what it is narrowed and how many
+items are left.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>C-s</kbd>, <kbd>C-r</kbd></td><td>Narrows the list, as a regular expression is typed,</td></tr>
+<tr><td></td><td>to the messages whose headers or contents match.</td></tr>
+<tr><td></td><td><kbd>RET</kbd> keeps the pattern as a filter, <kbd>C-g</kbd> lets the</td></tr>
+<tr><td></td><td>one typed go.</td></tr>
+<tr><td><kbd>C-x / f</kbd></td><td>Keeps the messages one field of which a pattern</td></tr>
+<tr><td></td><td>matches.</td></tr>
+<tr><td><kbd>C-x / h</kbd></td><td>Hides the messages one field of which a pattern</td></tr>
+<tr><td></td><td>matches.</td></tr>
+<tr><td><kbd>L</kbd></td><td>Narrows the list to the messages carrying a label</td></tr>
+<tr><td></td><td>(chapter 5).</td></tr>
+<tr><td><kbd>C-x / l</kbd></td><td>Lists the filters, each with how many items it</td></tr>
+<tr><td></td><td>leaves. There <kbd>d</kbd> takes away the filter on the line</td></tr>
+<tr><td></td><td>and <kbd>D</kbd> all of them. The later filters are worked</td></tr>
+<tr><td></td><td>out again.</td></tr>
+<tr><td><kbd>C-x / r</kbd></td><td>Takes every filter away: the whole list again.</td></tr>
+</tbody></table></div>
+<p><kbd>RET</kbd> on a message of the narrowed list opens it with the filters' matches lit.</p>
+<h2 id="04-searching-and-filtering--searching"><span class="num">4.2</span> Searching</h2>
+<p><kbd>C-s</kbd> (or <kbd>C-r</kbd>) in a mailbox's list does not move through its lines. It
+narrows the list, as the pattern is typed, to the messages it matches.</p>
+<p>A message matches when the pattern, a regular expression, is found in any of
+its headers (all of them, not only those the list shows: <code>^X-Mailer:.*Outlook</code>,
+<code>^Received:.*203\.0\.113</code>), in the text of any of its text parts, or in an
+attachment's name. Text is decoded from base64 or quoted-printable and from its
+charset, and HTML is searched as its text. Messages attached to it are looked
+through alike. Case is ignored while the pattern has no capital letter. <kbd>M-r</kbd>
+switches to literal text.</p>
+<p><kbd>RET</kbd> keeps the pattern as a filter. The next <kbd>C-s</kbd> narrows what that filter
+left, so <code>invoice</code> then <code>^from:.*acme</code> leaves the messages that have both. <kbd>C-g</kbd>
+lets go only the pattern being typed.</p>
+<p>The text searched is made once, as the mailbox is listed: for each message, in
+the list's own private directory, deleted with it. Matching runs in the
+background, the mode line saying how far it has got, and starts again as the
+pattern changes. The editor goes on meanwhile, however large the mailbox.</p>
+<p>Of a message larger than <code>*outlook-search-text-limit*</code> only that much is
+searched, and of one larger than <code>*outlook-largest-file*</code> only its headers. The
+list says how many such messages there are. Nothing in a message is run,
+attachments other than text are never decoded, and the mailbox and what was
+written of it are never changed.</p>
+<h2 id="04-searching-and-filtering--filtering-by-a-field"><span class="num">4.3</span> Filtering by a field</h2>
+<p><kbd>C-x / f</kbd> keeps the messages one field of which a pattern matches, and <kbd>C-x / h</kbd>
+hides them. It asks for the field first, the names completed from those found
+in the mailbox as it was listed:</p>
+<ul>
+<li><code>from</code>, <code>to</code>, <code>cc</code>, <code>bcc</code>, <code>subject</code>, <code>date</code>, <code>attachment name</code> (an
+  attachment's name) and <code>your label</code>, first;</li>
+<li>then every other header its messages have (<code>received</code>, <code>message-id</code>,
+  <code>in-reply-to</code>, <code>references</code>, <code>reply-to</code>, <code>return-path</code>, <code>x-mailer</code>,
+  <code>x-originating-ip</code> and the rest);</li>
+<li>and what the Outlook item written of each message says of itself, named
+  <code>outlook</code>, a space and the name Microsoft gives the property: <code>outlook
+  importance</code>, <code>outlook sensitivity</code>, <code>outlook message-class</code>, <code>outlook
+  client-submit-time</code>, <code>outlook message-delivery-time</code>, <code>outlook message-flags</code>,
+  <code>outlook conversation-topic</code>, <code>outlook conversation-index</code>, <code>outlook
+  sender-name</code>, <code>outlook sender-address-type</code>, <code>outlook sender-email-address</code>,
+  <code>outlook sent-representing-name</code>, <code>outlook display-to</code>, <code>outlook entry-id</code>,
+  <code>outlook creation-time</code> and so on. Its named properties are given by what they
+  stand for, <code>outlook Keywords</code>, or, named by a number, by the property set's
+  word and the number, <code>outlook address-8083</code>.</li>
+</ul>
+<p>The question names beside each whether it is a header or one of these. The names
+Tuatara makes up hold a space, which no header's name may, so a header such as
+<code>Attachment:</code> or <code>Label:</code> in a message stays a header and never poses as one of
+them. A line whose name holds a space is no header and is not offered.</p>
+<p>Then it asks for the pattern: a regular expression, or literal text after
+<kbd>M-r</kbd>, exactly as Tuatara's search reads it. It is tried on that field's values
+alone. A message with a header many times (<code>received</code>) is kept when any of them
+matches. A message without the field is not kept by <kbd>C-x / f</kbd>, and not hidden by
+<kbd>C-x / h</kbd>.</p>
+<p>The filter stacks with the others and is listed by <kbd>C-x / l</kbd>. Opening a message
+the list was narrowed to lights the header lines that matched, from the header's
+name to the match.</p>
+<p>A pattern used often can be saved under a name with Tuatara's <kbd>M-x
+save-named-pattern</kbd> (a regular expression, or literal text after <kbd>M-r</kbd>,
+remembered as either) and given later as <code>[[:name:]]</code> in any pattern.</p>
+</section>
+<section class="chapter" id="05-labels">
+<h1 id="05-labels--labels">Labels</h1>
+<p class="lead">Labels of your own on a mailbox's messages, kept apart from the mailbox.</p>
+<h2 id="05-labels--putting-labels-on-and-taking-them-off"><span class="num">5.1</span> Putting labels on and taking them off</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td>Puts labels on the messages marked with <kbd>m</kbd>, or with</td></tr>
+<tr><td></td><td>none marked on the one on the line.</td></tr>
+<tr><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td>Takes labels off the messages marked, or the one on</td></tr>
+<tr><td></td><td>the line, chosen from those they carry.</td></tr>
+<tr><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td>Narrows the list to the messages carrying a label, or</td></tr>
+<tr><td></td><td>any of several. With <kbd>C-u</kbd>, to those carrying none of</td></tr>
+<tr><td></td><td>them.</td></tr>
+<tr><td><kbd>M</kbd>, <kbd>C-c o m</kbd></td><td>Opens the label manager.</td></tr>
+</tbody></table></div>
+<p><kbd>+</kbd> asks for one label or several, apart by commas, the labels used before
+offered as you type. <kbd>RET</kbd> on the empty choice ends the question. Each message's
+labels are shown on its line, in a column of their own while any message
+carries one.</p>
+<p><kbd>L</kbd> chooses from the labels the mailbox's messages carry, apart by commas. It is
+one of the list's filters, as a search kept with <kbd>RET</kbd> is (chapter 4). It
+narrows what the filters before it left, <kbd>C-x / l</kbd> lists it and <kbd>C-x / r</kbd> takes
+every filter away. Labels are told apart by case: <code>kea</code> is not <code>Kea</code>. A message
+labelled or unlabelled while such a filter is on is shown or hidden at once, as
+the filters now say.</p>
+<p>The label prompt offers only the labels of the mailbox it is in.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td><code>outlook-label</code></td><td>Put labels on the messages marked in the mailbox's list (m), or with none marked on the one on the current line: several, apart by commas, the labels used before offered and new ones typed.</td></tr>
+<tr><td>none</td><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td><code>outlook-unlabel</code></td><td>Take labels off the messages marked in the mailbox's list, or with none marked off the one on the current line: several, apart by commas, chosen from those they carry (+).</td></tr>
+<tr><td>none</td><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td><code>outlook-filter-labels</code></td><td>Narrow the mailbox's list to the messages carrying a label, or any of several, chosen apart by commas from those its messages carry (+); with C-u, to those carrying none of them.</td></tr>
+</tbody></table></div>
+<h2 id="05-labels--where-labels-are-kept"><span class="num">5.2</span> Where labels are kept</h2>
+<p>The labels are kept for you alone in Tuatara's state directory
+(<code>~/.local/state/tuatara/outlook/labels/</code> unless <code>XDG_STATE_HOME</code> says
+otherwise), never in the mailbox nor beside it. A file is named by the mailbox's
+SHA-256 sum. Whenever that mailbox is opened again, a copy of it too, its labels
+come back, and a mailbox changed in any way starts with none. Nothing is
+written near the mailbox. The words above a mailbox's list say where its labels
+are kept.</p>
+<p>A message is known by its folder, its Message-ID and the SHA-256 sum of its
+headers as they were written. Two messages of a folder alike in all three (a
+Message-ID forged or copied, headers alike) are told apart by their order. The
+numbers its files are given are not used: they follow the order of the folder
+and change when deleted items are read or left out.</p>
+<p>Each change is a line added to the end of the mailbox's labels file, in one
+write while holding the file's lock, so two sessions labelling the same mailbox
+lose nothing of each other's. The file is read from the first line, and written
+again with only the labels it leaves once it has grown long.</p>
+<p>A line beginning <code>@</code> in each labels file says which mailbox it is for: its
+file's name, the path it was last opened from, its size, its SHA-256 sum and
+when its labels last changed. A file from before it existed still reads, and is
+given the line the next time its mailbox is opened.</p>
+<p>Labels put on when readpst read mailboxes were kept under the headers readpst
+wrote, which the package writes otherwise. They stay in the labels file, and the
+label manager shows them, but they show on no message read now.</p>
+<h2 id="05-labels--the-label-manager"><span class="num">5.3</span> The label manager</h2>
+<p><kbd>M-x outlook-label-manager</kbd>, or <kbd>M</kbd> (<kbd>C-c o m</kbd>) in a mailbox's list, lists every
+mailbox that has labels, one section each: its file's name, the path it was last
+opened from, whether the file is there now, the start of its SHA-256 sum, how
+many labels and messages, and when they last changed. A mailbox read with its
+deleted items has a section of its own. Under it is each label with the number
+of messages that carry it. The heading says where the labels are kept and how
+much room they take.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>RET</kbd>, <kbd>l</kbd></td><td>On a mailbox's line, opens the mailbox when its file</td></tr>
+<tr><td></td><td>is there.</td></tr>
+<tr><td><kbd>h</kbd></td><td>On a mailbox's line, folds its section.</td></tr>
+<tr><td><kbd>q</kbd></td><td>Closes the label manager.</td></tr>
+<tr><td><kbd>R</kbd> (<kbd>C-c o r</kbd>)</td><td>Renames the label on the line, or each one marked, in</td></tr>
+<tr><td></td><td>its mailbox only. A message that has the new name</td></tr>
+<tr><td></td><td>already only loses the old.</td></tr>
+<tr><td><kbd>d</kbd>, <kbd>x</kbd></td><td>Mark labels for deletion and take them off every</td></tr>
+<tr><td></td><td>message of their mailbox, after asking.</td></tr>
+<tr><td><kbd>D</kbd> (<kbd>C-c o f</kbd>)</td><td>Forgets every label of the mailbox on the line, after</td></tr>
+<tr><td></td><td>saying how many labels and messages that is.</td></tr>
+<tr><td><kbd>E</kbd> (<kbd>C-c o e</kbd>)</td><td>Writes the mailbox's labels into a plain text file, in</td></tr>
+<tr><td></td><td>a directory you choose and never an evidence</td></tr>
+<tr><td></td><td>directory: its SHA-256 sum, its file's name, and each</td></tr>
+<tr><td></td><td>message's identity with its labels.</td></tr>
+<tr><td><kbd>I</kbd> (<kbd>C-c o i</kbd>)</td><td>Reads such a file back into the mailbox with the sum</td></tr>
+<tr><td></td><td>it holds, adding to the labels there. On another</td></tr>
+<tr><td></td><td>mailbox's line it refuses. Elsewhere it goes to the</td></tr>
+<tr><td></td><td>mailbox the file is of, which gets its labels back</td></tr>
+<tr><td></td><td>after they were forgotten.</td></tr>
+</tbody></table></div>
+<p>Each change is lines added to the mailbox's journal, so labels another session
+put on meanwhile stay. Earlier versions kept a <code>names</code> file in the labels
+directory. It is left where it is and ignored, and can be deleted.</p>
+<p>The manager reads and changes the journals in the background, so it never holds
+the editor up. The heading says what is under way, and a second change waits for
+the first. A file read by <kbd>I</kbd> is accepted only when its sum is exactly 64
+lowercase hexadecimal digits, the name of a journal. Its file name is cut at 255
+characters and control characters in it become spaces.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>l</kbd>, <kbd>C-f</kbd>, <kbd>RET</kbd></td><td><code>outlook-label-open</code></td><td>Open the mailbox of the section the current line is in, as it was last opened, when its file is there; otherwise say why not.</td></tr>
+<tr><td>none</td><td><kbd>R</kbd>, <kbd>C-c o r</kbd></td><td><code>outlook-label-rename</code></td><td>Rename the label on the current line, or each label marked, asking for the new name of each: on every message of its mailbox that carries it.</td></tr>
+<tr><td>none</td><td><kbd>D</kbd>, <kbd>C-c o f</kbd></td><td><code>outlook-labels-forget</code></td><td>Forget every label of the mailbox the current line is in, after saying how many labels and messages that is: its journal is deleted, and the mailbox starts without labels the next time it is opened.</td></tr>
+<tr><td>none</td><td><kbd>E</kbd>, <kbd>C-c o e</kbd></td><td><code>outlook-labels-export</code></td><td>Write the labels of the mailbox the current line is in into a file, in the directory and under the name asked for (the mailbox's name and .labels at first): a plain text file holding the mailbox's SHA-256 sum, its file's name and, for each message, its identity and its labels, to be read back by I.</td></tr>
+<tr><td>none</td><td><kbd>I</kbd>, <kbd>C-c o i</kbd></td><td><code>outlook-labels-import</code></td><td>Read a file of a mailbox's labels, written by E, and add them to the mailbox whose SHA-256 sum it holds: those it has already stay, and none is taken away.</td></tr>
+</tbody></table></div>
+</section>
+<section class="chapter" id="06-copying-messages-out">
+<h1 id="06-copying-messages-out--copying-messages-out">Copying messages out</h1>
+<p class="lead">Messages from a mailbox as files, as one mbox file, or as a new mailbox.</p>
+<h2 id="06-copying-messages-out--the-menu"><span class="num">6.1</span> The menu</h2>
+<p><kbd>C</kbd> in a mailbox's list (<kbd>C-c o c</kbd>) opens a menu of copying out the messages
+marked with <kbd>m</kbd>, or, with none marked, the one on the line. <kbd>C-h</kbd> there lists
+the menu.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>e</kbd></td><td>Copies each as saved mail (<code>.eml</code>), then asks for the directory</td></tr>
+<tr><td></td><td>(made when it is not there).</td></tr>
+<tr><td><kbd>m</kbd></td><td>Copies each as an Outlook item (<code>.msg</code>), then asks for the</td></tr>
+<tr><td></td><td>directory.</td></tr>
+<tr><td><kbd>b</kbd></td><td>Collects them into one mbox file.</td></tr>
+<tr><td><kbd>p</kbd></td><td>Writes them into a new Outlook mailbox (<code>.pst</code>).</td></tr>
+<tr><td><kbd>a</kbd></td><td>First, switches to every message shown (see below).</td></tr>
+</tbody></table></div>
+<p><kbd>M-x outlook-export-eml</kbd>, <kbd>M-x outlook-export-msg</kbd>, <kbd>M-x outlook-export-mbox</kbd>
+and <kbd>M-x outlook-export-pst</kbd> do the same without the menu.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>C</kbd>, <kbd>C-c o c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
+</tbody></table></div>
+<p>Marks stay on messages a filter hides, and <kbd>C</kbd> copies them too. The question
+names how many it copies.</p>
+<p><kbd>a</kbd> in the menu, All shown, switches from the messages marked to every message
+the list's filters leave, those under folded folders too, marked or not. So <kbd>C a
+e</kbd> copies out as saved mail all that a search, a label or a field filter left.</p>
+<p>Copying runs in the background. The message line then says how many were copied
+and which could not be.</p>
+<h2 id="06-copying-messages-out--files-one-for-each-message"><span class="num">6.2</span> Files, one for each message</h2>
+<p><kbd>e</kbd> writes internet mail as it was written of the mailbox. <kbd>m</kbd> writes the
+Outlook item from the mailbox itself, beside each <code>.eml</code>, every property kept.</p>
+<p>A copy is named by when the message was sent and its subject, as in <code>2026-04-30
+0915 kea survey.msg</code>. A name already taken gets <code>(2)</code>, <code>(3)</code> and so on, and
+nothing in the directory is overwritten. Characters a name cannot hold on other
+systems' drives (<code>: * ? &quot; &lt; &gt; | / \</code>) are left out or made <code>-</code>.</p>
+<h2 id="06-copying-messages-out--one-mbox-file"><span class="num">6.3</span> One mbox file</h2>
+<p><kbd>b</kbd> collects the messages into one mbox file, the format most mail programs
+import. Each message is as it was written, after a <code>From = line with its
+sender's address and when it was sent. A line of a message beginning with =From
+= (after any number of =&gt;</code>) is written with one <code>&gt;</code> more, as the mboxrd form
+does, so that reading it back gives each message as it was.</p>
+<p>It asks for the file. A name taken gets <code>(2)</code>, <code>(3)</code> and so on, and nothing is
+overwritten. It is written in the background, and a copy stopped half-way is
+deleted. Contacts and appointments are left out.</p>
+<h2 id="06-copying-messages-out--a-new-outlook-mailbox"><span class="num">6.4</span> A new Outlook mailbox</h2>
+<p><kbd>p</kbd> writes the messages into a new Outlook mailbox (<code>.pst</code>), in the folders they
+are listed in, below its top folder. It asks for the file. <code>.pst</code> is added to a
+name without it, a name taken gets <code>(2)</code>, <code>(3)</code> and so on, and nothing is
+overwritten. It is written in the background, a file stopped half-way deleted,
+and never in an evidence directory. Contacts and appointments are left out.</p>
+<p>Each message is written from the Outlook item written of it as the mailbox was
+read: every property, recipient and attachment the mailbox gave it, a message
+attached to it with its own, and its named properties (Outlook's categories, a
+contact's addresses, an appointment's times and the rest) with what they stand
+for, given numbers of the new mailbox's own.</p>
+<p>The mailbox is written as Microsoft's
+<a href="https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/">MS-PST</a>
+lays out the Unicode format Outlook 2003 and later read. Its strings are in
+Unicode, its data blocks are encoded as Outlook encodes them (the permutation of
+MS-PST section 5.1), and every block and page has its check. The folders and
+tables Outlook needs to open it are there too (the top of the personal folders,
+deleted items and the search folders).</p>
+<p>A mailbox may be as large as 50 GB, the most Outlook takes as it is installed.
+The maps of which parts of the file are taken are written where MS-PST puts
+them, however far the file goes (each allocation map, page map, free map and
+free page map), and the file is streamed to the drive as it is made. Read back,
+by the package and by libpff, the messages copied out come out as they went in:
+their headers, text, HTML and attachments alike.</p>
+</section>
+<section class="chapter" id="07-settings-and-limits">
+<h1 id="07-settings-and-limits--settings-and-limits">Settings and limits</h1>
+<p class="lead">How much of a file outlook reads, and what it leaves unread.</p>
+<p>outlook reads files from anywhere, some made to do harm. Everything it reads is
+held to a size or a time, so that no file can make it run without end or fill
+the memory. What it leaves unread, it says in the list or the message.</p>
+<h2 id="07-settings-and-limits--the-settings"><span class="num">7.1</span> The settings</h2>
+<p>Set them in the package's <code>:config</code> in your init file:</p>
+<pre class="ex"><code class="language-lisp">(load-package &quot;outlook&quot;
+              :source &quot;https://github.com/Tuatara-Editor/tuatara-outlook&quot;
+              :config
+              (setf *outlook-include-deleted* nil))
+</code></pre>
+<p><kbd>C-h v</kbd> on a setting shows its help once the package is loaded. A size is a
+whole number of octets, or words such as <code>512M</code> or <code>64G</code>, in units of 1024. A
+time is a number of seconds, or words such as <code>90m</code> or <code>2h</code>.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Setting</th><th>Default</th><th>Values</th><th>What it changes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>*outlook-page-program*</code></td><td><code>&quot;weasyprint&quot;</code></td><td>text</td><td>The program that draws a message written in HTML as it looks, as pages, shut in the sandbox.</td></tr>
+<tr><td><code>*outlook-include-deleted*</code></td><td><code>t</code></td><td>t, nil</td><td>Whether the list of a mailbox (.pst, .ost) shows its deleted items.</td></tr>
+<tr><td><code>*outlook-largest-file*</code></td><td><code>268435456</code></td><td>a whole number of octets, 1 or more, or a size in words such as 512M, 1.5G or 20 GB (in 1024s: 1K is 1024 octets), at most 4E</td><td>The most octets an Outlook item (.msg) or a saved mail (.eml) may have to be read as a message.</td></tr>
+<tr><td><code>*outlook-nesting-limit*</code></td><td><code>8</code></td><td>a whole number, 0 or more</td><td>How deep messages attached to messages are read.</td></tr>
+<tr><td><code>*outlook-mailbox-seconds*</code></td><td><code>3600</code></td><td>a whole number of seconds, 1 or more, or a time in words such as 500ms, 90s, 30m or 2h, at most a hundred years</td><td>The most seconds reading a mailbox (.pst, .ost) may take.</td></tr>
+<tr><td><code>*outlook-mailbox-most-files*</code></td><td><code>1000000</code></td><td>a whole number, 1 or more</td><td>The most files written of a mailbox (.pst, .ost) its list takes in.</td></tr>
+<tr><td><code>*outlook-search-text-limit*</code></td><td><code>16777216</code></td><td>a whole number, 1 or more</td><td>The most characters of a message of a mailbox (.pst, .ost) its list's search looks through.</td></tr>
+<tr><td><code>*outlook-mailbox-space*</code></td><td><code>34359738368</code></td><td>a whole number of octets, 1 or more, or a size in words such as 512M, 1.5G or 20 GB (in 1024s: 1K is 1024 octets), at most 4E</td><td>The most octets reading a mailbox (.pst, .ost) may write.</td></tr>
+<tr><td><code>*outlook-preview*</code></td><td><code>t</code></td><td>t, nil</td><td>Whether the list of a mailbox (.pst, .ost) shows the message on the current line in a window beside it.</td></tr>
+</tbody></table></div>
+<p>An item or saved mail larger than <code>*outlook-largest-file*</code> opens as any file. A
+message of a mailbox reads no more of the mailbox than this. A mailbox is
+stopped after <code>*outlook-mailbox-seconds*</code>, or when it has written
+<code>*outlook-mailbox-space*</code>, or when the drive has less than 1 GB free, and what
+was read by then is listed. Past <code>*outlook-mailbox-most-files*</code> the rest are
+left out, and the list says so.</p>
+<h2 id="07-settings-and-limits--fixed-limits"><span class="num">7.2</span> Fixed limits</h2>
+<p>These are not settings:</p>
+<ul>
+<li>a message is read with no more than an eighth of the reader's memory;</li>
+<li>at most 256 messages attached to a message and to those;</li>
+<li>a message of parts within parts is read as deep as twice
+  <code>*outlook-nesting-limit*</code>;</li>
+<li>folders more than 64 deep are listed under <code>Orphans</code>;</li>
+<li>a folder whose path would pass 1,024 octets has its name cut.</li>
+</ul>
+<h2 id="07-settings-and-limits--what-outlook-does-not-do"><span class="num">7.3</span> What outlook does not do</h2>
+<ul>
+<li>It does not read the offline mailboxes of Outlook 2013 and later (<code>.ost</code> of
+  pages of 4 KB, blocks compressed). It refuses them and says so.</li>
+<li>It does not read a mailbox without the sandbox (<code>bwrap</code>).</li>
+<li>It never changes a mailbox, an item or a saved mail, or its access time.</li>
+<li>It does not fetch anything a message points to, and runs nothing in it.</li>
+</ul>
+</section>
+<section class="chapter" id="08-every-command-and-setting">
+<h1 id="08-every-command-and-setting--every-command-and-setting">Every command and setting</h1>
+<p class="lead">Each command and setting of outlook, to look one up by name.</p>
+<p>The tables are made from the program each time this manual is made, so they
+never list a command or setting that outlook does not have. The first table
+has four columns. The first two are keys: the modal keys, which work only with
+modal editing on, and the non-modal keys, which work with it off too. A command
+with no key says <kbd>M-x</kbd> and its name in the second column, because you can only
+run it by its name. The third column is the name of the command and the fourth
+says what it does.</p>
+<p>To run a command by its name, press <kbd>M-x</kbd>, type a few letters of the name and
+press <kbd>RET</kbd>. To find a command from within the editor, press <kbd>C-h f</kbd>. To find
+the command that a key runs, press <kbd>C-h k</kbd> and then the key. The editor's own
+settings and commands are in chapters 21 and 22 of its manual.</p>
+<h2 id="08-every-command-and-setting--every-command"><span class="num">8.1</span> Every command</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>h</kbd>, <kbd>C-c o h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
+<tr><td>none</td><td><kbd>C</kbd>, <kbd>C-c o c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
+<tr><td>none</td><td><kbd>M-x outlook-export-eml</kbd></td><td><code>outlook-export-eml</code></td><td>Copy the messages marked in the mailbox's list (m), or with none marked the one on the current line, out into a directory asked for, as saved mail (.eml).</td></tr>
+<tr><td>none</td><td><kbd>M-x outlook-export-mbox</kbd></td><td><code>outlook-export-mbox</code></td><td>Collect the messages marked in the mailbox's list (m), or with none marked the one on the current line, into one mbox file asked for, the format most mail programs read: each message as it was written, after a From line, a line of it beginning with From (after any number of &gt;) written with one &gt; more, as mboxrd does.</td></tr>
+<tr><td>none</td><td><kbd>M-x outlook-export-msg</kbd></td><td><code>outlook-export-msg</code></td><td>Copy the messages marked in the mailbox's list (m), or with none marked the one on the current line, out into a directory asked for, as Outlook items (.msg), as M-x outlook-export-eml copies them as saved mail.</td></tr>
+<tr><td>none</td><td><kbd>M-x outlook-export-pst</kbd></td><td><code>outlook-export-pst</code></td><td>Write the messages marked in the mailbox's list (m), or with none marked the one on the current line, into a new Outlook mailbox (.pst) asked for, in the folders they are listed in: each with every property, recipient and attachment the Outlook item written of it holds, its named properties among them.</td></tr>
+<tr><td>none</td><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td><code>outlook-filter-labels</code></td><td>Narrow the mailbox's list to the messages carrying a label, or any of several, chosen apart by commas from those its messages carry (+); with C-u, to those carrying none of them.</td></tr>
+<tr><td>none</td><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td><code>outlook-label</code></td><td>Put labels on the messages marked in the mailbox's list (m), or with none marked on the one on the current line: several, apart by commas, the labels used before offered and new ones typed.</td></tr>
+<tr><td>none</td><td><kbd>M</kbd>, <kbd>C-c o m</kbd></td><td><code>outlook-label-manager</code></td><td>List the labels kept for mailboxes (M-x outlook-label), a section for each mailbox with the labels on its messages, to rename, delete, forget, copy out and read back; the heading says where they are kept and how much room they take.</td></tr>
+<tr><td>none</td><td><kbd>l</kbd>, <kbd>C-f</kbd>, <kbd>RET</kbd></td><td><code>outlook-label-open</code></td><td>Open the mailbox of the section the current line is in, as it was last opened, when its file is there; otherwise say why not.</td></tr>
+<tr><td>none</td><td><kbd>R</kbd>, <kbd>C-c o r</kbd></td><td><code>outlook-label-rename</code></td><td>Rename the label on the current line, or each label marked, asking for the new name of each: on every message of its mailbox that carries it.</td></tr>
+<tr><td>none</td><td><kbd>E</kbd>, <kbd>C-c o e</kbd></td><td><code>outlook-labels-export</code></td><td>Write the labels of the mailbox the current line is in into a file, in the directory and under the name asked for (the mailbox's name and .labels at first): a plain text file holding the mailbox's SHA-256 sum, its file's name and, for each message, its identity and its labels, to be read back by I.</td></tr>
+<tr><td>none</td><td><kbd>D</kbd>, <kbd>C-c o f</kbd></td><td><code>outlook-labels-forget</code></td><td>Forget every label of the mailbox the current line is in, after saying how many labels and messages that is: its journal is deleted, and the mailbox starts without labels the next time it is opened.</td></tr>
+<tr><td>none</td><td><kbd>I</kbd>, <kbd>C-c o i</kbd></td><td><code>outlook-labels-import</code></td><td>Read a file of a mailbox's labels, written by E, and add them to the mailbox whose SHA-256 sum it holds: those it has already stay, and none is taken away.</td></tr>
+<tr><td>none</td><td><kbd>O</kbd>, <kbd>C-c o o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
+<tr><td>none</td><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td><code>outlook-unlabel</code></td><td>Take labels off the messages marked in the mailbox's list, or with none marked off the one on the current line: several, apart by commas, chosen from those they carry (+).</td></tr>
+<tr><td>none</td><td><kbd>T</kbd>, <kbd>C-c o t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
+<tr><td>none</td><td><kbd>P</kbd>, <kbd>C-c o p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
+</tbody></table></div>
+<h2 id="08-every-command-and-setting--every-setting"><span class="num">8.2</span> Every setting</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Setting</th><th>Default</th><th>Values</th><th>What it changes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>*outlook-include-deleted*</code></td><td><code>t</code></td><td>t, nil</td><td>Whether the list of a mailbox (.pst, .ost) shows its deleted items.</td></tr>
+<tr><td><code>*outlook-largest-file*</code></td><td><code>268435456</code></td><td>a whole number of octets, 1 or more, or a size in words such as 512M, 1.5G or 20 GB (in 1024s: 1K is 1024 octets), at most 4E</td><td>The most octets an Outlook item (.msg) or a saved mail (.eml) may have to be read as a message.</td></tr>
+<tr><td><code>*outlook-mailbox-most-files*</code></td><td><code>1000000</code></td><td>a whole number, 1 or more</td><td>The most files written of a mailbox (.pst, .ost) its list takes in.</td></tr>
+<tr><td><code>*outlook-mailbox-seconds*</code></td><td><code>3600</code></td><td>a whole number of seconds, 1 or more, or a time in words such as 500ms, 90s, 30m or 2h, at most a hundred years</td><td>The most seconds reading a mailbox (.pst, .ost) may take.</td></tr>
+<tr><td><code>*outlook-mailbox-space*</code></td><td><code>34359738368</code></td><td>a whole number of octets, 1 or more, or a size in words such as 512M, 1.5G or 20 GB (in 1024s: 1K is 1024 octets), at most 4E</td><td>The most octets reading a mailbox (.pst, .ost) may write.</td></tr>
+<tr><td><code>*outlook-nesting-limit*</code></td><td><code>8</code></td><td>a whole number, 0 or more</td><td>How deep messages attached to messages are read.</td></tr>
+<tr><td><code>*outlook-page-program*</code></td><td><code>&quot;weasyprint&quot;</code></td><td>text</td><td>The program that draws a message written in HTML as it looks, as pages, shut in the sandbox.</td></tr>
+<tr><td><code>*outlook-preview*</code></td><td><code>t</code></td><td>t, nil</td><td>Whether the list of a mailbox (.pst, .ost) shows the message on the current line in a window beside it.</td></tr>
+<tr><td><code>*outlook-search-text-limit*</code></td><td><code>16777216</code></td><td>a whole number, 1 or more</td><td>The most characters of a message of a mailbox (.pst, .ost) its list's search looks through.</td></tr>
+</tbody></table></div>
+</section>
+</article>
+</main>
+</div>
+</body>
+</html>

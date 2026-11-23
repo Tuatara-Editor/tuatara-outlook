@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src  'self'; img-src 'self' file:; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Labels &ndash; outlook Manual</title>
+<link rel="icon" href="tuatara.png">
+<link rel="stylesheet" href="manual.css">
+<script src="manual.js" defer></script>
+</head>
+<body>
+<div class="site">
+<nav class="toc" id="contents" aria-label="Contents">
+<strong>outlook Manual</strong>
+<small>for Tuatara 0.90.38 and later</small>
+<p class="tools"><a href="all.html">All on one page</a>
+<button type="button" class="theme" hidden>Dark</button></p>
+<input type="search" placeholder="Search the manual" aria-label="Search the manual">
+<ol class="chapters"><li id="nav-index"><a href="index.html">0 Contents</a></li><li id="nav-01-what-outlook-is"><a href="01-what-outlook-is.html">1 What outlook is</a><ol><li><a href="01-what-outlook-is.html#what-it-reads">1.1 What it reads</a></li><li><a href="01-what-outlook-is.html#how-it-keeps-a-file-safe">1.2 How it keeps a file safe</a></li><li><a href="01-what-outlook-is.html#where-things-are-kept">1.3 Where things are kept</a></li><li><a href="01-what-outlook-is.html#the-parts-of-this-manual">1.4 The parts of this manual</a></li><li><a href="01-what-outlook-is.html#keys">1.5 Keys</a></li></ol></li><li id="nav-02-reading-a-message"><a href="02-reading-a-message.html">2 Reading a message</a><ol><li><a href="02-reading-a-message.html#the-keys-of-a-message">2.1 The keys of a message</a></li><li><a href="02-reading-a-message.html#attachments">2.2 Attachments</a></li><li><a href="02-reading-a-message.html#seeing-a-message-as-it-looks">2.3 Seeing a message as it looks</a></li><li><a href="02-reading-a-message.html#attachments-earlier-in-a-conversation">2.4 Attachments earlier in a conversation</a></li></ol></li><li id="nav-03-mailboxes"><a href="03-mailboxes.html">3 Mailboxes</a><ol><li><a href="03-mailboxes.html#what-is-read">3.1 What is read</a></li><li><a href="03-mailboxes.html#how-it-is-read">3.2 How it is read</a></li><li><a href="03-mailboxes.html#nothing-is-left-out-without-a-word">3.3 Nothing is left out without a word</a></li><li><a href="03-mailboxes.html#a-mailbox-from-outside">3.4 A mailbox from outside</a></li><li><a href="03-mailboxes.html#the-cache">3.5 The cache</a></li><li><a href="03-mailboxes.html#the-list-and-its-keys">3.6 The list and its keys</a></li><li><a href="03-mailboxes.html#the-preview">3.7 The preview</a></li></ol></li><li id="nav-04-searching-and-filtering"><a href="04-searching-and-filtering.html">4 Searching and filtering a mailbox</a><ol><li><a href="04-searching-and-filtering.html#the-filters">4.1 The filters</a></li><li><a href="04-searching-and-filtering.html#searching">4.2 Searching</a></li><li><a href="04-searching-and-filtering.html#filtering-by-a-field">4.3 Filtering by a field</a></li></ol></li><li id="nav-05-labels" class="here"><a class="here" href="05-labels.html">5 Labels</a><ol><li><a href="05-labels.html#putting-labels-on-and-taking-them-off">5.1 Putting labels on and taking them off</a></li><li><a href="05-labels.html#where-labels-are-kept">5.2 Where labels are kept</a></li><li><a href="05-labels.html#the-label-manager">5.3 The label manager</a></li></ol></li><li id="nav-06-copying-messages-out"><a href="06-copying-messages-out.html">6 Copying messages out</a><ol><li><a href="06-copying-messages-out.html#the-menu">6.1 The menu</a></li><li><a href="06-copying-messages-out.html#files-one-for-each-message">6.2 Files, one for each message</a></li><li><a href="06-copying-messages-out.html#one-mbox-file">6.3 One mbox file</a></li><li><a href="06-copying-messages-out.html#a-new-outlook-mailbox">6.4 A new Outlook mailbox</a></li></ol></li><li id="nav-07-settings-and-limits"><a href="07-settings-and-limits.html">7 Settings and limits</a><ol><li><a href="07-settings-and-limits.html#the-settings">7.1 The settings</a></li><li><a href="07-settings-and-limits.html#fixed-limits">7.2 Fixed limits</a></li><li><a href="07-settings-and-limits.html#what-outlook-does-not-do">7.3 What outlook does not do</a></li></ol></li><li id="nav-08-every-command-and-setting"><a href="08-every-command-and-setting.html">8 Every command and setting</a><ol><li><a href="08-every-command-and-setting.html#every-command">8.1 Every command</a></li><li><a href="08-every-command-and-setting.html#every-setting">8.2 Every setting</a></li></ol></li></ol>
+</nav>
+<main>
+<article>
+<div class="node"><span>Previous: <a href="04-searching-and-filtering.html">Searching and filtering a mailbox</a></span><span>Next: <a href="06-copying-messages-out.html">Copying messages out</a></span><span>Up: <a href="index.html">Contents</a></span></div>
+<h1 id="labels">Labels</h1>
+<p class="lead">Labels of your own on a mailbox's messages, kept apart from the mailbox.</p>
+<h2 id="putting-labels-on-and-taking-them-off"><span class="num">5.1</span> Putting labels on and taking them off</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td>Puts labels on the messages marked with <kbd>m</kbd>, or with</td></tr>
+<tr><td></td><td>none marked on the one on the line.</td></tr>
+<tr><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td>Takes labels off the messages marked, or the one on</td></tr>
+<tr><td></td><td>the line, chosen from those they carry.</td></tr>
+<tr><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td>Narrows the list to the messages carrying a label, or</td></tr>
+<tr><td></td><td>any of several. With <kbd>C-u</kbd>, to those carrying none of</td></tr>
+<tr><td></td><td>them.</td></tr>
+<tr><td><kbd>M</kbd>, <kbd>C-c o m</kbd></td><td>Opens the label manager.</td></tr>
+</tbody></table></div>
+<p><kbd>+</kbd> asks for one label or several, apart by commas, the labels used before
+offered as you type. <kbd>RET</kbd> on the empty choice ends the question. Each message's
+labels are shown on its line, in a column of their own while any message
+carries one.</p>
+<p><kbd>L</kbd> chooses from the labels the mailbox's messages carry, apart by commas. It is
+one of the list's filters, as a search kept with <kbd>RET</kbd> is (chapter 4). It
+narrows what the filters before it left, <kbd>C-x / l</kbd> lists it and <kbd>C-x / r</kbd> takes
+every filter away. Labels are told apart by case: <code>kea</code> is not <code>Kea</code>. A message
+labelled or unlabelled while such a filter is on is shown or hidden at once, as
+the filters now say.</p>
+<p>The label prompt offers only the labels of the mailbox it is in.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td><code>outlook-label</code></td><td>Put labels on the messages marked in the mailbox's list (m), or with none marked on the one on the current line: several, apart by commas, the labels used before offered and new ones typed.</td></tr>
+<tr><td>none</td><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td><code>outlook-unlabel</code></td><td>Take labels off the messages marked in the mailbox's list, or with none marked off the one on the current line: several, apart by commas, chosen from those they carry (+).</td></tr>
+<tr><td>none</td><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td><code>outlook-filter-labels</code></td><td>Narrow the mailbox's list to the messages carrying a label, or any of several, chosen apart by commas from those its messages carry (+); with C-u, to those carrying none of them.</td></tr>
+</tbody></table></div>
+<h2 id="where-labels-are-kept"><span class="num">5.2</span> Where labels are kept</h2>
+<p>The labels are kept for you alone in Tuatara's state directory
+(<code>~/.local/state/tuatara/outlook/labels/</code> unless <code>XDG_STATE_HOME</code> says
+otherwise), never in the mailbox nor beside it. A file is named by the mailbox's
+SHA-256 sum. Whenever that mailbox is opened again, a copy of it too, its labels
+come back, and a mailbox changed in any way starts with none. Nothing is
+written near the mailbox. The words above a mailbox's list say where its labels
+are kept.</p>
+<p>A message is known by its folder, its Message-ID and the SHA-256 sum of its
+headers as they were written. Two messages of a folder alike in all three (a
+Message-ID forged or copied, headers alike) are told apart by their order. The
+numbers its files are given are not used: they follow the order of the folder
+and change when deleted items are read or left out.</p>
+<p>Each change is a line added to the end of the mailbox's labels file, in one
+write while holding the file's lock, so two sessions labelling the same mailbox
+lose nothing of each other's. The file is read from the first line, and written
+again with only the labels it leaves once it has grown long.</p>
+<p>A line beginning <code>@</code> in each labels file says which mailbox it is for: its
+file's name, the path it was last opened from, its size, its SHA-256 sum and
+when its labels last changed. A file from before it existed still reads, and is
+given the line the next time its mailbox is opened.</p>
+<p>Labels put on when readpst read mailboxes were kept under the headers readpst
+wrote, which the package writes otherwise. They stay in the labels file, and the
+label manager shows them, but they show on no message read now.</p>
+<h2 id="the-label-manager"><span class="num">5.3</span> The label manager</h2>
+<p><kbd>M-x outlook-label-manager</kbd>, or <kbd>M</kbd> (<kbd>C-c o m</kbd>) in a mailbox's list, lists every
+mailbox that has labels, one section each: its file's name, the path it was last
+opened from, whether the file is there now, the start of its SHA-256 sum, how
+many labels and messages, and when they last changed. A mailbox read with its
+deleted items has a section of its own. Under it is each label with the number
+of messages that carry it. The heading says where the labels are kept and how
+much room they take.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Key</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><kbd>RET</kbd>, <kbd>l</kbd></td><td>On a mailbox's line, opens the mailbox when its file</td></tr>
+<tr><td></td><td>is there.</td></tr>
+<tr><td><kbd>h</kbd></td><td>On a mailbox's line, folds its section.</td></tr>
+<tr><td><kbd>q</kbd></td><td>Closes the label manager.</td></tr>
+<tr><td><kbd>R</kbd> (<kbd>C-c o r</kbd>)</td><td>Renames the label on the line, or each one marked, in</td></tr>
+<tr><td></td><td>its mailbox only. A message that has the new name</td></tr>
+<tr><td></td><td>already only loses the old.</td></tr>
+<tr><td><kbd>d</kbd>, <kbd>x</kbd></td><td>Mark labels for deletion and take them off every</td></tr>
+<tr><td></td><td>message of their mailbox, after asking.</td></tr>
+<tr><td><kbd>D</kbd> (<kbd>C-c o f</kbd>)</td><td>Forgets every label of the mailbox on the line, after</td></tr>
+<tr><td></td><td>saying how many labels and messages that is.</td></tr>
+<tr><td><kbd>E</kbd> (<kbd>C-c o e</kbd>)</td><td>Writes the mailbox's labels into a plain text file, in</td></tr>
+<tr><td></td><td>a directory you choose and never an evidence</td></tr>
+<tr><td></td><td>directory: its SHA-256 sum, its file's name, and each</td></tr>
+<tr><td></td><td>message's identity with its labels.</td></tr>
+<tr><td><kbd>I</kbd> (<kbd>C-c o i</kbd>)</td><td>Reads such a file back into the mailbox with the sum</td></tr>
+<tr><td></td><td>it holds, adding to the labels there. On another</td></tr>
+<tr><td></td><td>mailbox's line it refuses. Elsewhere it goes to the</td></tr>
+<tr><td></td><td>mailbox the file is of, which gets its labels back</td></tr>
+<tr><td></td><td>after they were forgotten.</td></tr>
+</tbody></table></div>
+<p>Each change is lines added to the mailbox's journal, so labels another session
+put on meanwhile stay. Earlier versions kept a <code>names</code> file in the labels
+directory. It is left where it is and ignored, and can be deleted.</p>
+<p>The manager reads and changes the journals in the background, so it never holds
+the editor up. The heading says what is under way, and a second change waits for
+the first. A file read by <kbd>I</kbd> is accepted only when its sum is exactly 64
+lowercase hexadecimal digits, the name of a journal. Its file name is cut at 255
+characters and control characters in it become spaces.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td><kbd>l</kbd>, <kbd>C-f</kbd>, <kbd>RET</kbd></td><td><code>outlook-label-open</code></td><td>Open the mailbox of the section the current line is in, as it was last opened, when its file is there; otherwise say why not.</td></tr>
+<tr><td>none</td><td><kbd>R</kbd>, <kbd>C-c o r</kbd></td><td><code>outlook-label-rename</code></td><td>Rename the label on the current line, or each label marked, asking for the new name of each: on every message of its mailbox that carries it.</td></tr>
+<tr><td>none</td><td><kbd>D</kbd>, <kbd>C-c o f</kbd></td><td><code>outlook-labels-forget</code></td><td>Forget every label of the mailbox the current line is in, after saying how many labels and messages that is: its journal is deleted, and the mailbox starts without labels the next time it is opened.</td></tr>
+<tr><td>none</td><td><kbd>E</kbd>, <kbd>C-c o e</kbd></td><td><code>outlook-labels-export</code></td><td>Write the labels of the mailbox the current line is in into a file, in the directory and under the name asked for (the mailbox's name and .labels at first): a plain text file holding the mailbox's SHA-256 sum, its file's name and, for each message, its identity and its labels, to be read back by I.</td></tr>
+<tr><td>none</td><td><kbd>I</kbd>, <kbd>C-c o i</kbd></td><td><code>outlook-labels-import</code></td><td>Read a file of a mailbox's labels, written by E, and add them to the mailbox whose SHA-256 sum it holds: those it has already stay, and none is taken away.</td></tr>
+</tbody></table></div>
+<div class="node end"><span>Previous: <a href="04-searching-and-filtering.html">Searching and filtering a mailbox</a></span><span>Next: <a href="06-copying-messages-out.html">Copying messages out</a></span><span>Up: <a href="index.html">Contents</a></span></div>
+</article>
+</main>
+</div>
+</body>
+</html>
