@@ -1,0 +1,55 @@
+#+title: Settings and limits
+#+language: en
+
+* Settings and limits
+
+How much of a file outlook reads, and what it leaves unread.
+
+outlook reads files from anywhere, some made to do harm. Everything it reads is
+held to a size or a time, so that no file can make it run without end or fill
+the memory. What it leaves unread, it says in the list or the message.
+
+** The settings
+
+Set them in the package's =:config= in your init file:
+
+#+begin_src lisp
+(load-package "outlook"
+              :source "https://github.com/Tuatara-Editor/tuatara-outlook"
+              :config
+              (setf *outlook-include-deleted* nil))
+#+end_src
+
+~C-h v~ on a setting shows its help once the package is loaded. A size is a
+whole number of octets, or words such as =512M= or =64G=, in units of 1024. A
+time is a number of seconds, or words such as =90m= or =2h=.
+
+#+table: settings *outlook-page-program* *outlook-include-deleted* *outlook-largest-file* *outlook-nesting-limit* *outlook-mailbox-seconds* *outlook-mailbox-most-files* *outlook-search-text-limit* *outlook-mailbox-space* *outlook-preview*
+
+An item or saved mail larger than =*outlook-largest-file*= opens as any file. A
+message of a mailbox reads no more of the mailbox than this. A mailbox is
+stopped after =*outlook-mailbox-seconds*=, or when it has written
+=*outlook-mailbox-space*=, or when the drive has less than 1 GB free, and what
+was read by then is listed. Past =*outlook-mailbox-most-files*= the rest are
+left out, and the list says so.
+
+** Fixed limits
+
+These are not settings:
+
+- a message is read with no more than an eighth of the reader's memory;
+- at most 256 messages attached to a message and to those;
+- a message of parts within parts is read as deep as twice
+  =*outlook-nesting-limit*=;
+- a message or a part has its first 10,000 headers read, or its first megabyte
+  of them; the rest is read as its text, and the message says so;
+- folders more than 64 deep are listed under =Orphans=;
+- a folder whose path would pass 1,024 octets has its name cut.
+
+** What outlook does not do
+
+- It does not read the offline mailboxes of Outlook 2013 and later (=.ost= of
+  pages of 4 KB, blocks compressed). It refuses them and says so.
+- It does not read a mailbox without the sandbox (=bwrap=).
+- It never changes a mailbox, an item or a saved mail, or its access time.
+- It does not fetch anything a message points to, and runs nothing in it.

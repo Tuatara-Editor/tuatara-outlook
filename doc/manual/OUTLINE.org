@@ -1,0 +1,13 @@
+#+title: outlook manual: chapters
+
+Each chapter covers one part of outlook, with its commands, keys and settings.
+The last chapter lists every command and setting, generated from the source.
+
+1. What outlook is
+2. Reading a message
+3. Mailboxes
+4. Searching and filtering a mailbox
+5. Labels
+6. Copying messages out
+7. Settings and limits
+8. Every command and setting

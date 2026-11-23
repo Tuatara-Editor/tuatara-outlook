@@ -1,0 +1,64 @@
+#+title: What outlook is
+#+language: en
+
+* What outlook is
+
+A package that reads Outlook items, saved mail and Outlook mailboxes as
+messages, and never changes them.
+
+It is made for examining mail from evidence. It is no mail client: it signs
+in to no account, fetches no mail and sends none. Nothing in a message is run.
+An attachment is opened only when you ask, and from a private copy. The files
+read are never written to.
+
+** What it reads
+
+Once the package is loaded, opening one of these files shows it as a message,
+or as a list of messages:
+
+| File                                | Shown as                               |
+|-------------------------------------+----------------------------------------|
+| =.msg= (an Outlook item)            | the message: its headers, text and     |
+|                                     | attachments                            |
+| =.eml= (a saved mail)               | the message, its parts read as MIME    |
+| =.pst=, =.ost= (an Outlook mailbox) | its folders, and under each its        |
+|                                     | messages, a line each: when sent, from |
+|                                     | whom, how many attachments, the        |
+|                                     | subject                                |
+
+Rimu's preview shows them too. ~M-x check-health~ says what reads them here,
+and whether the program that draws a message as it looks (WeasyPrint) is found.
+
+** How it keeps a file safe
+
+A mailbox is read by the package itself, never by another program. The reader
+runs in a Tuatara of its own, shut in by Tuatara's sandbox (bubblewrap,
+=bwrap=), as every program that reads a file from outside does. It sees the
+mailbox, read only, and the directory it writes the messages in, and nothing
+else: no home directory, no network. Without the sandbox no mailbox is read.
+
+A message is drawn as it looks by WeasyPrint, also shut in the sandbox, with no
+network, so nothing is fetched from the internet and the sender cannot learn
+that the message was opened. An attachment opens in Tuatara, from a copy only
+you can read, unless you ask for the desktop's own program (chapter 2).
+
+** Where things are kept
+
+- The messages written of a mailbox go to Tuatara's cache directory (chapter 3).
+- Your labels go to Tuatara's state directory, never near the mailbox
+  (chapter 5).
+- Messages and mailboxes you copy out go where you say, never into an evidence
+  directory (chapter 6).
+
+** The parts of this manual
+
+Chapter 2 is the message: its keys, its attachments, how it looks. Chapter 3 is
+the mailbox and how it is read. Chapters 4 and 5 narrow a mailbox's list by a
+search, a field or a label. Chapter 6 copies messages out. Chapter 7 gives the
+settings and limits, and chapter 8 lists every command and setting.
+
+** Keys
+
+The commands of outlook have keys of their own and, as every package's do, a
+prefix of their own, =C-c o=. The keys are in the chapter of each part. Chapter
+8 has them all.

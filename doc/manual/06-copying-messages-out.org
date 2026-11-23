@@ -1,0 +1,89 @@
+#+title: Copying messages out
+#+language: en
+
+* Copying messages out
+
+Messages from a mailbox as files, as one mbox file, or as a new mailbox.
+
+** The menu
+
+~C~ in a mailbox's list (~C-c o c~) opens a menu of copying out the messages
+marked with ~m~, or, with none marked, the one on the line. ~C-h~ there lists
+the menu.
+
+| Key   | What it does                                                        |
+|-------+---------------------------------------------------------------------|
+| ~e~   | Copies each as saved mail (=.eml=), then asks for the directory     |
+|       | (made when it is not there).                                        |
+| ~m~   | Copies each as an Outlook item (=.msg=), then asks for the          |
+|       | directory.                                                          |
+| ~b~   | Collects them into one mbox file.                                   |
+| ~p~   | Writes them into a new Outlook mailbox (=.pst=).                    |
+| ~a~   | First, switches to every message shown (see below).                 |
+
+~M-x outlook-export-eml~, ~M-x outlook-export-msg~, ~M-x outlook-export-mbox~
+and ~M-x outlook-export-pst~ do the same without the menu.
+
+#+table: commands outlook-export
+
+Marks stay on messages a filter hides, and ~C~ copies them too. The question
+names how many it copies.
+
+~a~ in the menu, All shown, switches from the messages marked to every message
+the list's filters leave, those under folded folders too, marked or not. So ~C a
+e~ copies out as saved mail all that a search, a label or a field filter left.
+
+Copying runs in the background. The message line then says how many were copied
+and which could not be. Nothing is copied into an evidence directory, nor where
+you may not write: the message line says why, before anything is written.
+
+** Files, one for each message
+
+~e~ writes internet mail as it was written of the mailbox. ~m~ writes the
+Outlook item from the mailbox itself, beside each =.eml=, every property kept.
+
+A copy is named by when the message was sent and its subject, as in =2026-04-30
+0915 kea survey.msg=. A name already taken gets =(2)=, =(3)= and so on, and
+nothing in the directory is overwritten. Characters a name cannot hold on other
+systems' drives (=: * ? " < > | / \=) are left out or made =-=.
+
+** One mbox file
+
+~b~ collects the messages into one mbox file, the format most mail programs
+import. Each message is as it was written, after a =From = line with its
+sender's address and when it was sent. A line of a message beginning with =From
+= (after any number of =>=) is written with one =>= more, as the mboxrd form
+does, so that reading it back gives each message as it was.
+
+It asks for the file. A name taken gets =(2)=, =(3)= and so on, and nothing is
+overwritten. It is written in the background, and a copy stopped half-way is
+deleted. Contacts and appointments are left out.
+
+** A new Outlook mailbox
+
+~p~ writes the messages into a new Outlook mailbox (=.pst=), in the folders they
+are listed in, below its top folder. It asks for the file. =.pst= is added to a
+name without it, a name taken gets =(2)=, =(3)= and so on, and nothing is
+overwritten. It is written in the background, a file stopped half-way deleted,
+and never in an evidence directory. Contacts and appointments are left out.
+
+Each message is written from the Outlook item written of it as the mailbox was
+read: every property, recipient and attachment the mailbox gave it, a message
+attached to it with its own, and its named properties (Outlook's categories, a
+contact's addresses, an appointment's times and the rest) with what they stand
+for, given numbers of the new mailbox's own.
+
+The mailbox is written as Microsoft's
+[[https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/][MS-PST]]
+lays out the Unicode format Outlook 2003 and later read. Its strings are in
+Unicode, its data blocks are encoded as Outlook encodes them (the permutation of
+MS-PST section 5.1), and every block and page has its check. The folders and
+tables Outlook needs to open it are there too (the top of the personal folders,
+deleted items and the search folders).
+
+A mailbox may be as large as 50 GB, the most Outlook takes as it is installed.
+The maps of which parts of the file are taken are written where MS-PST puts
+them, however far the file goes (each allocation map, page map, free map and
+free page map), and the file is streamed to the drive as it is made. Read back,
+by the package and by libpff, the messages copied out come out as they went in:
+their headers, text, HTML and attachments alike.

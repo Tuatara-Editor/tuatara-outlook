@@ -1,0 +1,18 @@
+;;;; outlook.lisp --- The outlook package: Outlook items, saved mail and mailboxes read safely.
+;;;; Copyright (C) 2026 Michael A Jones.  GPL-3.0-or-later; see LICENSE.
+;;;; Needs: Tuatara 0.90.40
+;;;;
+;;;; One line in the init file loads it: (load-package "outlook").
+
+(defpackage #:outlook
+  (:use #:cl #:tuatara)
+  (:documentation "Outlook items, saved mail and mailboxes, read safely."))
+
+(in-package #:outlook)
+
+(declare-package-needs
+ '("weasyprint" "draws a message written in HTML as it looks" :install "install weasyprint"))
+
+(dolist (file '("mail" "cfb" "mime" "pst-format" "pst" "pst-read" "msg" "items" "view" "mailbox" "labels"
+                "label-manager" "fields" "thread" "install"))
+  (load-package-file (format nil "~a.lisp" file)))

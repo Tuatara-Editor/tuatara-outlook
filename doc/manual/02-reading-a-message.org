@@ -1,0 +1,101 @@
+#+title: Reading a message
+#+language: en
+
+* Reading a message
+
+The message, its attachments, and how to see it as a mail program shows it.
+
+** The keys of a message
+
+| Key                             | What it does                               |
+|---------------------------------+--------------------------------------------|
+| ~RET~, a click                  | Opens the attachment at point here, from a |
+|                                 | copy only you can read: an attached        |
+|                                 | message as a message; a PDF, an Office     |
+|                                 | document or a picture as rimu shows it, as |
+|                                 | pages or as the picture, drawn shut in the |
+|                                 | sandbox; anything else safely, read only.  |
+| ~O~                             | Opens the attachment at point in the       |
+|                                 | desktop's own program for its kind, after  |
+|                                 | asking. See below.                         |
+| ~P~                             | Shows the message as it looks. ~T~ there   |
+|                                 | comes back to the message.                 |
+| ~T~                             | Shows the message's file as its text:      |
+|                                 | opened safely when the message came from a |
+|                                 | mailbox or an attachment, else as any file |
+|                                 | is opened.                                 |
+| ~C-c o o~, ~C-c o p~, ~C-c o t~ | The same as ~O~, ~P~ and ~T~.              |
+| ~q~                             | Closes the message, back to the mailbox    |
+|                                 | (or wherever it was opened from).          |
+
+~h~ moves the cursor left, as everywhere.
+
+#+table: commands outlook-open-attachment-outside outlook-view-pages outlook-view-file-text
+
+** Attachments
+
+~RET~ on an attachment opens it in Tuatara from a copy only you can read.
+Nothing in it is run.
+
+~O~ opens it in the desktop's own program for its kind, after asking. The copy
+is private to you, and only a kind that may be opened outside Tuatara is
+opened: a picture, a PDF, a sound, a video or an Office document. That program
+is not shut in the sandbox.
+
+A part that cannot be read (an attachment, a value) is said so in the message,
+in lines that =Reading note= shows when the message is opened. An attachment
+whose contents are missing is a short text of that name saying so.
+
+A message attached to a message is shown as a message. How many levels deep
+this goes is set by =*outlook-nesting-limit*=; deeper ones are listed as not
+read. A message and the messages attached to it and to those are limited to 256,
+so that a small file cannot make the reader take memory or time without end.
+
+** Seeing a message as it looks
+
+~P~ in a message draws it as a mail program shows it. Its HTML is laid out as on
+a screen, with its colours, tables and fonts and the pictures it carries in
+their places. Above it are its headers (from, to, subject, dates, attachments)
+as a mail program prints them, and its internet headers, whole as they came, are
+on a page of their own after it. The pages are shown in Tuatara's PDF view, with
+its keys (zoom, search, the text).
+
+The HTML comes from the message itself: the HTML part of a saved mail, an
+Outlook item's HTML, or the HTML its rich text keeps. A message of plain text
+alone looks as it is shown already.
+
+It is drawn by [[https://weasyprint.org][WeasyPrint]], shut in Tuatara's sandbox
+with no network, so nothing is fetched from the internet (a picture, a style, a
+tracking pixel). The line over the pages says how many such things the message
+holds. WeasyPrint runs no scripts at all. It sees only the message's HTML and
+the pictures it shows, written into a directory of your cache only you can read,
+and your fonts, read only.
+
+The program is named by =*outlook-page-program*=. The pages need poppler's
+=pdftoppm= too, as any PDF does. The packages that provide WeasyPrint are:
+=weasyprint= on Fedora, Debian and Ubuntu, =python-weasyprint= on Arch and
+=python3-weasyprint= on openSUSE.
+
+** Attachments earlier in a conversation
+
+A reply or a forward quotes the earlier mails of its conversation but seldom
+carries their attachments. When the mailbox holds those earlier mails, a message
+opened from its list ends with "Attachments earlier in this conversation". Each
+attachment is shown under the subject, sender and date of the message it came
+with, and how it was found (by In-Reply-To, by References, or by the
+conversation index of the header or of the Outlook item). It says too when one
+Message-ID is given to several messages. ~RET~ on one opens it as the message's
+own attachments open, from a copy only you can read, shut in the sandbox,
+nothing in it run.
+
+The earlier mails are found by the Message-IDs the message's =In-Reply-To= and
+=References= headers name, and theirs in turn. When those find none, they are
+found by Outlook's conversation index (the =Thread-Index= header, or the
+PR_CONVERSATION_INDEX of the Outlook item). Its first 22 octets name the
+conversation and each reply adds 5, so a message whose index is the start of
+this one's is earlier in the same conversation. The links are read as the
+mailbox is listed and looked up in tables made once. Reading the earlier mails
+is part of reading the message, in the background.
+
+In the Enron sample mailbox (71 messages) every message has a conversation
+index, none has =In-Reply-To= or =References=, and two find an earlier message.
