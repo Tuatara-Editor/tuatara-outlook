@@ -137,6 +137,10 @@ its attachments' names and the start of its text alone, no buttons."
           (when earlier
             (heading (format nil "Attachments earlier in this conversation: ~d"
                              (reduce #'+ earlier :key (lambda (e) (length (cdr e))))))
+            (when (plusp (mail-earlier-left mail))
+              (put (format nil "  Those of the latest ~:d messages; ~:d earlier left out~%"
+                           *mail-earlier-most* (mail-earlier-left mail))
+                   :warning))
             (loop for (words . attachments) in earlier
                   do (put (format nil "  ~a~%" (one-line words)) :list-label)
                      (attachment-lines attachments "    ")))))
@@ -227,15 +231,36 @@ Outlook item, whose words of itself it shows too, or NIL."
 (defvar *mail-previews* '()
   "The buffers showing a message in the preview beside a mailbox's list.")
 
-(defun mail-read-earlier (earlier)
-  "The attachments of EARLIER, messages each (PATH . WORDS), as a message's
-EARLIER holds them: each read as a message is (OUTLOOK-READ-FILE), those
-carrying attachments, each (WORDS . ATTACHMENTS); one that cannot be read
-left out."
-  (loop for (path . words) in earlier
-        for mail = (handler-case (outlook-read-file path) (error () nil))
-        when (and mail (mail-attachments mail))
-          collect (cons words (mail-attachments mail))))
+(defparameter *mail-earlier-most* 50
+  "The most earlier messages of a conversation whose attachments a message
+shows, the latest of them, so that opening a message of a long conversation
+reads no more than these.")
+
+(defun mail-attachment-held-apart (attachment path index)
+  "A copy of ATTACHMENT, the one at INDEX among the attachments of the message
+in the file at PATH, holding what is said of it but not its contents: they
+are read from PATH again when it is opened (MAIL-WITH-ATTACHMENT-CONTENTS)."
+  (make-mail-attachment :name (mail-attachment-name attachment) :mime (mail-attachment-mime attachment)
+                        :hidden (mail-attachment-hidden attachment) :content-id (mail-attachment-content-id attachment)
+                        :why (mail-attachment-why attachment) :description (mail-attachment-description attachment)
+                        :source (cons path index)))
+
+(defun mail-read-earlier (mail earlier)
+  "Give MAIL the attachments of EARLIER, messages each (PATH . WORDS) in the
+order they were sent: the latest *MAIL-EARLIER-MOST* of them each read as a
+message is (OUTLOOK-READ-FILE), those carrying attachments, each (WORDS .
+ATTACHMENTS), the attachments held without their contents
+\(MAIL-ATTACHMENT-HELD-APART); one that cannot be read left out. How many
+were left out past the most is kept as its EARLIER-LEFT."
+  (let ((left (max 0 (- (length earlier) *mail-earlier-most*))))
+    (setf (mail-earlier-left mail) left
+          (mail-earlier mail)
+          (loop for (path . words) in (nthcdr left earlier)
+                for read = (handler-case (outlook-read-file path) (error () nil))
+                when (and read (mail-attachments read))
+                  collect (cons words (loop for attachment in (mail-attachments read)
+                                            for index from 0
+                                            collect (mail-attachment-held-apart attachment path index)))))))
 
 (defun mail-with-item-details (mail item)
   "MAIL with what the Outlook item at ITEM, the same message, says of itself
@@ -266,7 +291,7 @@ an Outlook item, adds what that says of itself (MAIL-WITH-ITEM-DETAILS)."
                                         (lambda (job)
                                           (let ((mail (outlook-read-file (mail-read-job-path job))))
                                             (when (mail-p mail)
-                                              (setf (mail-earlier mail) (mail-read-earlier (mail-read-job-earlier job)))
+                                              (mail-read-earlier mail (mail-read-job-earlier job))
                                               (when (mail-read-job-item job)
                                                 (mail-with-item-details mail (mail-read-job-item job))))
                                             (setf (mail-read-job-mail job) mail)))
@@ -291,6 +316,52 @@ read as text), a picture as itself, each drawn shut in the sandbox. Each is
 a function of a path and a function showing the buffer, returning the buffer
 or NIL for a file it does not show.")
 
+(define-record (mail-attachment-read-job (:include mail-read-job)
+                                         (:constructor make-mail-attachment-read-job (buffer path attachment then))
+                                         (:copier nil))
+  "The earlier message in the file at PATH read again for ATTACHMENT, one of
+its attachments held without its contents (MAIL-ATTACHMENT-SOURCE), a job;
+THEN is called with ATTACHMENT once its contents are back. FRESH is the
+attachment as read again, its contents decoded."
+  (attachment nil :documentation "The attachment MAIL-ATTACHMENT-READ-JOB reads the contents of.")
+  (then nil :documentation "What is done with the attachment once its contents are back, a function of it.")
+  (fresh nil :documentation "The attachment as read again, its contents decoded, or NIL when it is not there."))
+
+(defun mail-attachment-read-work (job)
+  "Read the message of JOB, a MAIL-ATTACHMENT-READ-JOB, again and decode the
+contents of the attachment it is for."
+  (let* ((attachment (mail-attachment-read-job-attachment job))
+         (fresh (nth (cdr (mail-attachment-source attachment))
+                     (mail-attachments (outlook-read-file (mail-read-job-path job))))))
+    (when (and fresh (equal (mail-attachment-name fresh) (mail-attachment-name attachment)))
+      (mail-attachment-contents fresh)
+      (setf (mail-attachment-read-job-fresh job) fresh))))
+
+(defmethod job-take-in ((job mail-attachment-read-job))
+  "Give the attachment its contents back and do what was asked with it, or say
+why they could not be read."
+  (let ((attachment (mail-attachment-read-job-attachment job))
+        (fresh (mail-attachment-read-job-fresh job)))
+    (cond ((not (eq (job-status job) :done))
+           (message "~a could not be read: ~a" (one-line (mail-attachment-name attachment)) (job-ending-words job)))
+          ((null fresh)
+           (message "~a is no longer in the message it came with" (one-line (mail-attachment-name attachment))))
+          (t (setf (mail-attachment-octets attachment) (mail-attachment-octets fresh)
+                   (mail-attachment-message attachment) (mail-attachment-message fresh)
+                   (mail-attachment-why attachment) (mail-attachment-why fresh)
+                   (mail-attachment-source attachment) nil)
+             (funcall (mail-attachment-read-job-then job) attachment)))))
+
+(defun mail-with-attachment-contents (attachment then)
+  "Call THEN with ATTACHMENT once it holds its contents: at once, or for one
+of an earlier message held without them (MAIL-ATTACHMENT-HELD-APART) after
+that message is read again in the background."
+  (let ((source (mail-attachment-source attachment)))
+    (if source
+        (start-job-thread (make-mail-attachment-read-job (current-buffer) (car source) attachment then)
+                          #'mail-attachment-read-work :name "tuatara mail reading")
+        (funcall then attachment))))
+
 (defun mail-open-attachment (attachment)
   "Open ATTACHMENT of a message shown, here: a message as one; any
 other from its private copy (MAIL-ATTACHMENT-COPY), an Outlook item or a
@@ -298,19 +369,22 @@ saved mail as a message, a PDF, an Office document or a picture as rimu
 shows it (*MAIL-ATTACHMENT-VIEWS*), the rest visited safely (read only,
 nothing in it acted on, a binary one in the hex view). Nothing is saved
 where you keep your files."
-  (let ((name (or (one-line (mail-attachment-name attachment)) "The attachment")))
-    (cond ((mail-attachment-message attachment)
-           (mail-show-message (mail-attachment-message attachment) name))
-          ((mail-attachment-has-contents-p attachment)
-           (let ((copy (mail-attachment-copy attachment)))
-             (cond ((outlook-message-kind copy) (show-buffer (mail-view-buffer copy :safe t)))
-                   ((some (lambda (view) (funcall view copy (lambda (buffer) (show-buffer buffer))))
-                          *mail-attachment-views*))
-                   (t (visit-path copy :safe t)))
-             (message "~a opened from a copy only you can read; ~
-                       \\<outlook-view-mode>\\[outlook-open-attachment-outside] in the message opens it outside"
-                      name)))
-          (t (message "~a: ~a" name (or (mail-attachment-why attachment) "nothing to open"))))))
+  (mail-with-attachment-contents
+   attachment
+   (lambda (attachment)
+     (let ((name (or (one-line (mail-attachment-name attachment)) "The attachment")))
+       (cond ((mail-attachment-message attachment)
+              (mail-show-message (mail-attachment-message attachment) name))
+             ((mail-attachment-has-contents-p attachment)
+              (let ((copy (mail-attachment-copy attachment)))
+                (cond ((outlook-message-kind copy) (show-buffer (mail-view-buffer copy :safe t)))
+                      ((some (lambda (view) (funcall view copy (lambda (buffer) (show-buffer buffer))))
+                             *mail-attachment-views*))
+                      (t (visit-path copy :safe t)))
+                (message "~a opened from a copy only you can read; ~
+                          \\<outlook-view-mode>\\[outlook-open-attachment-outside] in the message opens it outside"
+                         name)))
+             (t (message "~a: ~a" name (or (mail-attachment-why attachment) "nothing to open"))))))))
 
 (defun mail-attachment-at-point ()
   "The attachment whose button point is on in the message shown, or NIL."
@@ -325,16 +399,20 @@ attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a
 sound, a video, an Office document, by its contents, with a name that
 agrees; see *open-externally-kinds*). That program is not shut in the sandbox."
   (let ((attachment (mail-attachment-at-point)))
-    (cond ((null attachment) (message (concatenate 'string "No attachment at point: "
-                                                      "\\<outlook-view-mode>\\[forward-button] goes to the next")))
-          ((mail-attachment-message attachment)
-           (message "~a is a message: \\<outlook-view-mode>\\[push-button] opens it here"
-                    (one-line (mail-attachment-name attachment))))
-          ((null (mail-attachment-has-contents-p attachment))
-           (message "~a: ~a"
-                    (one-line (mail-attachment-name attachment))
-                    (or (mail-attachment-why attachment) "nothing to open")))
-          (t (open-externally-file (mail-attachment-copy attachment))))))
+    (if (null attachment)
+        (message (concatenate 'string "No attachment at point: "
+                              "\\<outlook-view-mode>\\[forward-button] goes to the next"))
+        (mail-with-attachment-contents
+         attachment
+         (lambda (attachment)
+           (cond ((mail-attachment-message attachment)
+                  (message "~a is a message: \\<outlook-view-mode>\\[push-button] opens it here"
+                           (one-line (mail-attachment-name attachment))))
+                 ((null (mail-attachment-has-contents-p attachment))
+                  (message "~a: ~a"
+                           (one-line (mail-attachment-name attachment))
+                           (or (mail-attachment-why attachment) "nothing to open")))
+                 (t (open-externally-file (mail-attachment-copy attachment)))))))))
 
 (define-command outlook-view-file-text ()
   "Show the file of the message shown as its text, the file itself: opened

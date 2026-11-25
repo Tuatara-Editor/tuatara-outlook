@@ -22,7 +22,7 @@ items are left.
 |                      | matches.                                            |
 | ~C-x / h~            | Hides the messages one field of which a pattern     |
 |                      | matches.                                            |
-| ~L~                  | Narrows the list to the messages carrying a label   |
+| ~C-c L~              | Narrows the list to the messages carrying a label   |
 |                      | (chapter 5).                                        |
 | ~C-x / l~            | Lists the filters, each with how many items it      |
 |                      | leaves. There ~d~ takes away the filter on the line |

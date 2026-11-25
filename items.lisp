@@ -328,16 +328,6 @@ that they follow a message's own headers."
 
 ;;; Contacts and appointments
 
-(defun item-escaped (text)
-  "TEXT as a value of a vCard or of iCalendar holds it: backslashes, commas
-and semicolons escaped, each line break written \\n."
-  (with-output-to-string (out)
-    (loop for c across (remove #\Return text)
-          do (case c
-               (#\Newline (write-string "\\n" out))
-               ((#\\ #\, #\;) (write-char #\\ out) (write-char c out))
-               (t (write-char c out))))))
-
 (defun item-folded (lines)
   "LINES, each a content line of a vCard or of iCalendar, folded as RFC 5545
 says (FOLD-CONTENT-LINE) and joined."
@@ -355,19 +345,19 @@ email addresses, telephone numbers, company, title and notes."
        (remove nil
                (append
                 (list "BEGIN:VCARD" "VERSION:3.0"
-                      (format nil "FN:~a" (item-escaped (or (text #x3001) (text #x0037) ""))))
+                      (format nil "FN:~a" (content-text-escaped (or (text #x3001) (text #x0037) ""))))
                 (list (format nil "N:~{~a~^;~}"
-                              (mapcar (lambda (id) (item-escaped (or (text id) "")))
+                              (mapcar (lambda (id) (content-text-escaped (or (text id) "")))
                                       '(#x3A11 #x3A06 #x3A44 #x3A45 #x3A05))))
                 (loop for lid in '(#x8083 #x8093 #x80A3)
                       for address = (item-named-text message address-set lid)
-                      when address collect (format nil "EMAIL;TYPE=INTERNET:~a" (item-escaped address)))
+                      when address collect (format nil "EMAIL;TYPE=INTERNET:~a" (content-text-escaped address)))
                 (loop for (id kind) in '((#x3A08 "WORK") (#x3A09 "HOME") (#x3A1C "CELL") (#x3A24 "WORK,FAX")
                                          (#x3A25 "HOME,FAX"))
-                      when (text id) collect (format nil "TEL;TYPE=~a:~a" kind (item-escaped (text id))))
-                (list (and (text #x3A16) (format nil "ORG:~a" (item-escaped (text #x3A16))))
-                      (and (text #x3A17) (format nil "TITLE:~a" (item-escaped (text #x3A17))))
-                      (and (text #x1000) (format nil "NOTE:~a" (item-escaped (text #x1000))))
+                      when (text id) collect (format nil "TEL;TYPE=~a:~a" kind (content-text-escaped (text id))))
+                (list (and (text #x3A16) (format nil "ORG:~a" (content-text-escaped (text #x3A16))))
+                      (and (text #x3A17) (format nil "TITLE:~a" (content-text-escaped (text #x3A17))))
+                      (and (text #x1000) (format nil "NOTE:~a" (content-text-escaped (text #x1000))))
                       "END:VCARD")))))))
 
 (defun item-ical-time (time)
@@ -376,10 +366,13 @@ email addresses, telephone numbers, company, title and notes."
   (multiple-value-bind (second minute hour day month year) (decode-universal-time time 0)
     (format nil "~4,'0d~2,'0d~2,'0dT~2,'0d~2,'0d~2,'0dZ" year month day hour minute second)))
 
-(defun item-icalendar (message nid)
+(defun item-icalendar (message nid &key record-key)
   "MESSAGE, an appointment, a task or a journal entry, the node NID of its
 mailbox, as iCalendar (RFC 5545): an event, a to-do or a journal entry with
-its subject, times, place, organiser and attendees, and notes."
+its subject, times, place, organiser and attendees, and notes. Its UID is
+made of NID and the mailbox's RECORD-KEY, when given, so that items of two
+mailboxes never share one; its DTSTAMP is the item's own time, or the time of
+the export when it has none."
   (let* ((properties (pst-message-properties message))
          (charset (item-charset properties))
          (kind (item-kind message))
@@ -393,32 +386,33 @@ its subject, times, place, organiser and attendees, and notes."
                (append
                 (list "BEGIN:VCALENDAR" "VERSION:2.0" "PRODID:-//Tuatara//outlook package//EN"
                       (format nil "BEGIN:~a" component)
-                      (format nil "UID:~(~x~)@mailbox" nid)
+                      (format nil "UID:~(~x~@[-~{~2,'0x~}~]~)@mailbox" nid (and record-key (coerce record-key 'list)))
                       (when-time "DTSTAMP" (or (item-time properties #x30080040) (item-time properties #x30070040)
                                                (get-universal-time)))
                       (when-time "CREATED" (item-time properties #x30070040))
                       (when-time "LAST-MODIFIED" (item-time properties #x30080040))
-                      (and (text #x0037) (format nil "SUMMARY:~a" (item-escaped (text #x0037)))))
+                      (and (text #x0037) (format nil "SUMMARY:~a" (content-text-escaped (text #x0037)))))
                 (case kind
                   (:event (list (when-time "DTSTART" (or (item-named-time message appointment #x820D)
                                                          (item-time properties #x00600040)))
                                 (when-time "DTEND" (or (item-named-time message appointment #x820E)
                                                        (item-time properties #x00610040)))
                                 (let ((place (item-named-text message appointment #x8208)))
-                                  (and place (format nil "LOCATION:~a" (item-escaped place))))))
+                                  (and place (format nil "LOCATION:~a" (content-text-escaped place))))))
                   (:task (list (when-time "DTSTART" (item-named-time message task #x8104))
                                (when-time "DUE" (item-named-time message task #x8105))))
                   (t (list (when-time "DTSTART" (item-time properties #x00600040)))))
                 (let ((organiser (item-text properties #x0042)))
-                  (list (and organiser (format nil "ORGANIZER;CN=~a:mailto:~a" (item-escaped organiser)
-                                               (item-escaped (or (item-text properties #x0065) organiser))))))
+                  (list (and organiser (format nil "ORGANIZER;CN=~a:mailto:~a" (content-parameter-text organiser)
+                                               (content-text-escaped (or (item-text properties #x0065) organiser))))))
                 (loop for recipient in (pst-message-recipients message)
                       for name = (item-text recipient #x3001 charset)
                       for address = (or (item-text recipient #x39FE charset) (item-text recipient #x3003 charset))
                       when (or name address)
                         collect (format nil "ATTENDEE~@[;CN=~a~]:mailto:~a"
-                                        (and name (item-escaped name)) (item-escaped (or address name))))
-                (list (and (text #x1000) (format nil "DESCRIPTION:~a" (item-escaped (text #x1000))))
+                                        (and name (content-parameter-text name))
+                                        (content-text-escaped (or address name))))
+                (list (and (text #x1000) (format nil "DESCRIPTION:~a" (content-text-escaped (text #x1000))))
                       (format nil "END:~a" component) "END:VCALENDAR")))))))
 
 ;;; The files of an item
@@ -428,10 +422,12 @@ its subject, times, place, organiser and attendees, and notes."
 NUMBER in its folder, each (NAME . OCTETS): a contact as NUMBER.vcf, an
 appointment, a task or a journal entry as NUMBER.ics, anything else as
 NUMBER.eml (ITEM-EML, NOTES among its headers) and NUMBER.msg (MSG-WRITE),
-its entry identifier made of its mailbox's RECORD-KEY, when given, and NID."
+its entry identifier and its UID made of its mailbox's RECORD-KEY, when
+given, and NID."
   (case (item-kind message)
     (:contact (list (cons (format nil "~d.vcf" number) (string-octets (item-vcard message)))))
-    ((:event :task :journal) (list (cons (format nil "~d.ics" number) (string-octets (item-icalendar message nid)))))
+    ((:event :task :journal)
+     (list (cons (format nil "~d.ics" number) (string-octets (item-icalendar message nid :record-key record-key)))))
     (t (list (cons (format nil "~d.eml" number) (item-eml message :notes notes))
              (cons (format nil "~d.msg" number)
                    (msg-write message :entry-id (and record-key (= 16 (length record-key))

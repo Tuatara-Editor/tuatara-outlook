@@ -119,9 +119,8 @@ This needs Tuatara 0.90.38 or later.
 | ~P~                | Turns the preview off and on.                           |
 | ~q~                | Closes the list. What was written of it stays in the    |
 |                    | cache, so the mailbox opens again at once.              |
-| ~h~                | Asks, then closes the list and goes back to its         |
+| ~C-c h~            | Asks, then closes the list and goes back to its         |
 |                    | directory in rimu, on the mailbox.                      |
-| ~C-c o h~          | The same as ~h~.                                        |
 
 The moves by word (~w~, ~b~, ~W~, ~B~) do nothing in the list. ~V~ is the one
 selection, of whole lines.

@@ -9,22 +9,22 @@ Labels of your own on a mailbox's messages, kept apart from the mailbox.
 
 | Key                | What it does                                          |
 |--------------------+-------------------------------------------------------|
-| ~+~, ~C-c o +~     | Puts labels on the messages marked with ~m~, or with  |
+| ~C-c +~            | Puts labels on the messages marked with ~m~, or with  |
 |                    | none marked on the one on the line.                   |
-| ~-~, ~C-c o -~     | Takes labels off the messages marked, or the one on   |
+| ~C-c -~            | Takes labels off the messages marked, or the one on   |
 |                    | the line, chosen from those they carry.               |
-| ~L~, ~C-c o l~     | Narrows the list to the messages carrying a label, or |
+| ~C-c L~            | Narrows the list to the messages carrying a label, or |
 |                    | any of several. With ~C-u~, to those carrying none of |
 |                    | them.                                                 |
-| ~M~, ~C-c o m~     | Opens the label manager.                              |
+| ~C-c M~            | Opens the label manager.                              |
 
-~+~ asks for one label or several, apart by commas, the labels used before
+~C-c +~ asks for one label or several, apart by commas, the labels used before
 offered as you type. ~RET~ on the empty choice ends the question. Each message's
 labels are shown on its line, in a column of their own while any message
 carries one.
 
-~L~ chooses from the labels the mailbox's messages carry, apart by commas. It is
-one of the list's filters, as a search kept with ~RET~ is (chapter 4). It
+~C-c L~ chooses from the labels the mailbox's messages carry, apart by commas.
+It is one of the list's filters, as a search kept with ~RET~ is (chapter 4). It
 narrows what the filters before it left, ~C-x / l~ lists it and ~C-x / r~ takes
 every filter away. Labels are told apart by case: =kea= is not =Kea=. A message
 labelled or unlabelled while such a filter is on is shown or hidden at once, as
@@ -66,7 +66,7 @@ label manager shows them, but they show on no message read now.
 
 ** The label manager
 
-~M-x outlook-label-manager~, or ~M~ (~C-c o m~) in a mailbox's list, lists every
+~M-x outlook-label-manager~, or ~C-c M~ in a mailbox's list, lists every
 mailbox that has labels, one section each: its file's name, the path it was last
 opened from, whether the file is there now, the start of its SHA-256 sum, how
 many labels and messages, and when they last changed. A mailbox read with its
@@ -76,22 +76,23 @@ much room they take.
 
 | Key               | What it does                                           |
 |-------------------+--------------------------------------------------------|
-| ~RET~, ~l~        | On a mailbox's line, opens the mailbox when its file   |
-|                   | is there.                                              |
+| ~RET~, ~l~        | On a label, opens its mailbox when the file is there;  |
+|                   | on a mailbox's line, folds its section.                |
+| ~C-c O~           | Opens the mailbox of the section the line is in.       |
 | ~h~               | On a mailbox's line, folds its section.                |
 | ~q~               | Closes the label manager.                              |
-| ~R~ (~C-c o r~)   | Renames the label on the line, or each one marked, in  |
+| ~C-c R~           | Renames the label on the line, or each one marked, in  |
 |                   | its mailbox only. A message that has the new name      |
 |                   | already only loses the old.                            |
 | ~d~, ~x~          | Mark labels for deletion and take them off every       |
 |                   | message of their mailbox, after asking.                |
-| ~D~ (~C-c o f~)   | Forgets every label of the mailbox on the line, after  |
+| ~C-c f~           | Forgets every label of the mailbox on the line, after  |
 |                   | saying how many labels and messages that is.           |
-| ~E~ (~C-c o e~)   | Writes the mailbox's labels into a plain text file, in |
+| ~C-c e~           | Writes the mailbox's labels into a plain text file, in |
 |                   | a directory you choose and never an evidence           |
 |                   | directory: its SHA-256 sum, its file's name, and each  |
 |                   | message's identity with its labels.                    |
-| ~I~ (~C-c o i~)   | Reads such a file back into the mailbox with the sum   |
+| ~C-c i~           | Reads such a file back into the mailbox with the sum   |
 |                   | it holds, adding to the labels there. On another       |
 |                   | mailbox's line it refuses. Elsewhere it goes to the    |
 |                   | mailbox the file is of, which gets its labels back     |
@@ -103,7 +104,7 @@ directory. It is left where it is and ignored, and can be deleted.
 
 The manager reads and changes the journals in the background, so it never holds
 the editor up. The heading says what is under way, and a second change waits for
-the first. A file read by ~I~ is accepted only when its sum is exactly 64
+the first. A file read by ~C-c i~ is accepted only when its sum is exactly 64
 lowercase hexadecimal digits, the name of a journal. Its file name is cut at 255
 characters and control characters in it become spaces.
 

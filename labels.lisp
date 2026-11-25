@@ -272,10 +272,17 @@ there are none, or when the mailbox's labels cannot be kept."
           ((null items) (message "No message on this line") nil)
           (t (values job items)))))
 
+(defun mailbox-refilter-labels (list)
+  "Work the search filters of LIST, a mailbox's list, out again when one of
+them looks at the labels, so that it leaves what it now matches; the others
+match as they did."
+  (when (some (lambda (filter) (equal (search-filter-where filter) "your label")) (search-filters list))
+    (refilter-search-filters list)))
+
 (defun mailbox-relabel (job items change)
   "Give each of ITEMS of the mailbox JOB read the labels CHANGE, a function of
 its labels, makes of them; keep the changes, show the list again and work its
-filters out again, so that a filter on labels leaves what it now matches."
+filters on labels out again (MAILBOX-REFILTER-LABELS)."
   (let ((table (mailbox-job-labels job)) (lines '()))
     (dolist (item items)
       (let* ((identity (mailbox-item-identity item))
@@ -291,7 +298,7 @@ filters out again, so that a filter on labels leaves what it now matches."
     (mailbox-keep-labels job (nreverse lines))
     (let ((list (job-buffer job)))
       (mailbox-render list job :keep)
-      (refilter-search-filters list))))
+      (mailbox-refilter-labels list))))
 
 (define-command outlook-label ()
   "Put labels on the messages marked in the mailbox's list

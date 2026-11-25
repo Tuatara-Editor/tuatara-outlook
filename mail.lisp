@@ -95,7 +95,8 @@ universal times or NIL, with DATE-TEXT the date as the item writes it when it
 could not be read as one. BODY is its text to show, read from BODY-KIND, and
 HTML a function giving the HTML it is written in, when it has one.
 ATTACHMENTS is each a MAIL-ATTACHMENT; EARLIER the attachments of the earlier
-messages of its conversation."
+messages of its conversation, EARLIER-LEFT how many of those messages were
+left out."
   (from nil :documentation "Who MAIL is from, as written to be read (a name with its address).")
   (to nil :documentation "Who MAIL is to, as written to be read (names with their addresses).")
   (cc nil :documentation "Who MAIL is copied to (carbon copy, CC), as written to be read.")
@@ -116,6 +117,9 @@ asked.")
   (earlier '()
            :documentation "The attachments of the earlier messages of the conversation of MAIL, each (WORDS .
 ATTACHMENTS), WORDS saying which message they came with.")
+  (earlier-left 0
+                :documentation "How many earlier messages of the conversation of MAIL carrying attachments are left
+out of its EARLIER, past the most shown (*MAIL-EARLIER-MOST*).")
   (notes '() :documentation "What could not be read of MAIL, in words."))
 
 (define-record (mail-attachment (:copier nil))
@@ -128,7 +132,9 @@ CONTENT-ID is set when the body shows it in place. WHY is what it is in words
 when it holds neither octets nor a message read (one too deep, an embedded
 object). COPY-PATH is the path of the private copy of its octets once one is
 made. DESCRIPTION is what it is in words and whether its contents are not what
-its name says, (WORDS . DISAGREES), once worked out (MAIL-ATTACHMENT-WORDS)."
+its name says, (WORDS . DISAGREES), once worked out (MAIL-ATTACHMENT-WORDS).
+SOURCE, for an attachment of an earlier message held without its contents, is
+where they are read from when it is opened."
   (name nil :documentation "The name of MAIL-ATTACHMENT as the item gives it.")
   (octets nil :documentation "The contents of MAIL-ATTACHMENT, or NIL when it is held as a part or a message.")
   (part nil
@@ -144,7 +150,10 @@ an embedded object).")
   (copy-path nil :documentation "The path of the private copy of the octets of MAIL-ATTACHMENT, once one is made.")
   (description nil
                :documentation "What MAIL-ATTACHMENT is in words and whether its contents are not what its name says,
-\(WORDS . DISAGREES), once worked out (MAIL-ATTACHMENT-WORDS)."))
+\(WORDS . DISAGREES), once worked out (MAIL-ATTACHMENT-WORDS).")
+  (source nil
+          :documentation "For an attachment of an earlier message of the conversation held without its contents,
+\(PATH . INDEX): the file of that message and the place of MAIL-ATTACHMENT among its attachments, from 0."))
 
 (defun mail-note (mail format &rest arguments)
   "Add to MAIL's notes what could not be read, FORMAT with ARGUMENTS."

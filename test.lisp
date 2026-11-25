@@ -61,7 +61,7 @@ first the root. Streams below 4,096 octets go in the mini stream."
            (out (make-array (* 512 (1+ total)) :element-type '(unsigned-byte 8) :initial-element 0))
            (fat (make-array (* fat-count 128) :initial-element #xFFFFFFFF))
            (next fat-count))
-      (labels ((put (at value count) (tuatara.io:octets-put-integer out value count :at at))
+      (labels ((put (at value count) (tuatara.text:octets-put-integer out value count :at at))
                (run (count) (let ((start next))
                               (dotimes (k count)
                                 (setf (aref fat (+ start k)) (if (< k (1- count)) (+ start k 1) #xFFFFFFFE)))
@@ -124,9 +124,9 @@ fixed-size properties; CHILDREN, more nodes in it."
     (dotimes (k header) (vector-push-extend 0 fixed))
     (flet ((entry (id type value)
              (let ((octets (make-array 16 :element-type '(unsigned-byte 8) :initial-element 0)))
-               (tuatara.io:octets-put-integer octets (logior type (ash id 16)) 4 :at 0)
+               (tuatara.text:octets-put-integer octets (logior type (ash id 16)) 4 :at 0)
                (setf (aref octets 4) 6)
-               (tuatara.io:octets-put-integer octets value 8 :at 8)
+               (tuatara.text:octets-put-integer octets value 8 :at 8)
                (loop for o across octets do (vector-push-extend o fixed)))))
       (loop for (id type value) in properties
             for stream-name = (format nil "__substg1.0_~4,'0X~4,'0X" id type)
@@ -175,10 +175,10 @@ fixed-size properties; CHILDREN, more nodes in it."
                (vector-push-extend control body)
                (dolist (item (nreverse group))
                  (if (consp item)
-                     (tuatara.io:octets-put-integer body (first item) 2 :big-endian t)
+                     (tuatara.text:octets-put-integer body (first item) 2 :big-endian t)
                      (vector-push-extend item body)))))
     (let ((out (make-array (+ 16 (length body)) :element-type '(unsigned-byte 8) :initial-element 0)))
-      (flet ((put (at value) (tuatara.io:octets-put-integer out value 4 :at at)))
+      (flet ((put (at value) (tuatara.text:octets-put-integer out value 4 :at at)))
         (put 0 (+ 12 (length body))) (put 4 raw) (put 8 #x75465A4C))
       (replace out body :start1 16)
       out)))
@@ -337,8 +337,8 @@ that a test reaches a line of a list however many lines stand above it."
 
 (define-test (outlook crafted-compound-files)
   (let* ((good (msg-test-octets))
-         (dir (tuatara.io:octets-integer good 48 4))
-         (fat (* 512 (1+ (tuatara.io:octets-integer good 76 4)))))
+         (dir (tuatara.text:octets-integer good 48 4))
+         (fat (* 512 (1+ (tuatara.text:octets-integer good 76 4)))))
     (flet ((refused (octets words)
              (let ((start (get-internal-real-time)))
                  (fail (outlook::msg-read octets))
@@ -347,7 +347,7 @@ that a test reaches a line of a list however many lines stand above it."
                (true (< (- (get-internal-real-time) start) (* 2 internal-time-units-per-second))))))
       ;; a FAT whose chain comes back on itself
       (let ((loop (copy-seq good)))
-        (tuatara.io:octets-put-integer loop dir 4 :at (+ fat (* 4 dir)))
+        (tuatara.text:octets-put-integer loop dir 4 :at (+ fat (* 4 dir)))
         (refused loop "loops"))
       ;; a stream saying it holds more than its chain does: the subject's
         (let* ((cfb (outlook::cfb-read good))
@@ -355,7 +355,7 @@ that a test reaches a line of a list however many lines stand above it."
                               :key (lambda (e) (and e (outlook::cfb-entry-name e))) :test #'equal))
              (big (copy-seq good))
                (at (+ (* 512 (1+ dir)) (* 128 (outlook::cfb-entry-index subject)) 120)))
-        (tuatara.io:octets-put-integer big 4000 4 :at at)
+        (tuatara.text:octets-put-integer big 4000 4 :at at)
         (refused big "more than its"))
       ;; not a compound file, and one cut short
       (refused (make-array 600 :element-type '(unsigned-byte 8) :initial-element 0) "Not a compound file")
@@ -376,9 +376,9 @@ that a test reaches a line of a list however many lines stand above it."
                       :key (lambda (e) (and e (outlook::cfb-entry-name e)))
                       :test #'equal))
          (circle (copy-seq good))
-         (at (+ (* 512 (1+ (tuatara.io:octets-integer good 48 4))) (* 128 (outlook::cfb-entry-index inner)) 76))
+         (at (+ (* 512 (1+ (tuatara.text:octets-integer good 48 4))) (* 128 (outlook::cfb-entry-index inner)) 76))
          (start (get-internal-real-time)))
-    (tuatara.io:octets-put-integer circle (outlook::cfb-entry-child (aref entries 0)) 4 :at at)
+    (tuatara.text:octets-put-integer circle (outlook::cfb-entry-child (aref entries 0)) 4 :at at)
     (let ((mail (outlook::msg-read circle)))
       (is string= "Kea survey results" (outlook::mail-subject mail)))
     (true (< (- (get-internal-real-time) start) (* 5 internal-time-units-per-second)))))
@@ -429,7 +429,7 @@ Inner text.~@
 Epilogue.~%"
           (let ((o (coerce *png-test-octets* '(simple-array (unsigned-byte 8) (*)))))
             ;; in lines of 60, as mail writes it
-            (let ((all (tuatara.io:base64-string o)))
+            (let ((all (tuatara.text:base64-string o)))
               (format nil
                       "~{~a~^~%~}"
                       (loop for at from 0 below (length all) by 60 collect (subseq all at (min (length all) (+ at 60))))))))
@@ -469,12 +469,13 @@ Epilogue.~%"
       (tuatara.text:charset-text (outlook::mime-quoted-printable-octets (sb-ext:string-to-octets (format nil "a=3Db =~%=C3=A9") :external-format :latin-1)) "utf-8"))
   (is string=
       "Man"
-      (tuatara.text:octets-latin-1 (tuatara.io:base64-octets (sb-ext:string-to-octets (format nil "TW~%Fu")
+      (tuatara.text:octets-latin-1 (tuatara.text:base64-octets (sb-ext:string-to-octets (format nil "TW~%Fu")
                                                                                       :external-format
                                                                                       :latin-1))))
   (is string=
       "Ma"
-      (tuatara.text:octets-latin-1 (tuatara.io:base64-octets (sb-ext:string-to-octets "TWE=" :external-format :latin-1))))
+      (tuatara.text:octets-latin-1
+       (tuatara.text:base64-octets (sb-ext:string-to-octets "TWE=" :external-format :latin-1))))
   ;; a boundary that never comes: the body is the rest, and the message says so
   (let ((mail (outlook::eml-read (sb-ext:string-to-octets (format nil
                                                                   "Subject: broken~%Content-Type: multipart/mixed; boundary=\"gone\"~%~%Only text.~%")
@@ -599,7 +600,7 @@ message shown."
         (has (session-text editor) "Inner body 1")
           (true (tuatara.command::buffer-mode-named-p (session-buffer editor) 'outlook::outlook-view-mode)))
       ;; T: the file itself, as text
-      (multiple-value-bind (f editor) (outlook-session path (list "T"))
+      (multiple-value-bind (f editor) (outlook-session path (list "C-c t"))
         (declare (ignore f))
         (is equal (tuatara.io:native path) (tuatara.io:native (tuatara.buffer:buffer-file (session-buffer editor)))))
       (dolist (b (copy-list tuatara.buffer:*buffers*))
@@ -623,7 +624,7 @@ message shown."
         (has (session-text editor) "résumé.png")
         (tuatara.buffer:kill-buffer (session-buffer editor)))
       ;; T shows its text, as any file is opened
-      (multiple-value-bind (f editor) (outlook-session path (list "T"))
+      (multiple-value-bind (f editor) (outlook-session path (list "C-c t"))
         (declare (ignore f))
         (has (session-text editor) "Content-Transfer-Encoding: quoted-printable")
         (dolist (b (copy-list tuatara.buffer:*buffers*))
@@ -695,12 +696,12 @@ WeasyPrint installed in it and a program drawing PDFs."
            (plain (write-test-octets (merge-pathnames "plain.msg" dir) (msg-test-octets)))
            (before (tuatara.io:file-octets html)))
       ;; plain text alone looks as it is shown
-      (multiple-value-bind (f editor) (outlook-session plain (list "P"))
+      (multiple-value-bind (f editor) (outlook-session plain (list "C-c p"))
         (true (tuatara.frontend.fake:fake-frame-showing f "Its text is plain"))
         (tuatara.buffer:kill-buffer (session-buffer editor)))
       ;; where WeasyPrint is not, it says what to install
       (let ((outlook::*outlook-page-program* "no-such-weasyprint"))
-        (multiple-value-bind (f editor) (outlook-session html (list "P"))
+        (multiple-value-bind (f editor) (outlook-session html (list "C-c p"))
           (true (tuatara.frontend.fake:fake-frame-showing f "no-such-weasyprint, which is not installed"))
           (tuatara.buffer:kill-buffer (session-buffer editor))))
       (if (not (mail-pages-drawn-p))
@@ -708,7 +709,7 @@ WeasyPrint installed in it and a program drawing PDFs."
           ;; P: its HTML drawn as pages, shut in, the script not run and nothing fetched; T back to the message
           (let ((pages nil) (back nil))
             (multiple-value-bind (f editor)
-                (outlook-session html (list "P" (lambda () (setf pages (tuatara:current-buffer))) "T"
+                (outlook-session html (list "C-c p" (lambda () (setf pages (tuatara:current-buffer))) "C-c t"
                                             (lambda () (setf back (tuatara:current-buffer)))))
               (declare (ignore f))
               (is string= "survey.msg (as it looks)" (tuatara.buffer:buffer-name pages))
@@ -1164,8 +1165,8 @@ and the subjects kept."
         ;; + on the line, two labels typed, then the empty choice ends the question; m marks two, + labels both
         (tuatara.tests::run-keys
          (list (lambda () (tuatara:show-buffer list))
-               (mailbox-test-go-to list "First") "+ u r g e n t RET k e a SPC c a s e RET RET"
-               (mailbox-test-go-to list "Second") "m m + u r g RET RET" #'wait-for-mailbox-labels :tick)
+               (mailbox-test-go-to list "First") "C-c + u r g e n t RET k e a SPC c a s e RET RET"
+               (mailbox-test-go-to list "Second") "m m C-c + u r g RET RET" #'wait-for-mailbox-labels :tick)
          :width 140 :height 30)
         (has (mailbox-test-subject-line list "First") "urgent, kea case")
         (has (mailbox-test-subject-line list "Second") "urgent")
@@ -1181,7 +1182,7 @@ and the subjects kept."
         ;; - takes one off the line's message, chosen from those it carries
         (tuatara.tests::run-keys
          (list (lambda () (tuatara:show-buffer list))
-               "U" (mailbox-test-go-to list "First") "- u r g e n t RET RET" #'wait-for-mailbox-labels :tick)
+               "U" (mailbox-test-go-to list "First") "C-c - u r g e n t RET RET" #'wait-for-mailbox-labels :tick)
          :width 140 :height 30)
         (false (search "urgent" (mailbox-test-subject-line list "First")))
         (has (mailbox-test-subject-line list "First") "kea case")
@@ -1194,7 +1195,7 @@ and the subjects kept."
         (tuatara.buffer:kill-buffer list))
       ;; no sum made: labels said not to be kept
       (multiple-value-bind (list) (mailbox-test-list (merge-pathnames "nosum/" dir) *mailbox-label-test-messages* :sum nil)
-        (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "First") "+")
+        (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "First") "C-c +")
                                  :width 140 :height 30)
         (false (search "Labels" (mailbox-test-subject-line list "Subject")))
         (tuatara.buffer:kill-buffer list)))))
@@ -1213,6 +1214,27 @@ and the subjects kept."
       (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "two/" dir) *mailbox-label-test-messages*
                                                          :sum two)
         (is equal '() (outlook::mailbox-labels-used job))
+        (tuatara.buffer:kill-buffer list)))))
+
+(define-test (outlook mailbox-relabel-refilters-label-filters-alone)
+  ;; a label put on shows on the message's line; the list's filters are worked out again only when one of them
+  ;; looks at the labels
+  (with-test-directory (dir)
+    (let ((sum (format nil "test~36r" (random (expt 2 40)))))
+      (multiple-value-bind (list job) (mailbox-test-list (merge-pathnames "one/" dir) *mailbox-label-test-messages*
+                                                         :sum sum)
+        (flet ((relabel (label)
+                 (prog1 (nth-value 1 (tuatara.tests::counting-calls (tuatara:refilter-search-filters)
+                                       (outlook::mailbox-relabel job (list (first (cdr (first (outlook::mailbox-job-folders
+                                                                                               job)))))
+                                                                 (lambda (had) (append had (list label))))))
+                   (wait-for-mailbox-labels))))
+          (is = 0 (relabel "kea"))
+          (has (mailbox-test-subject-line list "First") "kea")
+          (tuatara:add-search-filter list "First" :regex nil)
+          (is = 0 (relabel "tui"))
+          (tuatara:add-search-filter list (outlook::mailbox-labels-pattern '("kea")) :part "your label")
+          (is = 1 (relabel "ruru")))
         (tuatara.buffer:kill-buffer list)))))
 
 (defun mailbox-test-meta (sum)
@@ -1279,17 +1301,17 @@ and the subjects kept."
       (flet ((shown (keys)
                (nth-value 1 (mailbox-search-session list (append (list "C-x / r") keys (list :searched :look))))))
         ;; L: those carrying a label, or any of several; C-u L: those carrying none of them
-        (is equal '("First") (shown '("L u r g RET RET")))
+        (is equal '("First") (shown '("C-c L u r g RET RET")))
         (is equal '("your label: ^(?:urgent)$")
             (mapcar #'tuatara.defaults::search-filter-words (tuatara:search-filters list)))
-        (is equal '("First" "Third") (shown '("L u r g RET s e e n RET RET")))
-        (is equal '("Second" "Third") (shown '("C-u L u r g RET RET")))
+        (is equal '("First" "Third") (shown '("C-c L u r g RET s e e n RET RET")))
+        (is equal '("Second" "Third") (shown '("C-u C-c L u r g RET RET")))
         ;; a label with a regex's characters in it matches only itself
         (mailbox-test-label job "Second" "a.b")
         (outlook::mailbox-render list job)
-        (is equal '("Second") (shown '("L a . b RET RET")))
+        (is equal '("Second") (shown '("C-c L a . b RET RET")))
         ;; with the other filters: a search kept, then a label
-        (is equal '("Third") (shown '("C-s T h RET" :searched "C-u L u r g RET RET")))
+        (is equal '("Third") (shown '("C-s T h RET" :searched "C-u C-c L u r g RET RET")))
         ;; the field label offered by C-x / f, a pattern of your own
         (is equal '("First") (shown '("C-x / f y o u r SPC l a b e l RET k e a RET"))))
       (tuatara.buffer:kill-buffer list))))
@@ -1463,15 +1485,15 @@ Outlook item beside the first."
          (list (lambda () (tuatara:show-buffer list))
                "C-s ^ s u b j e c t : SPC ( F i r s t | T h i r d ) RET" #'wait-for-mailbox-search :tick
                (mailbox-test-go-to list "Third") "m" "TAB"
-               (format nil "C a e C-a C-k ~a C-j" (tuatara.tests::rimu-typed copies))
+               (format nil "C-c c a e C-a C-k ~a C-j" (tuatara.tests::rimu-typed copies))
                #'wait-for-mailbox-export :tick)
          :width 140 :height 30)
         (is equal (list (format nil "~a First.eml" (tuatara:format-time "%F %H%M" (encode-universal-time 0 0 9 6 10 2026 0)))
                         "Third.eml")
             (sort (mapcar #'first (tuatara.io:directory-entries copies)) #'string<))
         ;; b: the one marked into one mbox file; again, a name taken gets (2)
-        (dolist (keys (list (format nil "C b C-a C-k ~a C-j" (tuatara.tests::rimu-typed mbox))
-                            (format nil "C a b C-a C-k ~a C-j" (tuatara.tests::rimu-typed mbox))))
+        (dolist (keys (list (format nil "C-c c b C-a C-k ~a C-j" (tuatara.tests::rimu-typed mbox))
+                            (format nil "C-c c a b C-a C-k ~a C-j" (tuatara.tests::rimu-typed mbox))))
           (tuatara.tests::run-keys
            (list (lambda () (tuatara:show-buffer list)) "C-x / r" (mailbox-test-go-to list "First") "U m" keys
                  #'wait-for-mailbox-export :tick)
@@ -1555,7 +1577,8 @@ picture; and a message of neither."
                  (let ((buffer (tuatara:current-buffer)))
                    (setf (tuatara.buffer:buffer-point buffer)
                          (first (first (tuatara.buffer:buffer-local buffer 'outlook::mail-attachment-places))))))
-               "RET" (lambda () (setf opened (tuatara.buffer:buffer-name (tuatara:current-buffer)))))
+               "RET" #'wait-for-mail-reading :tick
+               (lambda () (setf opened (tuatara.buffer:buffer-name (tuatara:current-buffer)))))
          :width 140 :height 40)
         (has shown "Attachments earlier in this conversation: 1")
         (has shown "(by References)")
@@ -1563,6 +1586,40 @@ picture; and a message of neither."
         (has shown "budget.pdf")
         (true (search "budget" opened) "~a" opened))
       (tuatara.buffer:kill-buffer list))))
+
+(define-test (outlook earlier-attachments-held-apart)
+  ;; a message of a long conversation holds no octets of the earlier messages' attachments, and reads only the
+  ;; latest *mail-earlier-most* of them; an attachment's octets are read again when it is opened
+  (with-test-directory (dir)
+    (let* ((earlier (loop for i below 60
+                          collect (cons (write-test-octets
+                                         (merge-pathnames (format nil "~d.eml" i) dir)
+                                         (tuatara.text:string-octets
+                                          (format nil "Subject: Earlier ~d~%MIME-Version: 1.0~%~
+                                                       Content-Type: multipart/mixed; boundary=\"b\"~%~%--b~%~
+                                                       Content-Type: text/plain~%~%see attached~%--b~%~
+                                                       Content-Type: application/pdf; name=\"part ~d.pdf\"~%~
+                                                       Content-Transfer-Encoding: base64~%~%JVBERi0xLjQK~%--b--~%"
+                                                  i i)))
+                                        (format nil "Earlier ~d" i))))
+           (mail (outlook::make-mail :subject "Last")))
+      (outlook::mail-read-earlier mail earlier)
+      (let ((attachments (loop for (nil . more) in (outlook::mail-earlier mail) append more)))
+        (is = 50 (length attachments))
+        (is = 10 (outlook::mail-earlier-left mail))
+        (is string= "Earlier 10" (car (first (outlook::mail-earlier mail))))
+        (true (every (lambda (a) (and (null (outlook::mail-attachment-octets a))
+                                      (null (outlook::mail-attachment-part a))
+                                      (outlook::mail-attachment-source a)))
+                     attachments))
+        (true (outlook::mail-attachment-description (first attachments)))
+        (has (outlook::mail-brief-text mail) "Last")
+        (has (tuatara:pieces-text (outlook::mail-pieces mail)) "10 earlier left out")
+        (let ((job (outlook::make-mail-attachment-read-job
+                    nil (car (outlook::mail-attachment-source (first attachments))) (first attachments) #'identity)))
+          (outlook::mail-attachment-read-work job)
+          (is equalp (tuatara.text:string-octets (format nil "%PDF-1.4~%"))
+              (outlook::mail-attachment-octets (outlook::mail-attachment-read-job-fresh job))))))))
 
 ;;; Marked, folded, opened and copied out
 
@@ -1642,8 +1699,8 @@ picture; and a message of neither."
                 (copies (namestring (merge-pathnames "copies/" dir))))
             (tuatara.tests::run-keys
              (list (lambda () (tuatara:show-buffer list))
-                   ;; h asks before it goes back to the directory: no, and the list stays
-                   "h n" (lambda () (setf stayed (tuatara:current-buffer)))
+                   ;; C-c h asks before it goes back to the directory: no, and the list stays
+                   "C-c h n" (lambda () (setf stayed (tuatara:current-buffer)))
                    ;; m marks the message on the line and moves down; RET and l on a folder's line fold it
                    "m" (lambda () (setf marked (tuatara.defaults::list-marked list :marked)))
                    "k k RET" (lambda () (push (tuatara.buffer:buffer-string list) shown))
@@ -1652,9 +1709,9 @@ picture; and a message of neither."
                    "j l" (lambda () (setf opened (tuatara.buffer:buffer-name (tuatara:current-buffer))))
                    "h" (lambda () (setf moved (tuatara:current-buffer)))
                    "q" (lambda () (setf back (tuatara:current-buffer)))
-                   ;; C opens the menu of copying out: m copies the one marked as an Outlook item,
+                   ;; C-c c opens the menu of copying out: m copies the one marked as an Outlook item,
                    ;; into a directory asked for, made for it
-                   (format nil "C m C-a C-k ~a C-j" (tuatara.tests::rimu-typed copies))
+                   (format nil "C-c c m C-a C-k ~a C-j" (tuatara.tests::rimu-typed copies))
                    #'wait-for-mailbox-export :tick)
              :width 140 :height 30)
             (is equal (list first) marked)
@@ -1668,7 +1725,7 @@ picture; and a message of neither."
                                                (tuatara.frontend:parse-key-sequence "V")))
             (is eq list stayed)
             (has (tuatara.buffer:buffer-string list)
-                 "RET or l opens the item on the line, a folder's line folds; P in a")
+                 "RET or l opens the item on the line, a folder's line folds; C-c p in a")
             ;; filled to the help column, so that the line reads whole in a narrow window
             (true (every (lambda (line) (<= (length line) tuatara:*help-column*))
                          (subseq (uiop:split-string (tuatara.buffer:buffer-string list) :separator '(#\Newline)) 1 4))
@@ -1723,7 +1780,7 @@ picture; and a message of neither."
         (let ((directory nil))
           (tuatara.tests::run-keys
            (list (lambda () (tuatara:show-buffer list))
-                 "h y" (lambda () (setf directory (tuatara:current-buffer))))
+                 "C-c h y" (lambda () (setf directory (tuatara:current-buffer))))
            :width 140 :height 30)
           (false (tuatara.buffer:live-buffer-p list))
           (true (tuatara.defaults::rimu-list-p directory))
@@ -1834,7 +1891,7 @@ picture; and a message of neither."
          (mail (outlook-eml (format nil
                                     "Subject: forwarded~%Content-Type: multipart/mixed; boundary=b~%~%--b~%Content-Type: text/plain~%~%See below.~%~
                                          --b~%Content-Type: message/rfc822~%Content-Transfer-Encoding: base64~%~%~a~%--b--~%"
-                                    (tuatara.io:base64-string (tuatara.text:string-octets inner)))))
+                                    (tuatara.text:base64-string (tuatara.text:string-octets inner)))))
          (attachment (first (outlook::mail-attachments mail))))
     (true attachment)
     (is string= "Kea survey" (outlook::mail-attachment-name attachment))
@@ -1895,18 +1952,40 @@ picture; and a message of neither."
       (is = 2 (outlook::mailbox-job-total job))
       (true (find-if (lambda (note) (search "*outlook-mailbox-most-files*" note)) (outlook::mailbox-job-notes job))))))
 
-(define-test (outlook outlook-keys-under-c-c-o)
-  ;; its commands under a prefix of its own, C-c o, as every package's are, beside its lists' own letters
-  (loop for (mode keys command) in '((outlook::outlook-view-mode "C-c o o" outlook::outlook-open-attachment-outside)
-                                     (outlook::outlook-view-mode "C-c o t" outlook::outlook-view-file-text)
-                                     (outlook::outlook-view-mode "C-c o p" outlook::outlook-view-pages)
-                                     (outlook::outlook-mailbox-mode "C-c o h" outlook::outlook-back-to-directory)
-                                     (outlook::outlook-mailbox-mode "C-c o c" outlook::outlook-export))
-        do (is eq
-               command
-               (tuatara.command:lookup-key (tuatara:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys))
-               "~a"
-               keys)))
+(define-test (outlook outlook-keys-under-c)
+  ;; a mode of the package's own takes its keys straight under C-c, and the package binds no key of one character
+  (flet ((bound (mode keys)
+           (tuatara.command:lookup-key (tuatara:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys))))
+    (loop for (mode keys command) in '((outlook::outlook-view-mode "C-c o" outlook::outlook-open-attachment-outside)
+                                       (outlook::outlook-view-mode "C-c p" outlook::outlook-view-pages)
+                                       (outlook::outlook-view-mode "C-c t" outlook::outlook-view-file-text)
+                                       (outlook::outlook-mailbox-mode "C-c h" outlook::outlook-back-to-directory)
+                                       (outlook::outlook-mailbox-mode "C-c c" outlook::outlook-export)
+                                       (outlook::outlook-mailbox-mode "C-c +" outlook::outlook-label)
+                                       (outlook::outlook-mailbox-mode "C-c -" outlook::outlook-unlabel)
+                                       (outlook::outlook-mailbox-mode "C-c L" outlook::outlook-filter-labels)
+                                       (outlook::outlook-mailbox-mode "C-c M" outlook::outlook-label-manager)
+                                       (outlook::outlook-label-manager-mode "C-c O" outlook::outlook-label-open)
+                                       (outlook::outlook-label-manager-mode "C-c R" outlook::outlook-label-rename)
+                                       (outlook::outlook-label-manager-mode "C-c f" outlook::outlook-labels-forget)
+                                       (outlook::outlook-label-manager-mode "C-c e" outlook::outlook-labels-export)
+                                       (outlook::outlook-label-manager-mode "C-c i" outlook::outlook-labels-import))
+          do (is eq command (bound mode keys) "~a ~a" mode keys))
+    (dolist (mode '(outlook::outlook-view-mode outlook::outlook-mailbox-mode outlook::outlook-label-manager-mode))
+      (is equal '()
+          (loop for (spec . binding) in (tuatara.command:keymap-entries (tuatara:mode-keymap mode))
+                for key = (tuatara.frontend:key-description spec)
+                when (and (= 1 (length key)) (symbolp binding) binding
+                          (eq (symbol-package binding) (find-package "OUTLOOK")))
+                  collect key)
+          "~a" mode))
+    ;; no C-c o prefix in the lists
+    (dolist (mode '(outlook::outlook-mailbox-mode outlook::outlook-label-manager-mode))
+      (false (tuatara.command:keymap-p (bound mode "C-c o")) "~a" mode))
+    ;; C-c l and C-c m stay the lists' own keys
+    (is eq 'tuatara.defaults::list-visit (bound 'outlook::outlook-mailbox-mode "C-c l"))
+    (is eq 'tuatara.defaults::list-mark-entry (bound 'outlook::outlook-mailbox-mode "C-c m"))
+    (is eq 'tuatara.defaults::list-mark-entry (bound 'outlook::outlook-label-manager-mode "C-c m"))))
 
 (define-test (outlook nested-boundary-that-begins-as-the-outer)
   ;; an inner boundary abc.1 is not the outer abc: the outer has two parts, the inner two of its own
@@ -2468,7 +2547,7 @@ type and contents, an attached message compared alike."
         (dotimes (round 2)
           (tuatara.tests::run-keys
            (list (lambda () (tuatara:show-buffer list))
-                 (format nil "C a p C-a C-k ~a C-j"
+                 (format nil "C-c c a p C-a C-k ~a C-j"
                          (tuatara.tests::rimu-typed (concatenate 'string copies "birds")))
                  #'wait-for-mailbox-export :tick)
            :width 140 :height 30))
@@ -3473,6 +3552,30 @@ at the big one (PST-TEST-SHARED-ATTACHMENTS)."
             (has task "SUMMARY:Fill the feeders")))
         (tuatara.buffer:kill-buffer list)))))
 
+(define-test (outlook icalendar-uid-and-names)
+  ;; the same node of two mailboxes gives two UIDs; an item with no time of its own gets the time of the
+  ;; export as its DTSTAMP, which RFC 5545 requires; names with commas and colons are quoted as parameters
+  (let* ((message (outlook::make-pst-message
+                   :properties (list (outlook::pst-property #x001A001F "IPM.Appointment")
+                                     (outlook::pst-property #x0037001F "Bird count")
+                                     (outlook::pst-property #x0042001F "Smith, John"))
+                   :recipients (list (list (outlook::pst-property #x3001001F "Doe: Sales")
+                                           (outlook::pst-property #x3003001F "doe@example.org")))))
+         (one (outlook::item-icalendar message #x2224 :record-key (outlook::pst-octets 16)))
+         (other (outlook::item-icalendar message #x2224 :record-key (make-array 16 :element-type '(unsigned-byte 8)
+                                                                                    :initial-element 7))))
+    (flet ((line (text name)
+             (find-if (lambda (line) (eql 0 (search name line)))
+                      (uiop:split-string (remove #\Return text) :separator (string #\Newline)))))
+      (true (line one "UID:2224-"))
+      (isnt string= (line one "UID:") (line other "UID:"))
+      (true (line one "DTSTAMP:"))
+      (is = 24 (length (line one "DTSTAMP:")) "~a" (line one "DTSTAMP:"))
+      (is string= (line one "UID:")
+          (line (outlook::item-icalendar message #x2224 :record-key (outlook::pst-octets 16)) "UID:"))
+      (is string= "ORGANIZER;CN=\"Smith, John\":mailto:Smith\\, John" (line one "ORGANIZER"))
+      (is string= "ATTENDEE;CN=\"Doe: Sales\":mailto:doe@example.org" (line one "ATTENDEE")))))
+
 ;;; The label manager
 
 (defun manager-test-mailbox (dir name sum labelled)
@@ -3583,7 +3686,7 @@ then wait for the labels job they start and take it in."
         (tuatara.buffer:kill-buffer (manager-test-mailbox dir "two/" other '(("First" "mgrzeta"))))
         (let ((manager (manager-test-open)))
           ;; R: rename a label of this mailbox only, on every message that has it; the list open shows it
-          (manager-test-keys manager (manager-test-go manager sum "mgrkea") "R C-a C-k m g r t u i RET")
+          (manager-test-keys manager (manager-test-go manager sum "mgrkea") "C-c R C-a C-k m g r t u i RET")
           (is equal '(("mgrzeta" "mgrtui") ("mgrzeta") nil) (manager-test-labels job sum))
           (is = 1 (manager-test-count other "mgrzeta"))
           (has (mailbox-test-subject-line list "First") "mgrtui")
@@ -3606,16 +3709,42 @@ then wait for the labels job they start and take it in."
 
 (define-test (outlook label-manager-is-a-manager)
   ;; the label manager is a list of things kept and acted on: h and C-b fold the heading of a mailbox's
-  ;; section, as in the buffer list, and never close it; RET, l and C-f open the mailbox
+  ;; section, as in the buffer list, and never close it; RET and l open what the line shows, as in every
+  ;; manager; C-c O opens the mailbox of the section
   (flet ((key (text) (tuatara.command:lookup-key (tuatara.modes:mode-keymap 'outlook::outlook-label-manager-mode)
                                                  (tuatara.frontend:parse-key-sequence text))))
     (is eq :manager (tuatara.defaults::list-kind 'outlook::outlook-label-manager-mode))
     (dolist (text '("h" "C-b"))
       (is eq 'tuatara.defaults::list-fold-heading (key text)))
-    (dolist (text '("RET" "l" "C-f"))
-      (is eq 'outlook::outlook-label-open (key text)))
+    (dolist (text '("RET" "l"))
+      (is eq 'tuatara.defaults::list-visit (key text)))
+    (is eq 'outlook::outlook-label-open (key "C-c O"))
     (is eq 'tuatara.defaults::list-next-entry (key "n"))
-    (is eq 'outlook::outlook-label-rename (key "R"))))
+    (is eq 'outlook::outlook-label-rename (key "C-c R"))))
+
+(define-test (outlook label-manager-ret-opens-or-folds)
+  ;; RET on a label opens its mailbox; on a mailbox's heading it folds the section, as in every manager
+  (with-test-directory (dir)
+    (let ((sum (manager-test-sum)) (opened '()))
+      (multiple-value-bind (list job) (manager-test-mailbox dir "one/" sum *manager-test-labelled*)
+        (declare (ignore job))
+        (let ((manager (manager-test-open)))
+          (sb-int:encapsulate 'tuatara:visit-path 'label-manager-ret
+                              (lambda (original path &rest keys)
+                                (declare (ignore original keys))
+                                (push path opened)))
+          (unwind-protect
+               (progn
+                 (manager-test-keys manager (manager-test-go manager sum nil) "RET")
+                 (is equal '() opened)
+                 (true (member (outlook::mailbox-labels-name sum) (tuatara.defaults::list-folded manager)
+                               :test #'equal))
+                 (manager-test-keys manager (manager-test-go manager sum nil) "RET"
+                                    (manager-test-go manager sum "mgrkea") "RET")
+                 (is equal (list (namestring (merge-pathnames "one/archive.pst" dir))) opened))
+            (sb-int:unencapsulate 'tuatara:visit-path 'label-manager-ret))
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.buffer:kill-buffer list))))))
 
 (define-test (outlook label-manager-forgets-and-opens)
   (with-test-directory (dir)
@@ -3625,12 +3754,12 @@ then wait for the labels job they start and take it in."
         (let ((manager (manager-test-open))
               (file (tuatara.io:path-join (outlook::mailbox-label-directory) (outlook::mailbox-labels-name sum))))
           ;; D asks, saying how many labels and messages; no leaves everything
-          (manager-test-keys manager (manager-test-go manager sum nil) "D")
+          (manager-test-keys manager (manager-test-go manager sum nil) "C-c f")
           (true (probe-file file))
-          (manager-test-keys manager (manager-test-go manager sum nil) "D n o RET")
+          (manager-test-keys manager (manager-test-go manager sum nil) "C-c f n o RET")
           (true (probe-file file))
           ;; yes forgets that mailbox's labels alone; the list open shows none, the other mailbox keeps its own
-          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (manager-test-keys manager (manager-test-go manager sum nil) "C-c f y e s RET")
           (false (probe-file file))
           ;; the lock file stays: sessions waiting for it hold the same one
           (true (probe-file (concatenate 'string file ".lock")))
@@ -3667,7 +3796,7 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
           ;; lines not yet kept are dropped, and a writer under way ends before the journal goes
           (setf (outlook::mailbox-job-labels-pending job) (list (outlook::mailbox-label-line "+" "pending" "X")))
           (manager-test-slow-writer list job journal 0.5)
-          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (manager-test-keys manager (manager-test-go manager sum nil) "C-c f y e s RET")
           (false (outlook::mailbox-job-labels-pending job))
           (false (probe-file file))
           (tuatara.buffer:kill-buffer manager)
@@ -3737,7 +3866,7 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
           ;; a name taken gets (2)
           (dotimes (n 2)
             (manager-test-keys manager (manager-test-go manager sum nil)
-                               (format nil "E C-a C-k ~a C-j" (tuatara.tests::rimu-typed file))))
+                               (format nil "C-c e C-a C-k ~a C-j" (tuatara.tests::rimu-typed file))))
           (is equal '("labels (2).txt" "labels.txt")
               (sort (mapcar #'first (tuatara.io:directory-entries out)) #'string<))
           (let ((text (uiop:read-file-string file)))
@@ -3748,7 +3877,7 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
             (has text (format nil "+~cmgrkea~cOutlook Data File/Inbox~c<one@example.org>~c" #\Tab #\Tab #\Tab #\Tab))
             (is = 3 (count #\+ text)))
           ;; the labels forgotten, then I reads them back; those in the mailbox already stay, others are added
-          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (manager-test-keys manager (manager-test-go manager sum nil) "C-c f y e s RET")
           (is = 0 (hash-table-count (manager-test-journal sum)))
           (outlook::mailbox-change-labels
            (outlook::mailbox-labels-name sum)
@@ -3759,27 +3888,26 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
                     (outlook::mailbox-item-identity (second (cdr (first (outlook::mailbox-job-folders job)))))))))
           (manager-test-refresh manager)
           (manager-test-keys manager (manager-test-go manager sum nil)
-                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+                             (format nil "C-c i C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
           (is equal '(("mgrzeta" "mgrkea") ("mgrzeta") nil) (manager-test-labels job sum))
           (manager-test-keys manager (manager-test-go manager sum nil)
-                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+                             (format nil "C-c i C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
           (is equal '(("mgrzeta" "mgrkea") ("mgrzeta") nil) (manager-test-labels job sum))
           ;; on another mailbox's line, a file of this one is refused and nothing changes
           (manager-test-keys manager (manager-test-go manager other nil)
-                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+                             (format nil "C-c i C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
           (is = 1 (manager-test-count other "mgrtui"))
           (is = 0 (manager-test-count other "mgrzeta"))
           ;; anywhere but a mailbox's line it goes to the mailbox it is of, which may have been forgotten
-          (manager-test-keys manager (manager-test-go manager sum nil) "D y e s RET")
+          (manager-test-keys manager (manager-test-go manager sum nil) "C-c f y e s RET")
           (manager-test-keys manager (lambda () (setf (tuatara.buffer:buffer-point manager) 0))
-                             (format nil "I C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
+                             (format nil "C-c i C-a C-k ~a C-j" (tuatara.tests::rimu-typed file)))
           (is equal '(("mgrzeta" "mgrkea") ("mgrzeta") nil) (manager-test-labels job sum))
-          ;; the mailbox list's keys: M and C-c o m open the manager
-          (dolist (key '("M" "C-c o m"))
-            (tuatara.buffer:kill-buffer manager)
-            (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer list)) key) :width 140 :height 40)
-            (true (tuatara.buffer:find-buffer "*Mailbox labels*"))
-            (setf manager (tuatara.buffer:find-buffer "*Mailbox labels*")))
+          ;; the mailbox list's C-c M opens the manager
+          (tuatara.buffer:kill-buffer manager)
+          (tuatara.tests::run-keys (list (lambda () (tuatara:show-buffer list)) "C-c M") :width 140 :height 40)
+          (true (tuatara.buffer:find-buffer "*Mailbox labels*"))
+          (setf manager (tuatara.buffer:find-buffer "*Mailbox labels*"))
           (tuatara.buffer:kill-buffer manager)
           (tuatara.buffer:kill-buffer list))))))
 
@@ -3928,8 +4056,8 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
 (define-test (outlook commands-and-modes-carry-the-package-name)
   (flet ((bound (mode keys)
            (tuatara.command:lookup-key (tuatara.modes:mode-keymap mode) (tuatara.frontend:parse-key-sequence keys))))
-    (is eq 'outlook::outlook-label (bound 'outlook::outlook-mailbox-mode "+"))
-    (is eq 'outlook::outlook-view-pages (bound 'outlook::outlook-view-mode "P")))
+    (is eq 'outlook::outlook-label (bound 'outlook::outlook-mailbox-mode "C-c +"))
+    (is eq 'outlook::outlook-view-pages (bound 'outlook::outlook-view-mode "C-c p")))
   (dolist (name '("OUTLOOK-BACK-TO-DIRECTORY" "OUTLOOK-EXPORT"
                   "OUTLOOK-EXPORT-EML" "OUTLOOK-EXPORT-MSG" "OUTLOOK-EXPORT-MBOX" "OUTLOOK-EXPORT-PST"
                   "OUTLOOK-LABEL" "OUTLOOK-UNLABEL" "OUTLOOK-FILTER-LABELS" "OUTLOOK-OPEN-ATTACHMENT-OUTSIDE"
@@ -3997,7 +4125,7 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
        (format nil "Subject: Kea~%Content-Type: multipart/mixed; boundary=b~%~%--b~%Content-Type: text/plain~%~%~
                     See the picture.~%--b~%Content-Type: image/png; name=kea.png~%~
                     Content-Transfer-Encoding: base64~%~%~a~%--b--~%"
-               (tuatara.io:base64-string *png-test-octets* :line-length 76))
+               (tuatara.text:base64-string *png-test-octets* :line-length 76))
        path)
       (let ((mail (outlook::outlook-read-file path)))
         (multiple-value-bind (pieces calls) (counting-calls (outlook::mime-part-content)
@@ -4025,14 +4153,33 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
       (with-evidence-directories ((list evidence))
         (with-messages-said (said)
           (run-keys (list (lambda () (tuatara:show-buffer list)) (mailbox-test-go-to list "One")
-                          (format nil "C e C-a C-k ~a C-j" (rimu-typed (concatenate 'string evidence "copies")))
+                          (format nil "C-c c e C-a C-k ~a C-j" (rimu-typed (concatenate 'string evidence "copies")))
                           #'wait-for-mailbox-export :tick
-                          (format nil "C b C-a C-k ~a C-j" (rimu-typed (concatenate 'string evidence "all.mbox")))
+                          (format nil "C-c c b C-a C-k ~a C-j" (rimu-typed (concatenate 'string evidence "all.mbox")))
                           #'wait-for-mailbox-export :tick)
                     :width 140 :height 30)
           (has (said) "nothing copied")
           (has (said) "nothing collected")))
       (is equal '() (tuatara.io:directory-entries evidence))
+      (tuatara.buffer:kill-buffer list))))
+
+(define-test (outlook mbox-export-waits-for-the-filters)
+  ;; with All shown on while the list's filters are still worked out, collecting into an mbox file says to
+  ;; wait, as the other copies do, and asks nothing
+  (with-test-directory (dir)
+    (let ((list (mailbox-test-list dir (list (cons "Inbox/1.eml" (format nil "Subject: One~%~%one~%"))))))
+      (sb-int:encapsulate 'tuatara:menu-arguments 'mbox-waits
+                          (lambda (original) (declare (ignore original)) (list "--shown")))
+      (sb-int:encapsulate 'tuatara:entries-left-by-filters 'mbox-waits
+                          (lambda (original list) (declare (ignore original list)) :working))
+      (unwind-protect
+           (with-messages-said (said)
+             (run-keys (list (lambda () (tuatara:show-buffer list)) (lambda () (outlook::outlook-export-mbox)))
+                       :width 140 :height 30)
+             (has (said) "still being worked out")
+             (false (search "No message on this line" (said))))
+        (sb-int:unencapsulate 'tuatara:menu-arguments 'mbox-waits)
+        (sb-int:unencapsulate 'tuatara:entries-left-by-filters 'mbox-waits))
       (tuatara.buffer:kill-buffer list))))
 
 (define-test (outlook content-lines-folded-by-octets)
@@ -4046,7 +4193,7 @@ SECONDS, having added a line to the journal named JOURNAL as such a job does."
   ;; an attachment written a piece at a time is the base64 of the whole, line for line
   (let ((octets (make-array 200001 :element-type '(unsigned-byte 8))))
     (dotimes (i (length octets)) (setf (aref octets i) (mod (* i 7) 256)))
-    (is equalp (tuatara.text:string-octets (tuatara.io:base64-string octets :line-length 76))
+    (is equalp (tuatara.text:string-octets (tuatara.text:base64-string octets :line-length 76))
         (outlook::mime-base64 octets))
     (is equalp #() (outlook::mime-base64 (make-array 0 :element-type '(unsigned-byte 8))))))
 

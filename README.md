@@ -24,9 +24,9 @@ The manual says how, with every key, command and setting.
 
 ## What it needs
 
-- Tuatara 0.90.40 or later.
+- Tuatara 0.90.44 or later.
 - bubblewrap, to read a mailbox. Tuatara needs it for every file from outside.
-- WeasyPrint, only to see a message as it looks (`P`).
+- WeasyPrint, only to see a message as it looks (`C-c p`).
 
 | System | Command |
 |---|---|
@@ -49,6 +49,32 @@ The manual says how, with every key, command and setting.
    again**. Answer `y` when it asks whether to load outlook; it asks once.
 5. **Check it**: `M-x check-health` says whether WeasyPrint is found; then open
    a `.msg`, `.eml` or `.pst` file.
+
+## One-letter keys
+
+The package binds no key of one character, so that its keys never clash with
+yours. Its commands are on `C-c` keys: `C-c o`, `C-c t` and `C-c p` in a
+message, `C-c h`, `C-c c`, `C-c +`, `C-c -`, `C-c L` and `C-c M` in the list of
+a mailbox, and `C-c O`, `C-c R`, `C-c f`, `C-c e` and `C-c i` in the label
+manager. To have the one-letter keys too, put these lines in your init file,
+inside the `load-package "outlook"` form after its `:config`, so that they run
+once the package is loaded:
+
+```lisp
+(bind-key "O" 'outlook-open-attachment-outside :map 'outlook-view-mode)
+(bind-key "T" 'outlook-view-file-text :map 'outlook-view-mode)
+(bind-key "P" 'outlook-view-pages :map 'outlook-view-mode)
+(bind-key "h" 'outlook-back-to-directory :map 'outlook-mailbox-mode)
+(bind-key "C" 'outlook-export :map 'outlook-mailbox-mode)
+(bind-key "+" 'outlook-label :map 'outlook-mailbox-mode)
+(bind-key "-" 'outlook-unlabel :map 'outlook-mailbox-mode)
+(bind-key "L" 'outlook-filter-labels :map 'outlook-mailbox-mode)
+(bind-key "M" 'outlook-label-manager :map 'outlook-mailbox-mode)
+(bind-key "R" 'outlook-label-rename :map 'outlook-label-manager-mode)
+(bind-key "D" 'outlook-labels-forget :map 'outlook-label-manager-mode)
+(bind-key "E" 'outlook-labels-export :map 'outlook-label-manager-mode)
+(bind-key "I" 'outlook-labels-import :map 'outlook-label-manager-mode)
+```
 
 ## On a machine without internet
 

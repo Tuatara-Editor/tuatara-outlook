@@ -17,8 +17,9 @@ mailbox that has labels, with its file's name, where it was last opened, whether
 the file is there now, the start of its SHA-256 sum, how many labels and
 messages it has and when they last changed; a mailbox read with its deleted
 items has a section apart. Under it a line for each label and how many
-messages carry it. \\<outlook-label-manager-mode>\\[outlook-label-open] on a
-mailbox's line opens the mailbox, when its file is there.
+messages carry it. \\<outlook-label-manager-mode>\\[list-visit] on a label
+opens its mailbox, when its file is there, \\[outlook-label-open] on any line
+of the section.
 \\[list-mark-entry] marks a label, \\[list-mark-for-deletion] marks it for
 deletion, \\[list-unmark-entry] and \\[list-unmark-all] unmark; \\[list-execute]
 takes the labels marked for deletion off every message of their mailboxes,
@@ -182,7 +183,7 @@ said."
                         (mailbox-list-idle-p mailbox) (eq writer (mailbox-job-labels-writer mailbox)))
                 do (setf (mailbox-job-labels mailbox) table)
                    (mailbox-render buffer mailbox :keep)
-                   (refilter-search-filters buffer))
+                   (mailbox-refilter-labels buffer))
         (when (mailbox-labels-manager-job-result job) (message "~a" (mailbox-labels-manager-job-result job)))))
   (let ((list (job-buffer job)))
     (when (live-buffer-p list)
@@ -206,14 +207,12 @@ LIST, WORDS saying what is being done in the meantime. FORGETTING, the name of
 the journal the action deletes, is kept from being labelled (*MAILBOX-LABELS-
 FORGETTING*) from when the job has started till it is taken in. Returns true,
 or false, said, when something is being done already."
-  (let ((working (mailbox-labels-working list)))
-    (if working
-        (message "Wait: ~a" (mailbox-labels-manager-job-words working))
-        (progn (start-job-thread (make-mailbox-labels-manager-job list words action (mailbox-open-lists) forgetting)
-                                 #'mailbox-labels-manager-work :name "tuatara mailbox labels manager")
-               (when forgetting (push forgetting *mailbox-labels-forgetting*))
-               (mailbox-labels-render list :keep)
-               t))))
+  (when (mailbox-labels-free-p list)
+    (start-job-thread (make-mailbox-labels-manager-job list words action (mailbox-open-lists) forgetting)
+                      #'mailbox-labels-manager-work :name "tuatara mailbox labels manager")
+    (when forgetting (push forgetting *mailbox-labels-forgetting*))
+    (mailbox-labels-render list :keep)
+    t))
 
 (defun mailbox-label-set-words (set)
   "What the manager's section for SET says: the file's name, where it was last
@@ -259,8 +258,8 @@ each label, their marks kept. A job under way is said in the heading."
                        (format nil "~a~%~%"
                                (filled-words
                                 (substitute-command-keys
-                                 (format nil "~a. \\<outlook-label-manager-mode>\\[outlook-label-open] opens a ~
-                                              mailbox, \\[outlook-label-rename] renames a ~
+                                 (format nil "~a. \\<outlook-label-manager-mode>\\[list-visit] on a label opens ~
+                                              its mailbox, \\[outlook-label-rename] renames a ~
                                               label, \\[list-mark-for-deletion] and \\[list-execute] delete labels, ~
                                               \\[outlook-labels-forget] forgets a mailbox's labels, ~
                                               \\[outlook-labels-export] and \\[outlook-labels-import] copy them out ~
@@ -288,8 +287,8 @@ each label, their marks kept. A job under way is said in the heading."
   "List the labels kept for mailboxes (\\[outlook-label]), a section for each
 mailbox with the labels on its messages, to rename, delete, forget, copy out
 and read back; the heading says where they are kept and how much room they
-take. \\<outlook-label-manager-mode>\\[outlook-label-open] opens the mailbox
-of a section, \\[outlook-label-rename] renames a label,
+take. \\<outlook-label-manager-mode>\\[list-visit] on a label opens its
+mailbox, \\[outlook-label-rename] renames a label,
 \\[list-mark-for-deletion] and \\[list-execute] delete labels,
 \\[outlook-labels-forget] forgets a mailbox's labels, \\[outlook-labels-export]
 and \\[outlook-labels-import] copy them out and in. The labels are read in the
@@ -393,19 +392,30 @@ its sum when it has none noted."
     (or (let ((name (first (mailbox-label-set-meta set)))) (and name (plusp (length name)) name))
         (subseq sum 0 (min 8 (length sum))))))
 
+(defun mailbox-label-open (journal &key other)
+  "Open the mailbox whose labels are kept in the journal named JOURNAL, as it
+was last opened, when its file is there, in another window with OTHER;
+otherwise say why not."
+  (let* ((set (mailbox-label-set-named journal))
+         (path (and set (second (mailbox-label-set-meta set)))))
+    (cond ((null set) (message "~a" (mailbox-labels-gone-words)))
+          ((or (null path) (zerop (length path)))
+           (message "Where ~a was opened is not known: open it from its directory" (mailbox-label-set-title set)))
+          ((eq :gone (gethash path *mailbox-label-files*)) (message "~a is not there now" path))
+          ((null (gethash path *mailbox-label-files*)) (message "Still looking for ~a: try again" path))
+          (other (visit-path path :show #'display-buffer))
+          (t (visit-path path)))))
+
 (define-command outlook-label-open ()
   "Open the mailbox of the section the current line is in, as it was last
 opened, when its file is there; otherwise say why not."
   (let ((journal (mailbox-labels-line)))
-    (when journal
-      (let* ((set (mailbox-label-set-named journal))
-             (path (and set (second (mailbox-label-set-meta set)))))
-        (cond ((null set) (message "~a" (mailbox-labels-gone-words)))
-              ((or (null path) (zerop (length path)))
-               (message "Where ~a was opened is not known: open it from its directory" (mailbox-label-set-title set)))
-              ((eq :gone (gethash path *mailbox-label-files*)) (message "~a is not there now" path))
-              ((null (gethash path *mailbox-label-files*)) (message "Still looking for ~a: try again" path))
-              (t (visit-path path)))))))
+    (when journal (mailbox-label-open journal))))
+
+(defmethod visit-entry ((mode outlook-label-manager-mode) list entry other)
+  "Open the mailbox the label on the line is of, when its file is there."
+  (declare (ignore list))
+  (mailbox-label-open (first entry) :other other))
 
 (define-command outlook-label-rename ()
   "Rename the label on the current line, or each label marked, asking for the
@@ -523,17 +533,13 @@ control character made a space, and no more than 255 characters."
 name or where that is taken one with (2) and so on, nothing overwritten and
 nothing in an evidence directory; words saying what was done. Looks at the
 directory, so it is called in the background."
-  (let* ((name (native-file-name path))
-         (refusal (writing-refusal (parent-path path))))
-    (cond ((zerop (length name)) "No file named: nothing written")
+  (multiple-value-bind (directory name) (mailbox-new-file-target path "written")
+    (cond ((null directory) name)
           ((zerop (mailbox-label-set-messages (mailbox-read-label-set (mailbox-label-set-journal set) 0)))
            (format nil "~a has no labels to write: nothing written" (mailbox-label-set-title set)))
-          ((not (eq :directory (path-kind (parent-path path))))
-           (format nil "~a is not a directory: nothing written" (parent-path path)))
-          (refusal (format nil "~a: nothing written" refusal))
           (t (let ((text (string-octets (mailbox-labels-file-text set))))
                (format nil "Labels written to ~a"
-                       (call-with-free-file (parent-path path) name
+                       (call-with-free-file directory name
                                             (lambda (fd written)
                                               (write-octets fd text :path written)
                                               written))))))))

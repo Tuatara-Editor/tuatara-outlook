@@ -7,7 +7,7 @@ Messages from a mailbox as files, as one mbox file, or as a new mailbox.
 
 ** The menu
 
-~C~ in a mailbox's list (~C-c o c~) opens a menu of copying out the messages
+~C-c c~ in a mailbox's list opens a menu of copying out the messages
 marked with ~m~, or, with none marked, the one on the line. ~C-h~ there lists
 the menu.
 
@@ -26,7 +26,7 @@ and ~M-x outlook-export-pst~ do the same without the menu.
 
 #+table: commands outlook-export
 
-Marks stay on messages a filter hides, and ~C~ copies them too. The question
+Marks stay on messages a filter hides, and ~C-c c~ copies them too. The question
 names how many it copies.
 
 ~a~ in the menu, All shown, switches from the messages marked to every message

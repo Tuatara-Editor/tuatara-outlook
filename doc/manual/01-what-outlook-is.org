@@ -59,6 +59,9 @@ settings and limits, and chapter 8 lists every command and setting.
 
 ** Keys
 
-The commands of outlook have keys of their own and, as every package's do, a
-prefix of their own, =C-c o=. The keys are in the chapter of each part. Chapter
-8 has them all.
+The commands of outlook are on =C-c= keys, in the message and in the lists:
+=C-c o=, =C-c p= and =C-c t= in a message, =C-c h=, =C-c c=, =C-c L= and
+=C-c M= in a mailbox's list, =C-c O=, =C-c R= and so on in the label manager.
+The package binds no key of one character, so that its keys never clash with
+yours; the README gives the lines for your init file that bind them again. The
+keys are in the chapter of each part. Chapter 8 has them all.

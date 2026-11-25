@@ -46,9 +46,9 @@ takes its mark off, \\[list-unmark-all] takes every mark off, and
 \\[list-toggle-marks] marks those not marked and unmarks those marked.
 \\[outlook-export] copies those marked, or the one on the line, out into a
 directory, as saved mail (.eml) or as Outlook items (.msg), from a menu.
-\[outlook-label] puts labels of your own on them, shown on their lines and
-kept for the mailbox between sessions, and \[outlook-unlabel] takes them off;
-\[outlook-filter-labels] narrows the list to the messages carrying a label.
+\\[outlook-label] puts labels of your own on them, shown on their lines and
+kept for the mailbox between sessions, and \\[outlook-unlabel] takes them off;
+\\[outlook-filter-labels] narrows the list to the messages carrying a label.
 The message on the line is shown beside the list as the cursor moves, read as
 any message is (*OUTLOOK-PREVIEW*); \\[list-toggle-preview] turns that off and
 on.
@@ -769,8 +769,7 @@ was. Its searches narrow it, matching each message's headers and contents
                                     "Outlook mailbox ~a, ~a: ~:d item~:p in ~:d folder~:p~
                                      ~:[~;, deleted items included~]~%"
                                     (native-file-name (mailbox-job-path job))
-                                    (octets-words (or (ignore-errors (stamp-size (path-stamp (mailbox-job-path job))))
-                                                      0))
+                                    (octets-words (mailbox-job-size job))
                                     count (length folders) *outlook-include-deleted*)
                             :heading)
                       (format nil
@@ -1128,7 +1127,8 @@ pst, write them into a new mailbox (MAILBOX-EXPORT-PST-WORK)."
 the menu's switch All shown on, every item its filters leave
 \(ENTRIES-LEFT-BY-FILTERS), those of folded folders too, as folding hides
 nothing from them; else those marked, or with none marked the one on the
-line. NIL, said, while the filters are still worked out."
+line. NIL, said, while the filters are still worked out or when there is no
+message on the line."
   (let ((job (buffer-local list 'mailbox-job)))
     (if (and job (member "--shown" (menu-arguments) :test #'string=))
         (let ((left (entries-left-by-filters list)))
@@ -1136,7 +1136,27 @@ line. NIL, said, while the filters are still worked out."
             ((t) (loop for (nil . items) in (mailbox-job-folders job) append items))
             (:working (message "The list's filters are still being worked out: try again once they are") nil)
             (t (remove-if-not #'mailbox-item-p (mapcar #'entry-member left)))))
-        (remove-if-not #'mailbox-item-p (list-acted-on list)))))
+        (or (remove-if-not #'mailbox-item-p (list-acted-on list))
+            (progn (message "No message on this line") nil)))))
+
+(defun mailbox-new-file-target (path verb &key type)
+  "Where a new file is written for PATH, as asked for. Two values, its
+directory and its name, .TYPE added to a name without it when TYPE is given;
+or NIL and the words saying why nothing is VERB (\"written\", \"collected\"):
+no name given, no directory there, or one nothing may be written in
+\(WRITING-REFUSAL)."
+  (let* ((directory (and path (parent-path path)))
+         (name (and path (native-file-name path)))
+         (name (if (and type name (plusp (length name)) (not (string-equal (native-file-type name) type)))
+                   (concatenate 'string name "." type)
+                   name)))
+    (cond ((or (null path) (zerop (length name))) (values nil (format nil "No file named: nothing ~a" verb)))
+          ((not (eq :directory (path-kind directory)))
+           (values nil (format nil "~a is not a directory: nothing ~a" directory verb)))
+          (t (let ((refusal (writing-refusal directory)))
+               (if refusal
+                   (values nil (format nil "~a: nothing ~a" refusal verb))
+                   (values directory name)))))))
 
 (defun mailbox-export-directory (prompt)
   "Ask with PROMPT for a directory to write in, made when it is not there: its
@@ -1164,14 +1184,13 @@ its filters leave (MAILBOX-EXPORT-ITEMS), out into a directory asked for, as
 TYPE, \"eml\" or \"msg\" (MAILBOX-EXPORT-WORK, in the background)."
   (let* ((list (current-buffer))
          (items (mailbox-export-items list)))
-    (if (null items)
-        (unless (member "--shown" (menu-arguments) :test #'string=) (message "No message on this line"))
-        (let* ((words (list-question nil "message" items :name-of #'mailbox-item-name))
-               (directory (mailbox-export-directory (format nil "Copy ~a as .~a into: " words type))))
-          (when directory
-            (start-job-thread (make-mailbox-export-job list items directory type) #'mailbox-export-work
-                              :name "tuatara mailbox export")
-            (message "Copying ~a out into ~a as .~a..." words directory type))))))
+    (when items
+      (let* ((words (list-question nil "message" items :name-of #'mailbox-item-name))
+             (directory (mailbox-export-directory (format nil "Copy ~a as .~a into: " words type))))
+        (when directory
+          (start-job-thread (make-mailbox-export-job list items directory type) #'mailbox-export-work
+                            :name "tuatara mailbox export")
+          (message "Copying ~a out into ~a as .~a..." words directory type))))))
 
 (define-command outlook-export-eml ()
   "Copy the messages marked in the mailbox's list
@@ -1201,19 +1220,16 @@ written in the background; the mailbox itself is not touched. Contacts and
 appointments are left out."
   (let* ((list (current-buffer))
          (items (mailbox-export-items list)))
-    (if (null items)
-        (message "No message on this line")
-        (let* ((words (list-question nil "message" items :name-of #'mailbox-item-name))
-               (path (read-native-path (format nil "Collect ~a into the mbox file: " words) :writing t))
-               (name (and path (native-file-name path)))
-               (refusal (and path (writing-refusal (parent-path path)))))
-          (cond ((or (null path) (zerop (length name))) (message "No file named: nothing collected"))
-                ((not (eq :directory (path-kind (parent-path path))))
-                 (message "~a is not a directory: nothing collected" (parent-path path)))
-                (refusal (message "~a: nothing collected" refusal))
-                (t (start-job-thread (make-mailbox-export-job list items (parent-path path) "mbox" name)
-                                     #'mailbox-export-work :name "tuatara mailbox export")
-                   (message "Collecting ~a into ~a..." words path)))))))
+    (when items
+      (let ((words (list-question nil "message" items :name-of #'mailbox-item-name)))
+        (multiple-value-bind (directory name)
+            (mailbox-new-file-target (read-native-path (format nil "Collect ~a into the mbox file: " words) :writing t)
+                                     "collected")
+          (if (null directory)
+              (message "~a" name)
+              (progn (start-job-thread (make-mailbox-export-job list items directory "mbox" name)
+                                       #'mailbox-export-work :name "tuatara mailbox export")
+                     (message "Collecting ~a into ~a..." words (path-join directory name)))))))))
 
 (defun mailbox-export-folders (list items)
   "ITEMS of the mailbox listed in LIST in the folders they are listed in, in
@@ -1237,23 +1253,18 @@ background; the mailbox itself is not touched. Contacts and appointments are
 left out."
   (let* ((list (current-buffer))
          (items (mailbox-export-items list)))
-    (if (null items)
-        (unless (member "--shown" (menu-arguments) :test #'string=) (message "No message on this line"))
-        (let* ((words (list-question nil "message" items :name-of #'mailbox-item-name))
-               (path (read-native-path (format nil "Write ~a into the new Outlook mailbox: " words) :writing t))
-               (name (and path (native-file-name path)))
-               (name (if (and name (plusp (length name)) (not (string-equal (native-file-type name) "pst")))
-                         (concatenate 'string name ".pst")
-                         name))
-               (refusal (and path (writing-refusal (parent-path path)))))
-          (cond ((or (null path) (zerop (length name))) (message "No file named: nothing written"))
-                ((not (eq :directory (path-kind (parent-path path))))
-                 (message "~a is not a directory: nothing written" (parent-path path)))
-                (refusal (message "~a: nothing written" refusal))
-                (t (start-job-thread (make-mailbox-export-job list items (parent-path path) "pst" name
-                                                              (mailbox-export-folders list items))
-                                     #'mailbox-export-work :name "tuatara mailbox export")
-                   (message "Writing ~a into ~a..." words (path-join (parent-path path) name))))))))
+    (when items
+      (let ((words (list-question nil "message" items :name-of #'mailbox-item-name)))
+        (multiple-value-bind (directory name)
+            (mailbox-new-file-target (read-native-path (format nil "Write ~a into the new Outlook mailbox: " words)
+                                                       :writing t)
+                                     "written" :type "pst")
+          (if (null directory)
+              (message "~a" name)
+              (progn (start-job-thread (make-mailbox-export-job list items directory "pst" name
+                                                                (mailbox-export-folders list items))
+                                       #'mailbox-export-work :name "tuatara mailbox export")
+                     (message "Writing ~a into ~a..." words (path-join directory name)))))))))
 
 (define-menu outlook-export (:title "Copy out")
   "Open the menu of copying the messages marked in the mailbox's list, or with

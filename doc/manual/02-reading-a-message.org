@@ -15,16 +15,15 @@ The message, its attachments, and how to see it as a mail program shows it.
 |                                 | document or a picture as rimu shows it, as |
 |                                 | pages or as the picture, drawn shut in the |
 |                                 | sandbox; anything else safely, read only.  |
-| ~O~                             | Opens the attachment at point in the       |
+| ~C-c o~                         | Opens the attachment at point in the       |
 |                                 | desktop's own program for its kind, after  |
 |                                 | asking. See below.                         |
-| ~P~                             | Shows the message as it looks. ~T~ there   |
-|                                 | comes back to the message.                 |
-| ~T~                             | Shows the message's file as its text:      |
+| ~C-c p~                         | Shows the message as it looks. ~C-c t~     |
+|                                 | there comes back to the message.           |
+| ~C-c t~                         | Shows the message's file as its text:      |
 |                                 | opened safely when the message came from a |
 |                                 | mailbox or an attachment, else as any file |
 |                                 | is opened.                                 |
-| ~C-c o o~, ~C-c o p~, ~C-c o t~ | The same as ~O~, ~P~ and ~T~.              |
 | ~q~                             | Closes the message, back to the mailbox    |
 |                                 | (or wherever it was opened from).          |
 
@@ -37,8 +36,8 @@ The message, its attachments, and how to see it as a mail program shows it.
 ~RET~ on an attachment opens it in Tuatara from a copy only you can read.
 Nothing in it is run.
 
-~O~ opens it in the desktop's own program for its kind, after asking. The copy
-is private to you, and only a kind that may be opened outside Tuatara is
+~C-c o~ opens it in the desktop's own program for its kind, after asking. The
+copy is private to you, and only a kind that may be opened outside Tuatara is
 opened: a picture, a PDF, a sound, a video or an Office document. That program
 is not shut in the sandbox.
 
@@ -53,9 +52,9 @@ so that a small file cannot make the reader take memory or time without end.
 
 ** Seeing a message as it looks
 
-~P~ in a message draws it as a mail program shows it. Its HTML is laid out as on
-a screen, with its colours, tables and fonts and the pictures it carries in
-their places. Above it are its headers (from, to, subject, dates, attachments)
+~C-c p~ in a message draws it as a mail program shows it. Its HTML is laid out
+as on a screen, with its colours, tables and fonts and the pictures it carries
+in their places. Above it are its headers (from, to, subject, dates, attachments)
 as a mail program prints them, and its internet headers, whole as they came, are
 on a page of their own after it. The pages are shown in Tuatara's PDF view, with
 its keys (zoom, search, the text).
@@ -87,6 +86,10 @@ conversation index of the header or of the Outlook item). It says too when one
 Message-ID is given to several messages. ~RET~ on one opens it as the message's
 own attachments open, from a copy only you can read, shut in the sandbox,
 nothing in it run.
+
+Only the latest 50 earlier mails of a conversation are looked through, so that
+opening a message of a very long conversation stays quick; the list says how
+many earlier ones it left out.
 
 The earlier mails are found by the Message-IDs the message's =In-Reply-To= and
 =References= headers name, and theirs in turn. When those find none, they are
