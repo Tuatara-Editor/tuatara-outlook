@@ -13,7 +13,7 @@
 <div class="site">
 <nav class="toc" id="contents" aria-label="Contents">
 <strong>outlook Manual</strong>
-<small>for Tuatara 0.90.38 and later</small>
+<small>for Tuatara 0.90.44 and later</small>
 <p class="tools"><a href="all.html">All on one page</a>
 <button type="button" class="theme" hidden>Dark</button></p>
 <input type="search" placeholder="Search the manual" aria-label="Search the manual">
@@ -25,7 +25,8 @@
 <h1 id="what-outlook-is">What outlook is</h1>
 <p class="lead">A package that reads Outlook items, saved mail and Outlook mailboxes as
 messages, and never changes them.</p>
-<p>It is made for examining mail from evidence. Nothing in a message is run.
+<p>It is made for examining mail from evidence. It is no mail client: it signs
+in to no account, fetches no mail and sends none. Nothing in a message is run.
 An attachment is opened only when you ask, and from a private copy. The files
 read are never written to.</p>
 <h2 id="what-it-reads"><span class="num">1.1</span> What it reads</h2>
@@ -70,9 +71,12 @@ the mailbox and how it is read. Chapters 4 and 5 narrow a mailbox's list by a
 search, a field or a label. Chapter 6 copies messages out. Chapter 7 gives the
 settings and limits, and chapter 8 lists every command and setting.</p>
 <h2 id="keys"><span class="num">1.5</span> Keys</h2>
-<p>The commands of outlook have keys of their own and, as every package's do, a
-prefix of their own, <code>C-c o</code>. The keys are in the chapter of each part. Chapter
-8 has them all.</p>
+<p>The commands of outlook are on <code>C-c</code> keys, in the message and in the lists:
+<code>C-c o</code>, <code>C-c p</code> and <code>C-c t</code> in a message, <code>C-c h</code>, <code>C-c c</code>, <code>C-c L</code> and
+<code>C-c M</code> in a mailbox's list, <code>C-c O</code>, <code>C-c R</code> and so on in the label manager.
+The package binds no key of one character, so that its keys never clash with
+yours; the README gives the lines for your init file that bind them again. The
+keys are in the chapter of each part. Chapter 8 has them all.</p>
 <div class="node end"><span>Next: <a href="02-reading-a-message.html">Reading a message</a></span><span>Up: <a href="index.html">Contents</a></span></div>
 </article>
 </main>

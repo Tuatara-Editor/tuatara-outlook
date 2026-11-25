@@ -13,7 +13,7 @@
 <div class="site">
 <nav class="toc" id="contents" aria-label="Contents">
 <strong>outlook Manual</strong>
-<small>for Tuatara 0.90.38 and later</small>
+<small>for Tuatara 0.90.44 and later</small>
 <p class="tools"><a href="all.html">All on one page</a>
 <button type="button" class="theme" hidden>Dark</button></p>
 <input type="search" placeholder="Search the manual" aria-label="Search the manual">
@@ -65,6 +65,8 @@ left out, and the list says so.</p>
 <li>at most 256 messages attached to a message and to those;</li>
 <li>a message of parts within parts is read as deep as twice
   <code>*outlook-nesting-limit*</code>;</li>
+<li>a message or a part has its first 10,000 headers read, or its first megabyte
+  of them; the rest is read as its text, and the message says so;</li>
 <li>folders more than 64 deep are listed under <code>Orphans</code>;</li>
 <li>a folder whose path would pass 1,024 octets has its name cut.</li>
 </ul>

@@ -13,7 +13,7 @@
 <div class="site">
 <nav class="toc" id="contents" aria-label="Contents">
 <strong>outlook Manual</strong>
-<small>for Tuatara 0.90.38 and later</small>
+<small>for Tuatara 0.90.44 and later</small>
 <p class="tools"><a href="all.html">All on one page</a>
 <button type="button" class="theme" hidden>Dark</button></p>
 <input type="search" placeholder="Search the manual" aria-label="Search the manual">
@@ -36,16 +36,15 @@
 <tr><td></td><td>document or a picture as rimu shows it, as</td></tr>
 <tr><td></td><td>pages or as the picture, drawn shut in the</td></tr>
 <tr><td></td><td>sandbox; anything else safely, read only.</td></tr>
-<tr><td><kbd>O</kbd></td><td>Opens the attachment at point in the</td></tr>
+<tr><td><kbd>C-c o</kbd></td><td>Opens the attachment at point in the</td></tr>
 <tr><td></td><td>desktop's own program for its kind, after</td></tr>
 <tr><td></td><td>asking. See below.</td></tr>
-<tr><td><kbd>P</kbd></td><td>Shows the message as it looks. <kbd>T</kbd> there</td></tr>
-<tr><td></td><td>comes back to the message.</td></tr>
-<tr><td><kbd>T</kbd></td><td>Shows the message's file as its text:</td></tr>
+<tr><td><kbd>C-c p</kbd></td><td>Shows the message as it looks. <kbd>C-c t</kbd></td></tr>
+<tr><td></td><td>there comes back to the message.</td></tr>
+<tr><td><kbd>C-c t</kbd></td><td>Shows the message's file as its text:</td></tr>
 <tr><td></td><td>opened safely when the message came from a</td></tr>
 <tr><td></td><td>mailbox or an attachment, else as any file</td></tr>
 <tr><td></td><td>is opened.</td></tr>
-<tr><td><kbd>C-c o o</kbd>, <kbd>C-c o p</kbd>, <kbd>C-c o t</kbd></td><td>The same as <kbd>O</kbd>, <kbd>P</kbd> and <kbd>T</kbd>.</td></tr>
 <tr><td><kbd>q</kbd></td><td>Closes the message, back to the mailbox</td></tr>
 <tr><td></td><td>(or wherever it was opened from).</td></tr>
 </tbody></table></div>
@@ -55,15 +54,15 @@
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>O</kbd>, <kbd>C-c o o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
-<tr><td>none</td><td><kbd>P</kbd>, <kbd>C-c o p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
-<tr><td>none</td><td><kbd>T</kbd>, <kbd>C-c o t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
+<tr><td>none</td><td><kbd>C-c o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
+<tr><td>none</td><td><kbd>C-c p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
+<tr><td>none</td><td><kbd>C-c t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
 </tbody></table></div>
 <h2 id="attachments"><span class="num">2.2</span> Attachments</h2>
 <p><kbd>RET</kbd> on an attachment opens it in Tuatara from a copy only you can read.
 Nothing in it is run.</p>
-<p><kbd>O</kbd> opens it in the desktop's own program for its kind, after asking. The copy
-is private to you, and only a kind that may be opened outside Tuatara is
+<p><kbd>C-c o</kbd> opens it in the desktop's own program for its kind, after asking. The
+copy is private to you, and only a kind that may be opened outside Tuatara is
 opened: a picture, a PDF, a sound, a video or an Office document. That program
 is not shut in the sandbox.</p>
 <p>A part that cannot be read (an attachment, a value) is said so in the message,
@@ -74,9 +73,9 @@ this goes is set by <code>*outlook-nesting-limit*</code>; deeper ones are listed
 read. A message and the messages attached to it and to those are limited to 256,
 so that a small file cannot make the reader take memory or time without end.</p>
 <h2 id="seeing-a-message-as-it-looks"><span class="num">2.3</span> Seeing a message as it looks</h2>
-<p><kbd>P</kbd> in a message draws it as a mail program shows it. Its HTML is laid out as on
-a screen, with its colours, tables and fonts and the pictures it carries in
-their places. Above it are its headers (from, to, subject, dates, attachments)
+<p><kbd>C-c p</kbd> in a message draws it as a mail program shows it. Its HTML is laid out
+as on a screen, with its colours, tables and fonts and the pictures it carries
+in their places. Above it are its headers (from, to, subject, dates, attachments)
 as a mail program prints them, and its internet headers, whole as they came, are
 on a page of their own after it. The pages are shown in Tuatara's PDF view, with
 its keys (zoom, search, the text).</p>
@@ -103,6 +102,9 @@ conversation index of the header or of the Outlook item). It says too when one
 Message-ID is given to several messages. <kbd>RET</kbd> on one opens it as the message's
 own attachments open, from a copy only you can read, shut in the sandbox,
 nothing in it run.</p>
+<p>Only the latest 50 earlier mails of a conversation are looked through, so that
+opening a message of a very long conversation stays quick; the list says how
+many earlier ones it left out.</p>
 <p>The earlier mails are found by the Message-IDs the message's <code>In-Reply-To</code> and
 <code>References</code> headers name, and theirs in turn. When those find none, they are
 found by Outlook's conversation index (the <code>Thread-Index</code> header, or the

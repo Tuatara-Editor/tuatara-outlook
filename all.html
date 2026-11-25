@@ -13,7 +13,7 @@
 <div class="site">
 <nav class="toc" id="contents" aria-label="Contents">
 <strong>outlook Manual</strong>
-<small>for Tuatara 0.90.38 and later</small>
+<small>for Tuatara 0.90.44 and later</small>
 <p class="tools"><a href="index.html">By chapter</a>
 <button type="button" class="theme" hidden>Dark</button></p>
 <input type="search" placeholder="Search the manual" aria-label="Search the manual">
@@ -22,13 +22,14 @@
 <main>
 <article>
 <h1>outlook Manual</h1>
-<p class="lead">for Tuatara 0.90.38 and later, every chapter on one page</p>
+<p class="lead">for Tuatara 0.90.44 and later, every chapter on one page</p>
 <p>This manual is written with modal editing on, first and foremost. Where a command also has a key that works with modal editing off, it is given as well, as the non-modal key.</p>
 <section class="chapter" id="01-what-outlook-is">
 <h1 id="01-what-outlook-is--what-outlook-is">What outlook is</h1>
 <p class="lead">A package that reads Outlook items, saved mail and Outlook mailboxes as
 messages, and never changes them.</p>
-<p>It is made for examining mail from evidence. Nothing in a message is run.
+<p>It is made for examining mail from evidence. It is no mail client: it signs
+in to no account, fetches no mail and sends none. Nothing in a message is run.
 An attachment is opened only when you ask, and from a private copy. The files
 read are never written to.</p>
 <h2 id="01-what-outlook-is--what-it-reads"><span class="num">1.1</span> What it reads</h2>
@@ -73,9 +74,12 @@ the mailbox and how it is read. Chapters 4 and 5 narrow a mailbox's list by a
 search, a field or a label. Chapter 6 copies messages out. Chapter 7 gives the
 settings and limits, and chapter 8 lists every command and setting.</p>
 <h2 id="01-what-outlook-is--keys"><span class="num">1.5</span> Keys</h2>
-<p>The commands of outlook have keys of their own and, as every package's do, a
-prefix of their own, <code>C-c o</code>. The keys are in the chapter of each part. Chapter
-8 has them all.</p>
+<p>The commands of outlook are on <code>C-c</code> keys, in the message and in the lists:
+<code>C-c o</code>, <code>C-c p</code> and <code>C-c t</code> in a message, <code>C-c h</code>, <code>C-c c</code>, <code>C-c L</code> and
+<code>C-c M</code> in a mailbox's list, <code>C-c O</code>, <code>C-c R</code> and so on in the label manager.
+The package binds no key of one character, so that its keys never clash with
+yours; the README gives the lines for your init file that bind them again. The
+keys are in the chapter of each part. Chapter 8 has them all.</p>
 </section>
 <section class="chapter" id="02-reading-a-message">
 <h1 id="02-reading-a-message--reading-a-message">Reading a message</h1>
@@ -92,16 +96,15 @@ prefix of their own, <code>C-c o</code>. The keys are in the chapter of each par
 <tr><td></td><td>document or a picture as rimu shows it, as</td></tr>
 <tr><td></td><td>pages or as the picture, drawn shut in the</td></tr>
 <tr><td></td><td>sandbox; anything else safely, read only.</td></tr>
-<tr><td><kbd>O</kbd></td><td>Opens the attachment at point in the</td></tr>
+<tr><td><kbd>C-c o</kbd></td><td>Opens the attachment at point in the</td></tr>
 <tr><td></td><td>desktop's own program for its kind, after</td></tr>
 <tr><td></td><td>asking. See below.</td></tr>
-<tr><td><kbd>P</kbd></td><td>Shows the message as it looks. <kbd>T</kbd> there</td></tr>
-<tr><td></td><td>comes back to the message.</td></tr>
-<tr><td><kbd>T</kbd></td><td>Shows the message's file as its text:</td></tr>
+<tr><td><kbd>C-c p</kbd></td><td>Shows the message as it looks. <kbd>C-c t</kbd></td></tr>
+<tr><td></td><td>there comes back to the message.</td></tr>
+<tr><td><kbd>C-c t</kbd></td><td>Shows the message's file as its text:</td></tr>
 <tr><td></td><td>opened safely when the message came from a</td></tr>
 <tr><td></td><td>mailbox or an attachment, else as any file</td></tr>
 <tr><td></td><td>is opened.</td></tr>
-<tr><td><kbd>C-c o o</kbd>, <kbd>C-c o p</kbd>, <kbd>C-c o t</kbd></td><td>The same as <kbd>O</kbd>, <kbd>P</kbd> and <kbd>T</kbd>.</td></tr>
 <tr><td><kbd>q</kbd></td><td>Closes the message, back to the mailbox</td></tr>
 <tr><td></td><td>(or wherever it was opened from).</td></tr>
 </tbody></table></div>
@@ -111,15 +114,15 @@ prefix of their own, <code>C-c o</code>. The keys are in the chapter of each par
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>O</kbd>, <kbd>C-c o o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
-<tr><td>none</td><td><kbd>P</kbd>, <kbd>C-c o p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
-<tr><td>none</td><td><kbd>T</kbd>, <kbd>C-c o t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
+<tr><td>none</td><td><kbd>C-c o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
+<tr><td>none</td><td><kbd>C-c p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
+<tr><td>none</td><td><kbd>C-c t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
 </tbody></table></div>
 <h2 id="02-reading-a-message--attachments"><span class="num">2.2</span> Attachments</h2>
 <p><kbd>RET</kbd> on an attachment opens it in Tuatara from a copy only you can read.
 Nothing in it is run.</p>
-<p><kbd>O</kbd> opens it in the desktop's own program for its kind, after asking. The copy
-is private to you, and only a kind that may be opened outside Tuatara is
+<p><kbd>C-c o</kbd> opens it in the desktop's own program for its kind, after asking. The
+copy is private to you, and only a kind that may be opened outside Tuatara is
 opened: a picture, a PDF, a sound, a video or an Office document. That program
 is not shut in the sandbox.</p>
 <p>A part that cannot be read (an attachment, a value) is said so in the message,
@@ -130,9 +133,9 @@ this goes is set by <code>*outlook-nesting-limit*</code>; deeper ones are listed
 read. A message and the messages attached to it and to those are limited to 256,
 so that a small file cannot make the reader take memory or time without end.</p>
 <h2 id="02-reading-a-message--seeing-a-message-as-it-looks"><span class="num">2.3</span> Seeing a message as it looks</h2>
-<p><kbd>P</kbd> in a message draws it as a mail program shows it. Its HTML is laid out as on
-a screen, with its colours, tables and fonts and the pictures it carries in
-their places. Above it are its headers (from, to, subject, dates, attachments)
+<p><kbd>C-c p</kbd> in a message draws it as a mail program shows it. Its HTML is laid out
+as on a screen, with its colours, tables and fonts and the pictures it carries
+in their places. Above it are its headers (from, to, subject, dates, attachments)
 as a mail program prints them, and its internet headers, whole as they came, are
 on a page of their own after it. The pages are shown in Tuatara's PDF view, with
 its keys (zoom, search, the text).</p>
@@ -159,6 +162,9 @@ conversation index of the header or of the Outlook item). It says too when one
 Message-ID is given to several messages. <kbd>RET</kbd> on one opens it as the message's
 own attachments open, from a copy only you can read, shut in the sandbox,
 nothing in it run.</p>
+<p>Only the latest 50 earlier mails of a conversation are looked through, so that
+opening a message of a very long conversation stays quick; the list says how
+many earlier ones it left out.</p>
 <p>The earlier mails are found by the Message-IDs the message's <code>In-Reply-To</code> and
 <code>References</code> headers name, and theirs in turn. When those find none, they are
 found by Outlook's conversation index (the <code>Thread-Index</code> header, or the
@@ -272,9 +278,8 @@ This needs Tuatara 0.90.38 or later.</p>
 <tr><td><kbd>P</kbd></td><td>Turns the preview off and on.</td></tr>
 <tr><td><kbd>q</kbd></td><td>Closes the list. What was written of it stays in the</td></tr>
 <tr><td></td><td>cache, so the mailbox opens again at once.</td></tr>
-<tr><td><kbd>h</kbd></td><td>Asks, then closes the list and goes back to its</td></tr>
+<tr><td><kbd>C-c h</kbd></td><td>Asks, then closes the list and goes back to its</td></tr>
 <tr><td></td><td>directory in rimu, on the mailbox.</td></tr>
-<tr><td><kbd>C-c o h</kbd></td><td>The same as <kbd>h</kbd>.</td></tr>
 </tbody></table></div>
 <p>The moves by word (<kbd>w</kbd>, <kbd>b</kbd>, <kbd>W</kbd>, <kbd>B</kbd>) do nothing in the list. <kbd>V</kbd> is the one
 selection, of whole lines.</p>
@@ -284,7 +289,7 @@ selection, of whole lines.</p>
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>h</kbd>, <kbd>C-c o h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
+<tr><td>none</td><td><kbd>C-c h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
 </tbody></table></div>
 <h2 id="03-mailboxes--the-preview"><span class="num">3.7</span> The preview</h2>
 <p>As the cursor goes from line to line of a list, the message on the line is shown
@@ -317,7 +322,7 @@ items are left.</p>
 <tr><td></td><td>matches.</td></tr>
 <tr><td><kbd>C-x / h</kbd></td><td>Hides the messages one field of which a pattern</td></tr>
 <tr><td></td><td>matches.</td></tr>
-<tr><td><kbd>L</kbd></td><td>Narrows the list to the messages carrying a label</td></tr>
+<tr><td><kbd>C-c L</kbd></td><td>Narrows the list to the messages carrying a label</td></tr>
 <tr><td></td><td>(chapter 5).</td></tr>
 <tr><td><kbd>C-x / l</kbd></td><td>Lists the filters, each with how many items it</td></tr>
 <tr><td></td><td>leaves. There <kbd>d</kbd> takes away the filter on the line</td></tr>
@@ -394,21 +399,21 @@ remembered as either) and given later as <code>[[:name:]]</code> in any pattern.
 <tr><th>Key</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td>Puts labels on the messages marked with <kbd>m</kbd>, or with</td></tr>
+<tr><td><kbd>C-c +</kbd></td><td>Puts labels on the messages marked with <kbd>m</kbd>, or with</td></tr>
 <tr><td></td><td>none marked on the one on the line.</td></tr>
-<tr><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td>Takes labels off the messages marked, or the one on</td></tr>
+<tr><td><kbd>C-c -</kbd></td><td>Takes labels off the messages marked, or the one on</td></tr>
 <tr><td></td><td>the line, chosen from those they carry.</td></tr>
-<tr><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td>Narrows the list to the messages carrying a label, or</td></tr>
+<tr><td><kbd>C-c L</kbd></td><td>Narrows the list to the messages carrying a label, or</td></tr>
 <tr><td></td><td>any of several. With <kbd>C-u</kbd>, to those carrying none of</td></tr>
 <tr><td></td><td>them.</td></tr>
-<tr><td><kbd>M</kbd>, <kbd>C-c o m</kbd></td><td>Opens the label manager.</td></tr>
+<tr><td><kbd>C-c M</kbd></td><td>Opens the label manager.</td></tr>
 </tbody></table></div>
-<p><kbd>+</kbd> asks for one label or several, apart by commas, the labels used before
+<p><kbd>C-c +</kbd> asks for one label or several, apart by commas, the labels used before
 offered as you type. <kbd>RET</kbd> on the empty choice ends the question. Each message's
 labels are shown on its line, in a column of their own while any message
 carries one.</p>
-<p><kbd>L</kbd> chooses from the labels the mailbox's messages carry, apart by commas. It is
-one of the list's filters, as a search kept with <kbd>RET</kbd> is (chapter 4). It
+<p><kbd>C-c L</kbd> chooses from the labels the mailbox's messages carry, apart by commas.
+It is one of the list's filters, as a search kept with <kbd>RET</kbd> is (chapter 4). It
 narrows what the filters before it left, <kbd>C-x / l</kbd> lists it and <kbd>C-x / r</kbd> takes
 every filter away. Labels are told apart by case: <code>kea</code> is not <code>Kea</code>. A message
 labelled or unlabelled while such a filter is on is shown or hidden at once, as
@@ -419,9 +424,9 @@ the filters now say.</p>
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td><code>outlook-label</code></td><td>Put labels on the messages marked in the mailbox's list (m), or with none marked on the one on the current line: several, apart by commas, the labels used before offered and new ones typed.</td></tr>
-<tr><td>none</td><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td><code>outlook-unlabel</code></td><td>Take labels off the messages marked in the mailbox's list, or with none marked off the one on the current line: several, apart by commas, chosen from those they carry (+).</td></tr>
-<tr><td>none</td><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td><code>outlook-filter-labels</code></td><td>Narrow the mailbox's list to the messages carrying a label, or any of several, chosen apart by commas from those its messages carry (+); with C-u, to those carrying none of them.</td></tr>
+<tr><td>none</td><td><kbd>C-c +</kbd></td><td><code>outlook-label</code></td><td>Put labels on the messages marked in the mailbox's list (m), or with none marked on the one on the current line: several, apart by commas, the labels used before offered and new ones typed.</td></tr>
+<tr><td>none</td><td><kbd>C-c -</kbd></td><td><code>outlook-unlabel</code></td><td>Take labels off the messages marked in the mailbox's list, or with none marked off the one on the current line: several, apart by commas, chosen from those they carry (C-c +).</td></tr>
+<tr><td>none</td><td><kbd>C-c L</kbd></td><td><code>outlook-filter-labels</code></td><td>Narrow the mailbox's list to the messages carrying a label, or any of several, chosen apart by commas from those its messages carry (C-c +); with C-u, to those carrying none of them.</td></tr>
 </tbody></table></div>
 <h2 id="05-labels--where-labels-are-kept"><span class="num">5.2</span> Where labels are kept</h2>
 <p>The labels are kept for you alone in Tuatara's state directory
@@ -448,7 +453,7 @@ given the line the next time its mailbox is opened.</p>
 wrote, which the package writes otherwise. They stay in the labels file, and the
 label manager shows them, but they show on no message read now.</p>
 <h2 id="05-labels--the-label-manager"><span class="num">5.3</span> The label manager</h2>
-<p><kbd>M-x outlook-label-manager</kbd>, or <kbd>M</kbd> (<kbd>C-c o m</kbd>) in a mailbox's list, lists every
+<p><kbd>M-x outlook-label-manager</kbd>, or <kbd>C-c M</kbd> in a mailbox's list, lists every
 mailbox that has labels, one section each: its file's name, the path it was last
 opened from, whether the file is there now, the start of its SHA-256 sum, how
 many labels and messages, and when they last changed. A mailbox read with its
@@ -460,22 +465,23 @@ much room they take.</p>
 <tr><th>Key</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td><kbd>RET</kbd>, <kbd>l</kbd></td><td>On a mailbox's line, opens the mailbox when its file</td></tr>
-<tr><td></td><td>is there.</td></tr>
+<tr><td><kbd>RET</kbd>, <kbd>l</kbd></td><td>On a label, opens its mailbox when the file is there;</td></tr>
+<tr><td></td><td>on a mailbox's line, folds its section.</td></tr>
+<tr><td><kbd>C-c O</kbd></td><td>Opens the mailbox of the section the line is in.</td></tr>
 <tr><td><kbd>h</kbd></td><td>On a mailbox's line, folds its section.</td></tr>
 <tr><td><kbd>q</kbd></td><td>Closes the label manager.</td></tr>
-<tr><td><kbd>R</kbd> (<kbd>C-c o r</kbd>)</td><td>Renames the label on the line, or each one marked, in</td></tr>
+<tr><td><kbd>C-c R</kbd></td><td>Renames the label on the line, or each one marked, in</td></tr>
 <tr><td></td><td>its mailbox only. A message that has the new name</td></tr>
 <tr><td></td><td>already only loses the old.</td></tr>
 <tr><td><kbd>d</kbd>, <kbd>x</kbd></td><td>Mark labels for deletion and take them off every</td></tr>
 <tr><td></td><td>message of their mailbox, after asking.</td></tr>
-<tr><td><kbd>D</kbd> (<kbd>C-c o f</kbd>)</td><td>Forgets every label of the mailbox on the line, after</td></tr>
+<tr><td><kbd>C-c f</kbd></td><td>Forgets every label of the mailbox on the line, after</td></tr>
 <tr><td></td><td>saying how many labels and messages that is.</td></tr>
-<tr><td><kbd>E</kbd> (<kbd>C-c o e</kbd>)</td><td>Writes the mailbox's labels into a plain text file, in</td></tr>
+<tr><td><kbd>C-c e</kbd></td><td>Writes the mailbox's labels into a plain text file, in</td></tr>
 <tr><td></td><td>a directory you choose and never an evidence</td></tr>
 <tr><td></td><td>directory: its SHA-256 sum, its file's name, and each</td></tr>
 <tr><td></td><td>message's identity with its labels.</td></tr>
-<tr><td><kbd>I</kbd> (<kbd>C-c o i</kbd>)</td><td>Reads such a file back into the mailbox with the sum</td></tr>
+<tr><td><kbd>C-c i</kbd></td><td>Reads such a file back into the mailbox with the sum</td></tr>
 <tr><td></td><td>it holds, adding to the labels there. On another</td></tr>
 <tr><td></td><td>mailbox's line it refuses. Elsewhere it goes to the</td></tr>
 <tr><td></td><td>mailbox the file is of, which gets its labels back</td></tr>
@@ -486,7 +492,7 @@ put on meanwhile stay. Earlier versions kept a <code>names</code> file in the la
 directory. It is left where it is and ignored, and can be deleted.</p>
 <p>The manager reads and changes the journals in the background, so it never holds
 the editor up. The heading says what is under way, and a second change waits for
-the first. A file read by <kbd>I</kbd> is accepted only when its sum is exactly 64
+the first. A file read by <kbd>C-c i</kbd> is accepted only when its sum is exactly 64
 lowercase hexadecimal digits, the name of a journal. Its file name is cut at 255
 characters and control characters in it become spaces.</p>
 <div class="tablewrap"><table>
@@ -494,18 +500,18 @@ characters and control characters in it become spaces.</p>
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>l</kbd>, <kbd>C-f</kbd>, <kbd>RET</kbd></td><td><code>outlook-label-open</code></td><td>Open the mailbox of the section the current line is in, as it was last opened, when its file is there; otherwise say why not.</td></tr>
-<tr><td>none</td><td><kbd>R</kbd>, <kbd>C-c o r</kbd></td><td><code>outlook-label-rename</code></td><td>Rename the label on the current line, or each label marked, asking for the new name of each: on every message of its mailbox that carries it.</td></tr>
-<tr><td>none</td><td><kbd>D</kbd>, <kbd>C-c o f</kbd></td><td><code>outlook-labels-forget</code></td><td>Forget every label of the mailbox the current line is in, after saying how many labels and messages that is: its journal is deleted, and the mailbox starts without labels the next time it is opened.</td></tr>
-<tr><td>none</td><td><kbd>E</kbd>, <kbd>C-c o e</kbd></td><td><code>outlook-labels-export</code></td><td>Write the labels of the mailbox the current line is in into a file, in the directory and under the name asked for (the mailbox's name and .labels at first): a plain text file holding the mailbox's SHA-256 sum, its file's name and, for each message, its identity and its labels, to be read back by I.</td></tr>
-<tr><td>none</td><td><kbd>I</kbd>, <kbd>C-c o i</kbd></td><td><code>outlook-labels-import</code></td><td>Read a file of a mailbox's labels, written by E, and add them to the mailbox whose SHA-256 sum it holds: those it has already stay, and none is taken away.</td></tr>
+<tr><td>none</td><td><kbd>C-c O</kbd></td><td><code>outlook-label-open</code></td><td>Open the mailbox of the section the current line is in, as it was last opened, when its file is there; otherwise say why not.</td></tr>
+<tr><td>none</td><td><kbd>C-c R</kbd></td><td><code>outlook-label-rename</code></td><td>Rename the label on the current line, or each label marked, asking for the new name of each: on every message of its mailbox that carries it.</td></tr>
+<tr><td>none</td><td><kbd>C-c f</kbd></td><td><code>outlook-labels-forget</code></td><td>Forget every label of the mailbox the current line is in, after saying how many labels and messages that is: its journal is deleted, and the mailbox starts without labels the next time it is opened.</td></tr>
+<tr><td>none</td><td><kbd>C-c e</kbd></td><td><code>outlook-labels-export</code></td><td>Write the labels of the mailbox the current line is in into a file, in the directory and under the name asked for (the mailbox's name and .labels at first): a plain text file holding the mailbox's SHA-256 sum, its file's name and, for each message, its identity and its labels, to be read back by C-c i.</td></tr>
+<tr><td>none</td><td><kbd>C-c i</kbd></td><td><code>outlook-labels-import</code></td><td>Read a file of a mailbox's labels, written by C-c e, and add them to the mailbox whose SHA-256 sum it holds: those it has already stay, and none is taken away.</td></tr>
 </tbody></table></div>
 </section>
 <section class="chapter" id="06-copying-messages-out">
 <h1 id="06-copying-messages-out--copying-messages-out">Copying messages out</h1>
 <p class="lead">Messages from a mailbox as files, as one mbox file, or as a new mailbox.</p>
 <h2 id="06-copying-messages-out--the-menu"><span class="num">6.1</span> The menu</h2>
-<p><kbd>C</kbd> in a mailbox's list (<kbd>C-c o c</kbd>) opens a menu of copying out the messages
+<p><kbd>C-c c</kbd> in a mailbox's list opens a menu of copying out the messages
 marked with <kbd>m</kbd>, or, with none marked, the one on the line. <kbd>C-h</kbd> there lists
 the menu.</p>
 <div class="tablewrap"><table>
@@ -528,15 +534,16 @@ and <kbd>M-x outlook-export-pst</kbd> do the same without the menu.</p>
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>C</kbd>, <kbd>C-c o c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
+<tr><td>none</td><td><kbd>C-c c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
 </tbody></table></div>
-<p>Marks stay on messages a filter hides, and <kbd>C</kbd> copies them too. The question
+<p>Marks stay on messages a filter hides, and <kbd>C-c c</kbd> copies them too. The question
 names how many it copies.</p>
 <p><kbd>a</kbd> in the menu, All shown, switches from the messages marked to every message
 the list's filters leave, those under folded folders too, marked or not. So <kbd>C a
 e</kbd> copies out as saved mail all that a search, a label or a field filter left.</p>
 <p>Copying runs in the background. The message line then says how many were copied
-and which could not be.</p>
+and which could not be. Nothing is copied into an evidence directory, nor where
+you may not write: the message line says why, before anything is written.</p>
 <h2 id="06-copying-messages-out--files-one-for-each-message"><span class="num">6.2</span> Files, one for each message</h2>
 <p><kbd>e</kbd> writes internet mail as it was written of the mailbox. <kbd>m</kbd> writes the
 Outlook item from the mailbox itself, beside each <code>.eml</code>, every property kept.</p>
@@ -622,6 +629,8 @@ left out, and the list says so.</p>
 <li>at most 256 messages attached to a message and to those;</li>
 <li>a message of parts within parts is read as deep as twice
   <code>*outlook-nesting-limit*</code>;</li>
+<li>a message or a part has its first 10,000 headers read, or its first megabyte
+  of them; the rest is read as its text, and the message says so;</li>
 <li>folders more than 64 deep are listed under <code>Orphans</code>;</li>
 <li>a folder whose path would pass 1,024 octets has its name cut.</li>
 </ul>
@@ -654,24 +663,24 @@ settings and commands are in chapters 21 and 22 of its manual.</p>
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>h</kbd>, <kbd>C-c o h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
-<tr><td>none</td><td><kbd>C</kbd>, <kbd>C-c o c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
+<tr><td>none</td><td><kbd>C-c h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
+<tr><td>none</td><td><kbd>C-c c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
 <tr><td>none</td><td><kbd>M-x outlook-export-eml</kbd></td><td><code>outlook-export-eml</code></td><td>Copy the messages marked in the mailbox's list (m), or with none marked the one on the current line, out into a directory asked for, as saved mail (.eml).</td></tr>
 <tr><td>none</td><td><kbd>M-x outlook-export-mbox</kbd></td><td><code>outlook-export-mbox</code></td><td>Collect the messages marked in the mailbox's list (m), or with none marked the one on the current line, into one mbox file asked for, the format most mail programs read: each message as it was written, after a From line, a line of it beginning with From (after any number of &gt;) written with one &gt; more, as mboxrd does.</td></tr>
 <tr><td>none</td><td><kbd>M-x outlook-export-msg</kbd></td><td><code>outlook-export-msg</code></td><td>Copy the messages marked in the mailbox's list (m), or with none marked the one on the current line, out into a directory asked for, as Outlook items (.msg), as M-x outlook-export-eml copies them as saved mail.</td></tr>
 <tr><td>none</td><td><kbd>M-x outlook-export-pst</kbd></td><td><code>outlook-export-pst</code></td><td>Write the messages marked in the mailbox's list (m), or with none marked the one on the current line, into a new Outlook mailbox (.pst) asked for, in the folders they are listed in: each with every property, recipient and attachment the Outlook item written of it holds, its named properties among them.</td></tr>
-<tr><td>none</td><td><kbd>L</kbd>, <kbd>C-c o l</kbd></td><td><code>outlook-filter-labels</code></td><td>Narrow the mailbox's list to the messages carrying a label, or any of several, chosen apart by commas from those its messages carry (+); with C-u, to those carrying none of them.</td></tr>
-<tr><td>none</td><td><kbd>+</kbd>, <kbd>C-c o +</kbd></td><td><code>outlook-label</code></td><td>Put labels on the messages marked in the mailbox's list (m), or with none marked on the one on the current line: several, apart by commas, the labels used before offered and new ones typed.</td></tr>
-<tr><td>none</td><td><kbd>M</kbd>, <kbd>C-c o m</kbd></td><td><code>outlook-label-manager</code></td><td>List the labels kept for mailboxes (M-x outlook-label), a section for each mailbox with the labels on its messages, to rename, delete, forget, copy out and read back; the heading says where they are kept and how much room they take.</td></tr>
-<tr><td>none</td><td><kbd>l</kbd>, <kbd>C-f</kbd>, <kbd>RET</kbd></td><td><code>outlook-label-open</code></td><td>Open the mailbox of the section the current line is in, as it was last opened, when its file is there; otherwise say why not.</td></tr>
-<tr><td>none</td><td><kbd>R</kbd>, <kbd>C-c o r</kbd></td><td><code>outlook-label-rename</code></td><td>Rename the label on the current line, or each label marked, asking for the new name of each: on every message of its mailbox that carries it.</td></tr>
-<tr><td>none</td><td><kbd>E</kbd>, <kbd>C-c o e</kbd></td><td><code>outlook-labels-export</code></td><td>Write the labels of the mailbox the current line is in into a file, in the directory and under the name asked for (the mailbox's name and .labels at first): a plain text file holding the mailbox's SHA-256 sum, its file's name and, for each message, its identity and its labels, to be read back by I.</td></tr>
-<tr><td>none</td><td><kbd>D</kbd>, <kbd>C-c o f</kbd></td><td><code>outlook-labels-forget</code></td><td>Forget every label of the mailbox the current line is in, after saying how many labels and messages that is: its journal is deleted, and the mailbox starts without labels the next time it is opened.</td></tr>
-<tr><td>none</td><td><kbd>I</kbd>, <kbd>C-c o i</kbd></td><td><code>outlook-labels-import</code></td><td>Read a file of a mailbox's labels, written by E, and add them to the mailbox whose SHA-256 sum it holds: those it has already stay, and none is taken away.</td></tr>
-<tr><td>none</td><td><kbd>O</kbd>, <kbd>C-c o o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
-<tr><td>none</td><td><kbd>-</kbd>, <kbd>C-c o -</kbd></td><td><code>outlook-unlabel</code></td><td>Take labels off the messages marked in the mailbox's list, or with none marked off the one on the current line: several, apart by commas, chosen from those they carry (+).</td></tr>
-<tr><td>none</td><td><kbd>T</kbd>, <kbd>C-c o t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
-<tr><td>none</td><td><kbd>P</kbd>, <kbd>C-c o p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
+<tr><td>none</td><td><kbd>C-c L</kbd></td><td><code>outlook-filter-labels</code></td><td>Narrow the mailbox's list to the messages carrying a label, or any of several, chosen apart by commas from those its messages carry (C-c +); with C-u, to those carrying none of them.</td></tr>
+<tr><td>none</td><td><kbd>C-c +</kbd></td><td><code>outlook-label</code></td><td>Put labels on the messages marked in the mailbox's list (m), or with none marked on the one on the current line: several, apart by commas, the labels used before offered and new ones typed.</td></tr>
+<tr><td>none</td><td><kbd>C-c M</kbd></td><td><code>outlook-label-manager</code></td><td>List the labels kept for mailboxes (M-x outlook-label), a section for each mailbox with the labels on its messages, to rename, delete, forget, copy out and read back; the heading says where they are kept and how much room they take.</td></tr>
+<tr><td>none</td><td><kbd>C-c O</kbd></td><td><code>outlook-label-open</code></td><td>Open the mailbox of the section the current line is in, as it was last opened, when its file is there; otherwise say why not.</td></tr>
+<tr><td>none</td><td><kbd>C-c R</kbd></td><td><code>outlook-label-rename</code></td><td>Rename the label on the current line, or each label marked, asking for the new name of each: on every message of its mailbox that carries it.</td></tr>
+<tr><td>none</td><td><kbd>C-c e</kbd></td><td><code>outlook-labels-export</code></td><td>Write the labels of the mailbox the current line is in into a file, in the directory and under the name asked for (the mailbox's name and .labels at first): a plain text file holding the mailbox's SHA-256 sum, its file's name and, for each message, its identity and its labels, to be read back by C-c i.</td></tr>
+<tr><td>none</td><td><kbd>C-c f</kbd></td><td><code>outlook-labels-forget</code></td><td>Forget every label of the mailbox the current line is in, after saying how many labels and messages that is: its journal is deleted, and the mailbox starts without labels the next time it is opened.</td></tr>
+<tr><td>none</td><td><kbd>C-c i</kbd></td><td><code>outlook-labels-import</code></td><td>Read a file of a mailbox's labels, written by C-c e, and add them to the mailbox whose SHA-256 sum it holds: those it has already stay, and none is taken away.</td></tr>
+<tr><td>none</td><td><kbd>C-c o</kbd></td><td><code>outlook-open-attachment-outside</code></td><td>Open the attachment at point in the desktop's own program for its kind, after asking: a copy of it only you can read, never the message, and only an attachment of a kind that may be opened outside Tuatara (a picture, a PDF, a sound, a video, an Office document, by its contents, with a name that agrees; see <strong>open-externally-kinds</strong>).</td></tr>
+<tr><td>none</td><td><kbd>C-c -</kbd></td><td><code>outlook-unlabel</code></td><td>Take labels off the messages marked in the mailbox's list, or with none marked off the one on the current line: several, apart by commas, chosen from those they carry (C-c +).</td></tr>
+<tr><td>none</td><td><kbd>C-c t</kbd></td><td><code>outlook-view-file-text</code></td><td>Show the file of the message shown as its text, the file itself: opened safely when the message was (one of a mailbox, an attachment), else as any file is opened, as text.</td></tr>
+<tr><td>none</td><td><kbd>C-c p</kbd></td><td><code>outlook-view-pages</code></td><td>Show the message shown as it looks, as pages: its HTML laid out as a screen shows it, drawn by <strong>outlook-page-program</strong> (WeasyPrint) shut in the sandbox, the pictures it holds in their places.</td></tr>
 </tbody></table></div>
 <h2 id="08-every-command-and-setting--every-setting"><span class="num">8.2</span> Every setting</h2>
 <div class="tablewrap"><table>

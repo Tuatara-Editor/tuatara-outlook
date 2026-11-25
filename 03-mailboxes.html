@@ -13,7 +13,7 @@
 <div class="site">
 <nav class="toc" id="contents" aria-label="Contents">
 <strong>outlook Manual</strong>
-<small>for Tuatara 0.90.38 and later</small>
+<small>for Tuatara 0.90.44 and later</small>
 <p class="tools"><a href="all.html">All on one page</a>
 <button type="button" class="theme" hidden>Dark</button></p>
 <input type="search" placeholder="Search the manual" aria-label="Search the manual">
@@ -123,9 +123,8 @@ This needs Tuatara 0.90.38 or later.</p>
 <tr><td><kbd>P</kbd></td><td>Turns the preview off and on.</td></tr>
 <tr><td><kbd>q</kbd></td><td>Closes the list. What was written of it stays in the</td></tr>
 <tr><td></td><td>cache, so the mailbox opens again at once.</td></tr>
-<tr><td><kbd>h</kbd></td><td>Asks, then closes the list and goes back to its</td></tr>
+<tr><td><kbd>C-c h</kbd></td><td>Asks, then closes the list and goes back to its</td></tr>
 <tr><td></td><td>directory in rimu, on the mailbox.</td></tr>
-<tr><td><kbd>C-c o h</kbd></td><td>The same as <kbd>h</kbd>.</td></tr>
 </tbody></table></div>
 <p>The moves by word (<kbd>w</kbd>, <kbd>b</kbd>, <kbd>W</kbd>, <kbd>B</kbd>) do nothing in the list. <kbd>V</kbd> is the one
 selection, of whole lines.</p>
@@ -135,7 +134,7 @@ selection, of whole lines.</p>
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>h</kbd>, <kbd>C-c o h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
+<tr><td>none</td><td><kbd>C-c h</kbd></td><td><code>outlook-back-to-directory</code></td><td>Close the list of the mailbox, after asking, and list its directory with rimu, point on the mailbox: the messages written of it stay in the cache, as when it is closed any other way, until unused for <strong>CACHE-KEEP</strong>.</td></tr>
 </tbody></table></div>
 <h2 id="the-preview"><span class="num">3.7</span> The preview</h2>
 <p>As the cursor goes from line to line of a list, the message on the line is shown

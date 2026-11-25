@@ -13,7 +13,7 @@
 <div class="site">
 <nav class="toc" id="contents" aria-label="Contents">
 <strong>outlook Manual</strong>
-<small>for Tuatara 0.90.38 and later</small>
+<small>for Tuatara 0.90.44 and later</small>
 <p class="tools"><a href="all.html">All on one page</a>
 <button type="button" class="theme" hidden>Dark</button></p>
 <input type="search" placeholder="Search the manual" aria-label="Search the manual">
@@ -25,7 +25,7 @@
 <h1 id="copying-messages-out">Copying messages out</h1>
 <p class="lead">Messages from a mailbox as files, as one mbox file, or as a new mailbox.</p>
 <h2 id="the-menu"><span class="num">6.1</span> The menu</h2>
-<p><kbd>C</kbd> in a mailbox's list (<kbd>C-c o c</kbd>) opens a menu of copying out the messages
+<p><kbd>C-c c</kbd> in a mailbox's list opens a menu of copying out the messages
 marked with <kbd>m</kbd>, or, with none marked, the one on the line. <kbd>C-h</kbd> there lists
 the menu.</p>
 <div class="tablewrap"><table>
@@ -48,15 +48,16 @@ and <kbd>M-x outlook-export-pst</kbd> do the same without the menu.</p>
 <tr><th>Modal</th><th>Non-modal</th><th>Command</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>none</td><td><kbd>C</kbd>, <kbd>C-c o c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
+<tr><td>none</td><td><kbd>C-c c</kbd></td><td><code>outlook-export</code></td><td>Open the menu of copying the messages marked in the mailbox's list, or with none marked the one on the current line, out: e as saved mail (.eml) and m as Outlook items (.msg) into a directory, b into one mbox file, p into a new Outlook mailbox (.pst), the directory or the file asked for then.</td></tr>
 </tbody></table></div>
-<p>Marks stay on messages a filter hides, and <kbd>C</kbd> copies them too. The question
+<p>Marks stay on messages a filter hides, and <kbd>C-c c</kbd> copies them too. The question
 names how many it copies.</p>
 <p><kbd>a</kbd> in the menu, All shown, switches from the messages marked to every message
 the list's filters leave, those under folded folders too, marked or not. So <kbd>C a
 e</kbd> copies out as saved mail all that a search, a label or a field filter left.</p>
 <p>Copying runs in the background. The message line then says how many were copied
-and which could not be.</p>
+and which could not be. Nothing is copied into an evidence directory, nor where
+you may not write: the message line says why, before anything is written.</p>
 <h2 id="files-one-for-each-message"><span class="num">6.2</span> Files, one for each message</h2>
 <p><kbd>e</kbd> writes internet mail as it was written of the mailbox. <kbd>m</kbd> writes the
 Outlook item from the mailbox itself, beside each <code>.eml</code>, every property kept.</p>
