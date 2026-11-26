@@ -370,16 +370,25 @@ buckets, each (BUCKET . OCTETS) among 251 (2.4.7.5), four values."
                         collect (cons bucket (pst-join (reverse held))))
                   #'< :key #'car))))
 
+(defvar *pst-names-left-out* nil
+  "While a count, how many named properties PST-RENAMED has left out because
+the numbers from #x8000 to #xFFFF were all given; NIL when not counted.")
+
 (defun pst-renamed (message names)
   "MESSAGE, a PST-MESSAGE, with each named property among its properties,
 its recipients' and its attachments', and those of the messages attached to
 it, numbered as NAMES numbers what it stands for: NAMES a table from (GUID .
 NAME) to a number from #x8000, given the next number for one it lacks. A
-named property whose meaning MESSAGE does not give is left out."
+named property whose meaning MESSAGE does not give is left out, and so is one
+new to NAMES once every number up to #xFFFF is given (counted in
+*PST-NAMES-LEFT-OUT*)."
   (labels ((number (own id)
              (let ((name (cdr (assoc id own))))
                (and name (or (gethash name names)
-                             (setf (gethash name names) (+ #x8000 (hash-table-count names)))))))
+                             (if (< (hash-table-count names) #x8000)
+                                 (setf (gethash name names) (+ #x8000 (hash-table-count names)))
+                                 (progn (when *pst-names-left-out* (incf *pst-names-left-out*))
+                                        nil))))))
            (renamed (properties own)
              (loop for (tag . value) in properties
                    for id = (ldb (byte 16 16) tag)

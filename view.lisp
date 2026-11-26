@@ -12,6 +12,11 @@
 
 (in-package #:outlook)
 
+(defparameter *mail-earlier-most* 50
+  "The most earlier messages of a conversation whose attachments a message
+shows, the latest of them, so that opening a message of a long conversation
+reads no more than these.")
+
 (define-major-mode outlook-view-mode special-mode
   "A message read, read only: an Outlook item (.msg), a saved mail (.eml) or a
 message of a mailbox. It shows who it is from and to, its dates and subject,
@@ -230,11 +235,6 @@ Outlook item, whose words of itself it shows too, or NIL."
 
 (defvar *mail-previews* '()
   "The buffers showing a message in the preview beside a mailbox's list.")
-
-(defparameter *mail-earlier-most* 50
-  "The most earlier messages of a conversation whose attachments a message
-shows, the latest of them, so that opening a message of a long conversation
-reads no more than these.")
 
 (defun mail-attachment-held-apart (attachment path index)
   "A copy of ATTACHMENT, the one at INDEX among the attachments of the message
@@ -616,14 +616,17 @@ Returns the buffer, or NIL for a file of another kind."
                             (lambda (b) (car (buffer-local b 'mail-source)))
                             (lambda () (mail-view-buffer native)) show))))))
 
-(defun outlook-preview-text (fd path size kind octets)
+(defun outlook-preview-text (fd path size kind octets &optional list)
   "The preview of an Outlook item, a saved mail or a mailbox (a function of
 *PREVIEW-TEXT-FUNCTIONS*, the file descriptor (FD), PATH, SIZE, KIND and OCTETS
-as it gives them): a message's headers, attachments and the start of its text; a
-mailbox's size and how to read it; NIL for any other file."
+as it gives them, LIST the list it is shown from when given): a message's
+headers, attachments and the start of its text; a mailbox's size and how to
+read it; NIL for any other file, and for a file Tuatara may not read itself
+\(READ-HERE-P), such as one in a list opened safely."
   (let* ((name (native-file-name path))
          (type (native-file-type name)))
-    (cond ((eq kind :pst) (mailbox-preview-words name size))
+    (cond ((not (read-here-p path list)) nil)
+          ((eq kind :pst) (mailbox-preview-words name size))
           ((and (<= size *outlook-largest-file*)
                 (or (and (string-equal type "msg") (eq kind :ole))
                     (and (string-equal type "eml") (not (binary-head-p octets)))))

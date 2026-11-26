@@ -89,10 +89,7 @@ iCalendar, else :mail."
 (defun item-date-words (time)
   "The universal time TIME as mail writes a date (RFC 5322), in universal
 time: Tue, 06 Oct 2026 09:00:00 +0000."
-  (multiple-value-bind (second minute hour day month year weekday) (decode-universal-time time 0)
-    (format nil "~a, ~2,'0d ~a ~d ~2,'0d:~2,'0d:~2,'0d +0000"
-            (svref *short-weekday-names* (mod (1+ weekday) 7)) day
-            (aref *short-month-names* (1- month)) year hour minute second)))
+  (format-time "%a, %d %b %Y %T +0000" time :utc t))
 
 (defun item-address (name address)
   "A person as a header names them: NAME in encoded words when it is not
@@ -360,11 +357,20 @@ email addresses, telephone numbers, company, title and notes."
                       (and (text #x1000) (format nil "NOTE:~a" (content-text-escaped (text #x1000))))
                       "END:VCARD")))))))
 
+(defun item-calendar-address (property name address)
+  "The line of the iCalendar PROPERTY (ORGANIZER, ATTENDEE) for a person called
+NAME at ADDRESS, either NIL: the address found in ADDRESS (MAIL-ADDRESS-IN) as
+a mailto: URI, NAME as its CN parameter; NIL, the property left out, when
+ADDRESS holds no address."
+  (let ((found (and address (mail-address-in address))))
+    (and found
+         (format nil "~a~@[;CN=~a~]:mailto:~a" property (and name (content-parameter-text name))
+                 (percent-encoded found :safe "-._~!$&'*+=@")))))
+
 (defun item-ical-time (time)
   "The universal time TIME as iCalendar writes one in universal time:
 20261006T090000Z."
-  (multiple-value-bind (second minute hour day month year) (decode-universal-time time 0)
-    (format nil "~4,'0d~2,'0d~2,'0dT~2,'0d~2,'0d~2,'0dZ" year month day hour minute second)))
+  (format-time "%Y%m%dT%H%M%SZ" time :utc t))
 
 (defun item-icalendar (message nid &key record-key)
   "MESSAGE, an appointment, a task or a journal entry, the node NID of its
@@ -402,16 +408,10 @@ the export when it has none."
                   (:task (list (when-time "DTSTART" (item-named-time message task #x8104))
                                (when-time "DUE" (item-named-time message task #x8105))))
                   (t (list (when-time "DTSTART" (item-time properties #x00600040)))))
-                (let ((organiser (item-text properties #x0042)))
-                  (list (and organiser (format nil "ORGANIZER;CN=~a:mailto:~a" (content-parameter-text organiser)
-                                               (content-text-escaped (or (item-text properties #x0065) organiser))))))
+                (list (item-calendar-address "ORGANIZER" (item-text properties #x0042) (item-text properties #x0065)))
                 (loop for recipient in (pst-message-recipients message)
-                      for name = (item-text recipient #x3001 charset)
                       for address = (or (item-text recipient #x39FE charset) (item-text recipient #x3003 charset))
-                      when (or name address)
-                        collect (format nil "ATTENDEE~@[;CN=~a~]:mailto:~a"
-                                        (and name (content-parameter-text name))
-                                        (content-text-escaped (or address name))))
+                      collect (item-calendar-address "ATTENDEE" (item-text recipient #x3001 charset) address))
                 (list (and (text #x1000) (format nil "DESCRIPTION:~a" (content-text-escaped (text #x1000))))
                       (format nil "END:~a" component) "END:VCALENDAR")))))))
 

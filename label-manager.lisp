@@ -451,10 +451,12 @@ their mailboxes, after asking; done in the background."
   (declare (ignore mark))
   (let ((sets (mapcar #'mailbox-label-set-named (remove-duplicates (mapcar #'car keys) :test #'string=))))
     (when (and keys (mailbox-labels-free-p list)
-               (yes-or-no-p*
-                (format nil "~a off every message of ~:[their mailboxes~;~:*~a~]?"
-                        (list-question "Take" "label" keys :name-of #'cdr)
-                        (and (null (rest sets)) (first sets) (mailbox-label-set-title (first sets))))))
+               (multiple-value-bind (question details)
+                   (list-question "Take" "label" keys :name-of #'cdr
+                                  :after (if (rest sets) "off every message of their mailboxes"
+                                             "off every message of its mailbox")
+                                  :details (names-shown (remove nil sets) :name-of #'mailbox-label-set-title))
+                 (yes-or-no-p* (format nil "~a?" question) :details details)))
       (mailbox-labels-start
        list "taking labels off"
        (lambda ()
@@ -485,9 +487,10 @@ It is done in the background."
       (let ((set (mailbox-label-set-named journal)))
         (when (and set (mailbox-labels-free-p list)
                    (yes-or-no-p*
-                    (format nil "Forget the ~:d label~:p on ~:d message~:p of ~a~:[~; (with deleted items)~]?"
-                            (length (mailbox-label-set-labels set)) (mailbox-label-set-messages set)
-                            (mailbox-label-set-title set) (mailbox-label-set-deleted set))))
+                    (format nil "Forget the ~:d label~:p on ~:d message~:p?"
+                            (length (mailbox-label-set-labels set)) (mailbox-label-set-messages set))
+                    :details (format nil "Of ~a~:[~;, deleted items among them~]."
+                                     (mailbox-label-set-title set) (mailbox-label-set-deleted set))))
           (let ((writers '()))
             (loop for (buffer name nil writer) in (mailbox-open-lists)
                   when (string= name journal)
@@ -557,9 +560,10 @@ directory. It is written in the background."
       (let ((set (mailbox-label-set-named journal)))
         (if (or (null set) (not (mailbox-labels-free-p list)))
             (unless set (message "~a" (mailbox-labels-gone-words)))
-            (let ((path (read-native-path (format nil "Write the labels of ~a into: " (mailbox-label-set-title set))
+            (let ((path (read-native-path "Write the labels into: "
                                           :kind :any :writing t
-                                          :initial (format nil "~a.labels" (mailbox-label-set-title set)))))
+                                          :initial (format nil "~a.labels" (mailbox-label-set-title set))
+                                          :details (format nil "The labels of ~a." (mailbox-label-set-title set)))))
               (if (null path)
                   (message "No file named: nothing written")
                   (mailbox-labels-start list "writing a file" (lambda () (mailbox-export-labels set path))))))))))

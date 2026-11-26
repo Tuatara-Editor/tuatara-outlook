@@ -18,8 +18,8 @@ The message, its attachments, and how to see it as a mail program shows it.
 | ~C-c o~                         | Opens the attachment at point in the       |
 |                                 | desktop's own program for its kind, after  |
 |                                 | asking. See below.                         |
-| ~C-c p~                         | Shows the message as it looks. ~C-c t~     |
-|                                 | there comes back to the message.           |
+| ~C-c p~                         | Shows the message as it looks. ~T~ there   |
+|                                 | comes back to the message.                 |
 | ~C-c t~                         | Shows the message's file as its text:      |
 |                                 | opened safely when the message came from a |
 |                                 | mailbox or an attachment, else as any file |
@@ -100,5 +100,5 @@ this one's is earlier in the same conversation. The links are read as the
 mailbox is listed and looked up in tables made once. Reading the earlier mails
 is part of reading the message, in the background.
 
-In the Enron sample mailbox (71 messages) every message has a conversation
-index, none has =In-Reply-To= or =References=, and two find an earlier message.
+In a sample mailbox of 71 messages every message has a conversation index,
+none has =In-Reply-To= or =References=, and two find an earlier message.

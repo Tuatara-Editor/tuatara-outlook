@@ -67,21 +67,29 @@ is the start of ITEM's. A Message-ID that several messages give is said. In
 the order they were sent, ITEM never among them."
   (destructuring-bind (&optional id earlier index source) (mailbox-item-thread item)
     (declare (ignore id))
-    (let ((seen (make-hash-table :test 'eq)) (found '()))
-      (setf (gethash item seen) t)
-      (loop with waiting = (mapcar (lambda (link) (list (car link) (cdr link) nil)) earlier)
-            while (and waiting (< (hash-table-count seen) *mailbox-thread-most*))
-            do (destructuring-bind (named header by) (pop waiting)
-                 (let ((others (gethash named (car tables))))
-                   (dolist (other others)
-                     (unless (gethash other seen)
-                       (setf (gethash other seen) t)
-                       (push (cons other (format nil "by ~a~@[ of ~a~]~:[~*~;; ~a is the Message-ID of ~:d messages~]"
-                                                 header by (rest others) named (length others)))
-                             found)
-                       (dolist (link (second (mailbox-item-thread other)))
-                         (setf waiting
-                               (append waiting (list (list (car link) (cdr link) (mailbox-item-name other)))))))))))
+    (let ((seen (make-hash-table :test 'eq)) (found '())
+          ;; the links still to follow, each (NAMED HEADER BY), in the order found; each Message-ID once
+          (waiting (make-array 16 :adjustable t :fill-pointer 0))
+          (queued (make-hash-table :test 'equal)))
+      (flet ((wait-for (named header by)
+               (unless (gethash named queued)
+                 (setf (gethash named queued) t)
+                 (vector-push-extend (list named header by) waiting))))
+        (setf (gethash item seen) t)
+        (dolist (link earlier) (wait-for (car link) (cdr link) nil))
+        (loop for next from 0
+              while (and (< next (fill-pointer waiting)) (< (hash-table-count seen) *mailbox-thread-most*))
+              do (destructuring-bind (named header by) (aref waiting next)
+                   (let ((others (gethash named (car tables))))
+                     (dolist (other others)
+                       (unless (gethash other seen)
+                         (setf (gethash other seen) t)
+                         (push (cons other
+                                     (format nil "by ~a~@[ of ~a~]~:[~*~;; ~a is the Message-ID of ~:d messages~]"
+                                             header by (rest others) named (length others)))
+                               found)
+                         (dolist (link (second (mailbox-item-thread other)))
+                           (wait-for (car link) (cdr link) (mailbox-item-name other)))))))))
       (when (and (null found) index)
         (loop for end from 44 below (length index) by 10
               do (dolist (other (gethash (subseq index 0 end) (cdr tables)))

@@ -301,11 +301,7 @@ line: NAME=\"VALUE\" when VALUE is printable ASCII, else with VALUE in UTF-8
 percent-encoded (RFC 2231), NAME*=utf-8''..."
   (if (mime-ascii-p value)
       (format nil "~a=\"~a\"" name (cl-ppcre:regex-replace-all "([\"\\\\])" value "\\\\\\1"))
-      (format nil "~a*=utf-8''~{~a~}" name
-              (loop for o across (string-octets value)
-                    collect (if (or (<= 48 o 57) (<= 65 o 90) (<= 97 o 122) (find (code-char o) "-._~"))
-                                (string (code-char o))
-                                (format nil "%~2,'0X" o))))))
+      (format nil "~a*=utf-8''~a" name (percent-encoded value :safe "-._~"))))
 
 (defun mime-header-line (name value)
   "The header NAME with VALUE as a line of mail, folded before a space where

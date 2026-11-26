@@ -281,9 +281,10 @@ match as they did."
 
 (defun mailbox-relabel (job items change)
   "Give each of ITEMS of the mailbox JOB read the labels CHANGE, a function of
-its labels, makes of them; keep the changes, show the list again and work its
-filters on labels out again (MAILBOX-REFILTER-LABELS)."
-  (let ((table (mailbox-job-labels job)) (lines '()))
+its labels, makes of them; keep the changes, show their lines again and work
+the list's filters on labels out again (MAILBOX-REFILTER-LABELS). The whole
+list is drawn again only when its column of labels comes or goes."
+  (let* ((table (mailbox-job-labels job)) (lines '()) (labelled (plusp (hash-table-count table))))
     (dolist (item items)
       (let* ((identity (mailbox-item-identity item))
              (had (gethash identity table))
@@ -297,7 +298,9 @@ filters on labels out again (MAILBOX-REFILTER-LABELS)."
         (if labels (setf (gethash identity table) labels) (remhash identity table))))
     (mailbox-keep-labels job (nreverse lines))
     (let ((list (job-buffer job)))
-      (mailbox-render list job :keep)
+      (if (eq labelled (plusp (hash-table-count table)))
+          (redraw-table-rows list items)
+          (mailbox-render list job :keep))
       (mailbox-refilter-labels list))))
 
 (define-command outlook-label ()
@@ -311,16 +314,16 @@ the mailbox nor beside it, and come back whenever that mailbox is opened again.
 the messages carrying them."
   (multiple-value-bind (job items) (mailbox-labelled-items)
     (when job
-      (let* ((words (list-question nil "message" items :name-of #'mailbox-item-name))
-             (labels (remove nil (mapcar #'mailbox-clean-label
-                                         (read-several (format nil "Label ~a with: " words)
-                                                       (lambda () (mailbox-labels-used job))
-                                                       :none "no label" :more "no more labels")))))
-        (if (null labels)
-            (message "No label given: nothing labelled")
-            (progn (mailbox-relabel job items (lambda (had) (remove-duplicates (append had labels) :test #'string=
-                                                                                                    :from-end t)))
-                   (message "~{~a~^, ~} put on ~a" labels words)))))))
+      (multiple-value-bind (words details) (mailbox-items-question items)
+        (let ((labels (remove nil (mapcar #'mailbox-clean-label
+                                          (read-several (format nil "Label ~a with: " words)
+                                                        (lambda () (mailbox-labels-used job))
+                                                        :none "no label" :more "no more labels" :details details)))))
+          (if (null labels)
+              (message "No label given: nothing labelled")
+              (progn (mailbox-relabel job items (lambda (had) (remove-duplicates (append had labels) :test #'string=
+                                                                                                      :from-end t)))
+                     (message "~{~a~^, ~} put on ~a" labels words))))))))
 
 (define-command outlook-unlabel ()
   "Take labels off the messages marked in the mailbox's list, or with none
@@ -333,9 +336,9 @@ those they carry (\\<outlook-mailbox-mode>\\[outlook-label])."
                            #'string<)))
         (if (null carried)
             (message "~a no label" (if (rest items) "They carry" "It carries"))
-            (let ((labels (read-several (format nil "Take off ~a: "
-                                                (list-question nil "message" items :name-of #'mailbox-item-name))
-                                        (lambda () carried) :none "no label" :more "no more labels")))
+            (let ((labels (multiple-value-bind (words details) (mailbox-items-question items)
+                            (read-several (format nil "Take off ~a: " words) (lambda () carried)
+                                          :none "no label" :more "no more labels" :details details))))
               (if (null labels)
                   (message "No label given: nothing taken off")
                   (progn (mailbox-relabel job items (lambda (had)

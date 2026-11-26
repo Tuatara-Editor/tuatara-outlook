@@ -709,7 +709,7 @@ WeasyPrint installed in it and a program drawing PDFs."
           ;; P: its HTML drawn as pages, shut in, the script not run and nothing fetched; T back to the message
           (let ((pages nil) (back nil))
             (multiple-value-bind (f editor)
-                (outlook-session html (list "C-c p" (lambda () (setf pages (tuatara:current-buffer))) "C-c t"
+                (outlook-session html (list "C-c p" (lambda () (setf pages (tuatara:current-buffer))) "T"
                                             (lambda () (setf back (tuatara:current-buffer)))))
               (declare (ignore f))
               (is string= "survey.msg (as it looks)" (tuatara.buffer:buffer-name pages))
@@ -1237,6 +1237,27 @@ and the subjects kept."
           (is = 1 (relabel "ruru")))
         (tuatara.buffer:kill-buffer list)))))
 
+(define-test (outlook mailbox-relabel-redraws-its-lines-alone)
+  ;; once the list has its column of labels, a label put on draws the message's line again, not the list
+  (with-test-directory (dir)
+    (let ((sum (format nil "test~36r" (random (expt 2 40)))))
+      (multiple-value-bind (list job) (mailbox-test-list dir *mailbox-label-test-messages* :sum sum)
+        (flet ((relabel (subject label)
+                 (prog1 (nth-value 1 (tuatara.tests::counting-calls (outlook::mailbox-render)
+                                       (outlook::mailbox-relabel
+                                        job (list (find subject (cdr (first (outlook::mailbox-job-folders job)))
+                                                        :key #'outlook::mailbox-item-subject :test #'search))
+                                        (lambda (had) (append had (list label))))))
+                   (wait-for-mailbox-labels))))
+          ;; the first label brings the column: the list drawn whole
+          (is = 1 (relabel "First" "kea"))
+          (is = 0 (relabel "Second" "tui"))
+          (has (mailbox-test-subject-line list "Second") "tui")
+          (has (mailbox-test-subject-line list "First") "kea")
+          (is = 0 (relabel "First" "ruru"))
+          (has (mailbox-test-subject-line list "First") "kea, ruru"))
+        (tuatara.buffer:kill-buffer list)))))
+
 (defun mailbox-test-meta (sum)
   "What the journal of the mailbox SUM tells of the mailbox (MAILBOX-JOURNAL-META)."
   (outlook::mailbox-journal-meta
@@ -1533,6 +1554,58 @@ picture; and a message of neither."
           (cons "Inbox/5.eml" (format nil "Subject: Fifth~%Thread-Index: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgIC~%~%fwd~%"))
           (cons "Inbox/6.eml" (format nil "Subject: Sixth~%~%alone~%")))))
 
+(define-test (outlook named-properties-stop-at-ffff)
+  ;; once a mailbox's numbers for named properties are all given, a new name is left out and counted, never
+  ;; numbered past #xFFFF into another property's tag
+  (let ((names (make-hash-table :test 'equalp))
+        (guid (make-array 16 :element-type '(unsigned-byte 8) :initial-element 7))
+        (outlook::*pst-names-left-out* 0))
+    (dotimes (i #x8000) (setf (gethash (cons guid i) names) (+ #x8000 i)))
+    (let ((renamed (outlook::pst-renamed (outlook::make-pst-message
+                                          :properties (list (cons #x8000001F "x") (cons #x8001001F "y"))
+                                          :names (list (list* #x8000 guid 5) (list* #x8001 guid "new")))
+                                         names)))
+      (is equal '(#x8005001F) (mapcar #'car (outlook::pst-message-properties renamed)))
+      (is = 1 outlook::*pst-names-left-out*)
+      (is = #x8000 (hash-table-count names)))))
+
+(define-test (outlook label-question-names-no-subject)
+  ;; the question for one message says "the message"; its subject is in the details beside it
+  (let ((item (outlook::make-mailbox-item :path "/m/Inbox/1" :message t :subject "Kea survey results"))
+        (asked nil))
+    (sb-int:encapsulate 'outlook::mailbox-labelled-items 'cs-one
+                        (lambda (function) (declare (ignore function)) (values t (list item))))
+    (sb-int:encapsulate 'tuatara:read-several 'cs-asked
+                        (lambda (function prompt offered &rest keys)
+                          (declare (ignore function offered))
+                          (setf asked (list prompt (getf keys :details)))
+                          nil))
+    (unwind-protect (outlook::outlook-label)
+      (sb-int:unencapsulate 'outlook::mailbox-labelled-items 'cs-one)
+      (sb-int:unencapsulate 'tuatara:read-several 'cs-asked))
+    (is string= "Label the message with: " (first asked))
+    (true (search "Kea survey results" (or (second asked) "")) "~s" asked)
+    (is string= "3 messages" (outlook::mailbox-items-question (list item item item)))))
+
+(define-test (outlook mailbox-earlier-items-in-linear-time)
+  ;; 1,000 messages each naming 300 others in References: the walk back ends within a bound
+  (let* ((ids (loop for i below 1000 collect (format nil "<m~d@example.org>" i)))
+         (items (loop for i below 1000
+                      collect (outlook::make-mailbox-item
+                               :path (format nil "/m/Inbox/~d" i) :message t :attachments 1 :sent i
+                               :thread (list (nth i ids)
+                                             (loop for j below 300
+                                                   collect (cons (nth (mod (+ i 1 (* j 7)) 1000) ids) "References"))
+                                             nil nil))))
+         (tables (outlook::mailbox-thread-tables (list (cons "Inbox" items))))
+         (found :unfinished)
+         (walk (sb-thread:make-thread (lambda () (setf found (outlook::mailbox-earlier-items tables (first items))))
+                                      :name "earlier items")))
+    (when (eq :unfinished (sb-thread:join-thread walk :timeout 5 :default :unfinished))
+      (sb-thread:terminate-thread walk))
+    (true (listp found) "the walk did not end within 5 s")
+    (true (<= 900 (length found) 999) "~d found" (and (listp found) (length found)))))
+
 (define-test (outlook mailbox-earlier-attachments)
   (with-test-directory (dir)
     (multiple-value-bind (list job) (mailbox-test-list dir (mailbox-thread-test-messages))
@@ -1818,7 +1891,17 @@ picture; and a message of neither."
                                                                                                                4096))))
                                      (has text "Kea survey results")
                                      (has text "kea.png")
-                                     (has text "Twelve kea"))))))
+                                     (has text "Twelve kea"))))
+      ;; shown from a list opened safely, the item is not parsed in the editor
+      (let ((list (tuatara.buffer:make-buffer "*safe list*" :text "")))
+        (setf (tuatara.io:safe-visit-p list) t)
+        (unwind-protect
+             (tuatara.io:call-with-file path
+                                        (lambda (fd name size)
+                                          (false (outlook::outlook-preview-text
+                                                  fd name size :ole (tuatara.io:read-fd-start fd name size 4096)
+                                                  list))))
+          (tuatara.buffer:kill-buffer list)))))
   ;; a path is no package's name
   (fail (tuatara-user:load-package "../outlook"))
   ;; the package's views and preview in place
@@ -3554,13 +3637,16 @@ at the big one (PST-TEST-SHARED-ATTACHMENTS)."
 
 (define-test (outlook icalendar-uid-and-names)
   ;; the same node of two mailboxes gives two UIDs; an item with no time of its own gets the time of the
-  ;; export as its DTSTAMP, which RFC 5545 requires; names with commas and colons are quoted as parameters
+  ;; export as its DTSTAMP, which RFC 5545 requires; names with commas and colons are quoted as parameters;
+  ;; a person is written with an address as a mailto: URI, or not at all
   (let* ((message (outlook::make-pst-message
                    :properties (list (outlook::pst-property #x001A001F "IPM.Appointment")
                                      (outlook::pst-property #x0037001F "Bird count")
-                                     (outlook::pst-property #x0042001F "Smith, John"))
+                                     (outlook::pst-property #x0042001F "Smith, John")
+                                     (outlook::pst-property #x0065001F "john.smith@example.org"))
                    :recipients (list (list (outlook::pst-property #x3001001F "Doe: Sales")
-                                           (outlook::pst-property #x3003001F "doe@example.org")))))
+                                           (outlook::pst-property #x3003001F "doe@example.org"))
+                                     (list (outlook::pst-property #x3001001F "Kea, without address")))))
          (one (outlook::item-icalendar message #x2224 :record-key (outlook::pst-octets 16)))
          (other (outlook::item-icalendar message #x2224 :record-key (make-array 16 :element-type '(unsigned-byte 8)
                                                                                     :initial-element 7))))
@@ -3573,8 +3659,14 @@ at the big one (PST-TEST-SHARED-ATTACHMENTS)."
       (is = 24 (length (line one "DTSTAMP:")) "~a" (line one "DTSTAMP:"))
       (is string= (line one "UID:")
           (line (outlook::item-icalendar message #x2224 :record-key (outlook::pst-octets 16)) "UID:"))
-      (is string= "ORGANIZER;CN=\"Smith, John\":mailto:Smith\\, John" (line one "ORGANIZER"))
-      (is string= "ATTENDEE;CN=\"Doe: Sales\":mailto:doe@example.org" (line one "ATTENDEE")))))
+      (is string= "ORGANIZER;CN=\"Smith, John\":mailto:john.smith@example.org" (line one "ORGANIZER"))
+      (is string= "ATTENDEE;CN=\"Doe: Sales\":mailto:doe@example.org" (line one "ATTENDEE"))
+      (false (search "without address" one))
+      (false (line (outlook::item-icalendar (outlook::make-pst-message
+                                             :properties (list (outlook::pst-property #x001A001F "IPM.Appointment")
+                                                               (outlook::pst-property #x0042001F "Smith, John")))
+                                            #x2224 :record-key (outlook::pst-octets 16))
+                   "ORGANIZER")))))
 
 ;;; The label manager
 

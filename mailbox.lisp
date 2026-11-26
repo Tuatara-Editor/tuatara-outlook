@@ -205,6 +205,15 @@ were read. Nothing else of an attachment is decoded."
   "What ITEM of a mailbox is called in questions and messages: its subject."
   (or (mailbox-item-subject item) "(no subject)"))
 
+(defun mailbox-items-question (items)
+  "ITEMS, messages of a mailbox, as a question names them, two values: the
+words on the question itself, \"the message\" or \"3 messages\", and the
+details shown beside it: what LIST-QUESTION says of them (hidden by a filter,
+in a folded section), then their subjects."
+  (let ((subjects (names-shown items :name-of #'mailbox-item-name)))
+    (values (if (rest items) (format nil "~:d messages" (length items)) "the message")
+            (nth-value 1 (list-question nil "message" items :details subjects)))))
+
 (defun mailbox-text-file (path text)
   "PATH, where TEXT for a search of a mailbox's list is kept: written there, a
 new file for you alone, unless an earlier listing of the same messages wrote
@@ -956,7 +965,10 @@ one file.")
            :documentation "For a pst file, the folders the items go in, each (NAMES . ITEMS) as WRITE-PST takes them.")
   (copied 0 :documentation "How many items have been copied so far.")
   (not-copied '() :documentation "The items that could not be copied, each (ITEM . WHY).")
-  (written nil :documentation "The mbox or pst file once made."))
+  (written nil :documentation "The mbox or pst file once made.")
+  (names-left-out 0
+                  :documentation "For a pst file, how many named properties were left out, the mailbox's numbers for
+them all given (WRITE-PST)."))
 
 (define-job-words mailbox-export-job
   :doing "Copying messages out"
@@ -993,10 +1005,7 @@ from (MAILER-DAEMON for none), and the date in universal time as asctime
 writes it, then a line feed."
   (let* ((header (or (mime-header part "return-path") (mime-header part "from") ""))
          (address (or (mail-address-in header) "MAILER-DAEMON")))
-    (multiple-value-bind (second minute hour day month year weekday) (decode-universal-time (or sent 0) 0)
-      (format nil "From ~a ~a ~a ~2d ~2,'0d:~2,'0d:~2,'0d ~d~%"
-              address (svref *short-weekday-names* (mod (1+ weekday) 7))
-              (aref *short-month-names* (1- month)) day hour minute second year))))
+    (format nil "From ~a ~a~%" address (format-time "%a %b %e %T %Y" (or sent 0) :utc t))))
 
 (defun mbox-write-message (fd path octets)
   "Write OCTETS, a message, to the mbox file open as FD at PATH as mboxrd
@@ -1076,14 +1085,16 @@ cannot be read. The file is deleted when the job is stopped or fails."
      (let ((done nil))
        (unwind-protect
             (progn
-              (write-pst fd path (native-file-stem path) (mailbox-export-job-folders job)
-                         :each (lambda (item)
-                                 (job-check-stop)
-                                 (handler-case (prog1 (mailbox-pst-message item)
-                                                 (incf (mailbox-export-job-copied job)))
-                                   (error (e)
-                                     (push (cons item (princ-to-string e)) (mailbox-export-job-not-copied job))
-                                     nil))))
+              (setf (mailbox-export-job-names-left-out job)
+                    (nth-value 1 (write-pst fd path (native-file-stem path) (mailbox-export-job-folders job)
+                                            :each (lambda (item)
+                                                    (job-check-stop)
+                                                    (handler-case (prog1 (mailbox-pst-message item)
+                                                                    (incf (mailbox-export-job-copied job)))
+                                                      (error (e)
+                                                        (push (cons item (princ-to-string e))
+                                                              (mailbox-export-job-not-copied job))
+                                                        nil))))))
               (setf done t))
          (unless done
            (handler-case (remove-file path) (file-system-error () nil))
@@ -1115,10 +1126,12 @@ pst, write them into a new mailbox (MAILBOX-EXPORT-PST-WORK)."
 (defmethod job-take-in ((job mailbox-export-job))
   "Say how many messages were copied out and where, and which could not be."
   (let ((missed (reverse (mailbox-export-job-not-copied job))))
-    (message "~:[~a~;~*Copied ~:d message~:p into ~a~]~@[; not copied: ~{~a~^, ~}~]"
+    (message "~:[~a~;~*Copied ~:d message~:p into ~a~]~@[; ~:d named propert~:@p left out, the mailbox's ~
+              32,768 names all given~]~@[; not copied: ~{~a~^, ~}~]"
              (eq (job-status job) :done) (ignore-errors (job-ending-words job))
              (mailbox-export-job-copied job)
              (or (mailbox-export-job-written job) (mailbox-export-job-directory job))
+             (let ((left (mailbox-export-job-names-left-out job))) (and left (plusp left) left))
              (and missed (loop for (item . why) in missed
                                collect (format nil "~a (~a)" (mailbox-item-name item) why))))))
 
@@ -1158,11 +1171,11 @@ no name given, no directory there, or one nothing may be written in
                    (values nil (format nil "~a: nothing ~a" refusal verb))
                    (values directory name)))))))
 
-(defun mailbox-export-directory (prompt)
-  "Ask with PROMPT for a directory to write in, made when it is not there: its
-path, or NIL, said, when none is given, nothing may be written there
-\(WRITING-REFUSAL) or it cannot be made."
-  (let* ((directory (or (read-native-path prompt :writing t)
+(defun mailbox-export-directory (prompt &optional details)
+  "Ask with PROMPT for a directory to write in, made when it is not there, DETAILS
+shown beside the question: its path, or NIL, said, when none is given, nothing
+may be written there (WRITING-REFUSAL) or it cannot be made."
+  (let* ((directory (or (read-native-path prompt :writing t :details details)
                         (progn (message "No directory given: nothing copied") nil)))
          (refusal (and directory (writing-refusal (if (path-kind directory) directory (parent-path directory))))))
     (when refusal
@@ -1185,12 +1198,12 @@ TYPE, \"eml\" or \"msg\" (MAILBOX-EXPORT-WORK, in the background)."
   (let* ((list (current-buffer))
          (items (mailbox-export-items list)))
     (when items
-      (let* ((words (list-question nil "message" items :name-of #'mailbox-item-name))
-             (directory (mailbox-export-directory (format nil "Copy ~a as .~a into: " words type))))
-        (when directory
-          (start-job-thread (make-mailbox-export-job list items directory type) #'mailbox-export-work
-                            :name "tuatara mailbox export")
-          (message "Copying ~a out into ~a as .~a..." words directory type))))))
+      (multiple-value-bind (words details) (mailbox-items-question items)
+        (let ((directory (mailbox-export-directory (format nil "Copy ~a as .~a into: " words type) details)))
+          (when directory
+            (start-job-thread (make-mailbox-export-job list items directory type) #'mailbox-export-work
+                              :name "tuatara mailbox export")
+            (message "Copying ~a out into ~a as .~a..." words directory type)))))))
 
 (define-command outlook-export-eml ()
   "Copy the messages marked in the mailbox's list
@@ -1221,9 +1234,10 @@ appointments are left out."
   (let* ((list (current-buffer))
          (items (mailbox-export-items list)))
     (when items
-      (let ((words (list-question nil "message" items :name-of #'mailbox-item-name)))
+      (multiple-value-bind (words details) (mailbox-items-question items)
         (multiple-value-bind (directory name)
-            (mailbox-new-file-target (read-native-path (format nil "Collect ~a into the mbox file: " words) :writing t)
+            (mailbox-new-file-target (read-native-path (format nil "Collect ~a into the mbox file: " words)
+                                                       :writing t :details details)
                                      "collected")
           (if (null directory)
               (message "~a" name)
@@ -1254,10 +1268,10 @@ left out."
   (let* ((list (current-buffer))
          (items (mailbox-export-items list)))
     (when items
-      (let ((words (list-question nil "message" items :name-of #'mailbox-item-name)))
+      (multiple-value-bind (words details) (mailbox-items-question items)
         (multiple-value-bind (directory name)
             (mailbox-new-file-target (read-native-path (format nil "Write ~a into the new Outlook mailbox: " words)
-                                                       :writing t)
+                                                       :writing t :details details)
                                      "written" :type "pst")
           (if (null directory)
               (message "~a" name)

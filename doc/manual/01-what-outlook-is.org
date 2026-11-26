@@ -63,5 +63,24 @@ The commands of outlook are on =C-c= keys, in the message and in the lists:
 =C-c o=, =C-c p= and =C-c t= in a message, =C-c h=, =C-c c=, =C-c L= and
 =C-c M= in a mailbox's list, =C-c O=, =C-c R= and so on in the label manager.
 The package binds no key of one character, so that its keys never clash with
-yours; the README gives the lines for your init file that bind them again. The
-keys are in the chapter of each part. Chapter 8 has them all.
+yours. The keys are in the chapter of each part. Chapter 8 has them all.
+
+To have one-letter keys too, put these lines in your init file, inside the
+=load-package "outlook"= form after its =:config=, so that they run once the
+package is loaded:
+
+#+begin_src lisp
+(bind-key "O" 'outlook-open-attachment-outside :map 'outlook-view-mode)
+(bind-key "T" 'outlook-view-file-text :map 'outlook-view-mode)
+(bind-key "P" 'outlook-view-pages :map 'outlook-view-mode)
+(bind-key "h" 'outlook-back-to-directory :map 'outlook-mailbox-mode)
+(bind-key "C" 'outlook-export :map 'outlook-mailbox-mode)
+(bind-key "+" 'outlook-label :map 'outlook-mailbox-mode)
+(bind-key "-" 'outlook-unlabel :map 'outlook-mailbox-mode)
+(bind-key "L" 'outlook-filter-labels :map 'outlook-mailbox-mode)
+(bind-key "M" 'outlook-label-manager :map 'outlook-mailbox-mode)
+(bind-key "R" 'outlook-label-rename :map 'outlook-label-manager-mode)
+(bind-key "D" 'outlook-labels-forget :map 'outlook-label-manager-mode)
+(bind-key "E" 'outlook-labels-export :map 'outlook-label-manager-mode)
+(bind-key "I" 'outlook-labels-import :map 'outlook-label-manager-mode)
+#+end_src

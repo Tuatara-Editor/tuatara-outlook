@@ -30,8 +30,9 @@ Marks stay on messages a filter hides, and ~C-c c~ copies them too. The question
 names how many it copies.
 
 ~a~ in the menu, All shown, switches from the messages marked to every message
-the list's filters leave, those under folded folders too, marked or not. So ~C a
-e~ copies out as saved mail all that a search, a label or a field filter left.
+the list's filters leave, those under folded folders too, marked or not. So
+~C-c c a e~ copies out as saved mail all that a search, a label or a field
+filter left.
 
 Copying runs in the background. The message line then says how many were copied
 and which could not be. Nothing is copied into an evidence directory, nor where
@@ -71,7 +72,9 @@ Each message is written from the Outlook item written of it as the mailbox was
 read: every property, recipient and attachment the mailbox gave it, a message
 attached to it with its own, and its named properties (Outlook's categories, a
 contact's addresses, an appointment's times and the rest) with what they stand
-for, given numbers of the new mailbox's own.
+for, given numbers of the new mailbox's own. A mailbox has numbers for 32,768
+names; past that, a property of a new name is left out, and the message line
+says how many were.
 
 The mailbox is written as Microsoft's
 [[https://learn.microsoft.com/openspecs/office_file_formats/ms-pst/][MS-PST]]

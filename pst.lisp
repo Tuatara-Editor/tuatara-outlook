@@ -804,7 +804,11 @@ tree, its size, and its properties as written."
       (multiple-value-bind (data sub)
           (pst-table-context writer
                              (union *pst-recipient-columns*
-                                    (remove-duplicates (mapcar #'car (reduce #'append recipients))))
+                                    (let ((seen (make-hash-table)))
+                                      (loop for properties in recipients
+                                            nconc (loop for (tag) in properties
+                                                        unless (gethash tag seen)
+                                                          collect (setf (gethash tag seen) tag)))))
                              (loop for properties in recipients for row from 1 collect (cons row properties)))
         (push (list #x692 data sub) (car subnodes))))
     (when attachments
@@ -945,8 +949,10 @@ items, the root of searches and a search folder of spam (2.7.2). Data
 blocks are permuted, with ENCODING :cyclic encoded by NDB_CRYPT_CYCLIC, with
 :none written as they are; with FORMAT :ansi the mailbox is of the ANSI
 format of Outlook 97 to 2002, which the tests of the reader take. Returns
-the file's size."
+the file's size and how many named properties were left out, a mailbox
+numbering 32,768 names at most (PST-RENAMED)."
   (let* ((writer (make-pst-writer fd path :encoding encoding :format format))
+         (*pst-names-left-out* 0)
          (*random-state* (make-random-state t))
          (record-key (let ((key (pst-octets 16))) (dotimes (i 16 key) (setf (aref key i) (random 256)))))
          (top (make-pst-folder "Top of Personal Folders" #x401))
@@ -970,4 +976,4 @@ the file's size."
     ;; the root folder is in itself (2.7.3.4.1)
     (pst-write-folder writer root #x122)
     (pst-write-store writer name record-key)
-    (pst-finish writer)))
+    (values (pst-finish writer) *pst-names-left-out*)))

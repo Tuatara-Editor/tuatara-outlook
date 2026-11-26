@@ -29,8 +29,9 @@ time changed. Without the sandbox (=bwrap=), no mailbox is read.
 The messages are written to your cache directory, each twice: as saved mail and
 as an Outlook item holding every property the mailbox gives it, so that they can
 be copied out as either. A contact is written as a vCard (=.vcf=). An
-appointment, a task or a journal entry is written as iCalendar (=.ics=). A
-distribution list, a note and any other item is written as a message.
+appointment, a task or a journal entry is written as iCalendar (=.ics=); its
+organiser and attendees are written with their mail addresses, and one without
+an address is left out. A distribution list, a note and any other item is written as a message.
 
 A damaged mailbox is read as far as it can be. Every offset and size is
 checked, and every tree of the file is followed with each part seen once, so
